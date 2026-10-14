@@ -66,7 +66,7 @@ const ranked = graph.nodes.map((n) => ({ n, s: score(n) })).filter((r) => r.s > 
   .sort((a, b) => b.s - a.s).slice(0, LIMIT);
 
 if (!ranked.length) {
-  console.log(JSON.stringify({ query: terms, results: [], hint: 'sem match; rode node ingest.js e tente termos do código (ex: billing, webhook, finance, license)' }, null, 1));
+  console.log(JSON.stringify({ query: terms, results: [], hint: 'sem match; rode node ingest.js e tente termos do código (ex: landpage, checkout, dashboard, portal, admin, billing, webhook, finance, license)' }, null, 1));
   process.exit(0);
 }
 

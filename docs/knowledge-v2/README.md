@@ -36,9 +36,16 @@ JSON continua valendo — nenhum erro vaza p/ build/test/prod.
 ## Fontes (todas read-only)
 
 1. `../knowledge/graph.json` (seed manual curado — preservado com flag `seed`)
-2. `apps/api/src/modules/*/*.controller.ts` (`@Controller` + verbos → nós `route:*`)
+2. `apps/api/src/**/*.controller.ts` (`@Controller` + verbos → nós `route:*`) + `**/*.service.ts` (→ `svc:*`)
 3. `prisma/*/schema.prisma` (`model X` → nós `db:<dominio>.<model>`)
-4. `apps/workers/src/**/*.ts` (strings `*.v1` / filas → nós `ev:` / `q:`)
+4. `apps/workers/src/**/*.ts` (strings `*.v1` / filas BullMQ → nós `ev:` / `q:`)
+5. `apps/portal/app/**/page.tsx` (→ `ui-page:portal:*`, `/` = landpage) + `app/api/**/route.ts` (→ `bff:portal:*`)
+6. `apps/admin/app/**/page.tsx` (→ `ui-page:admin:*`) + `app/api/**/route.ts` (→ `bff:admin:*`)
+7. `apps/portal/components/sections/*.tsx` (→ `ui-section:*` com sinônimos de landpage) + `apps/portal/lib/*` (→ `fe-lib:*`)
+8. `apps/{portal,admin}/{components,lib,hooks,stores}` + `middleware.ts` (→ `file:*`)
+9. `libs/*` (→ `lib:*` + `file:*`)
+10. `deploy/docker-compose*.yml` (services → `infra:*`) + `deploy/scripts/*.sh` (→ `infra-script:*`)
+11. `docs/*.md` (→ `doc:*` com título H1 real)
 
 ## Quando atualizar
 
