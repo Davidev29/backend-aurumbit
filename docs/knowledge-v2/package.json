@@ -1,0 +1,17 @@
+{
+  "name": "aurum-knowledge-v2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Knowledge graph DEV-ONLY do repo Aurum Bit. Isolado: nao e workspace pnpm, nao entra no turbo, nao sobe em prod.",
+  "type": "commonjs",
+  "scripts": {
+    "ingest": "node ingest.js",
+    "query": "node query.js",
+    "ingest:kuzu": "node ingest-kuzu.js",
+    "rebuild": "node ingest.js && node ingest-kuzu.js",
+    "verify": "node verify-kuzu.js"
+  },
+  "optionalDependencies": {
+    "kuzu": "^0.9.0"
+  }
+}

@@ -1,0 +1,7 @@
+# ---> ISOLADO DEV-ONLY <---
+# Nada aqui afeta prod. DBs gerados ficam nesta pasta e são descartáveis.
+node_modules/
+data/
+*.kuzu/
+*.kuzu-journal/
+*.lock
