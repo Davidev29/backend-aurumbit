@@ -1,0 +1,53 @@
+{
+  "title": "Aurum Bit — Runtime (Fase 6 stub)",
+  "uid": "aurum-runtime",
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "version": 1,
+  "description": "Stub Fase 6: latência/throughput HTTP, outbox lag, DLQ depth, reconciliação billing. Importar em Grafana > Dashboards > Import. Requer Prometheus com scrape de GET /metrics.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP p99 por rota",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (route, le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Throughput + erros 5xx",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (route, status) (rate(http_requests_total[5m]))",
+          "legendFormat": "{{route}} {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Outbox lag (s) por tópico",
+      "type": "timeseries",
+      "targets": [{ "expr": "outbox_lag_seconds", "legendFormat": "{{topic}}" }]
+    },
+    {
+      "id": 4,
+      "title": "DLQ depth por fila (alerta > 0)",
+      "type": "stat",
+      "targets": [{ "expr": "bullmq_dlq_depth", "legendFormat": "{{queue}}" }]
+    },
+    {
+      "id": 5,
+      "title": "Billing recon / webhook",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "sum by (result) (rate(billing_recon_total[1h]))", "legendFormat": "recon {{result}}" },
+        { "expr": "sum by (result) (rate(billing_webhook_total[5m]))", "legendFormat": "webhook {{result}}" }
+      ]
+    }
+  ]
+}

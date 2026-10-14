@@ -1,0 +1,46 @@
+{
+  "$comment": "Aurum Bit — alvos de uptime externo (Fase 7 T6). Importar/adaptar no UptimeRobot ou Better Stack. Sem credenciais: contatos são nomes de canal a criar no provedor.",
+  "provider_notes": "UptimeRobot: Monitor Type HTTP(s), URL, Monitoring Interval 5 min (paid: 1 min). Better Stack: Check Upptime/HTTP, Request timeout 15s, interval 180s. Ambos: assert status 200 + keyword.",
+  "contacts": {
+    "$comment": "Criar estes canais no provedor; nunca commitar webhook URLs/tokens aqui.",
+    "channels": ["ops-email", "ops-slack"]
+  },
+  "monitors": [
+    {
+      "name": "aurumbit-apex-home",
+      "host": "apex",
+      "url": "https://aurumbit.com/",
+      "method": "GET",
+      "interval_seconds": 300,
+      "timeout_seconds": 15,
+      "asserts": { "status": 200, "body_contains": "produtos" },
+      "alert_after_consecutive_failures": 2,
+      "contacts": ["ops-email", "ops-slack"],
+      "runbook": "docs/RUNBOOKS/health.md"
+    },
+    {
+      "name": "aurumbit-admin-home",
+      "host": "admin",
+      "url": "https://admin.aurumbit.com/",
+      "method": "GET",
+      "interval_seconds": 300,
+      "timeout_seconds": 15,
+      "asserts": { "status": 200 },
+      "alert_after_consecutive_failures": 2,
+      "contacts": ["ops-email", "ops-slack"],
+      "runbook": "docs/RUNBOOKS/health.md"
+    },
+    {
+      "name": "aurumbit-api-live",
+      "host": "api",
+      "url": "https://api.aurumbit.com/health/live",
+      "method": "GET",
+      "interval_seconds": 180,
+      "timeout_seconds": 15,
+      "asserts": { "status": 200, "body_contains": "\"status\":\"ok\"" },
+      "alert_after_consecutive_failures": 2,
+      "contacts": ["ops-email", "ops-slack"],
+      "runbook": "docs/RUNBOOKS/health.md"
+    }
+  ]
+}

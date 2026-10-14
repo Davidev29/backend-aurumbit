@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/auth"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_AUTH")
+}
+
+// Fase 2 — Auth (sem negócio de licenças/pagamentos).
+// Sem FK cross-DB: todas as referências abaixo são intra-DB (auth).
+// Referências a outros domínios (ex. customers) seriam IDs opacos String, sem @relation.
+
+model UserIdentity {
+  id                String    @id @default(cuid())
+  email_norm        String    @unique // normalizado: trim + lowercase (busca/anti-enumeração)
+  email_display     String    // como digitado (trim), p/ exibição
+  status            String    @default("PENDING_VERIFICATION") // PENDING_VERIFICATION | ACTIVE | LOCKED | DELETED
+  email_verified_at DateTime?
+  failed_attempts   Int       @default(0)
+  locked_until      DateTime?
+  mfa_enabled       Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt @default(now())
+
+  credential           Credential?
+  sessions             AuthSession[]
+  consents             ConsentGrant[]
+  verificationTokens   EmailVerificationToken[]
+
+  @@map("user_identities")
+}
+
+model Credential {
+  id                  String    @id @default(cuid())
+  identity            UserIdentity @relation(fields: [identity_id], references: [id], onDelete: Cascade)
+  identity_id         String    @unique
+  password_hash       String    // Argon2id PHC ($argon2id$...); fallback scrypt ($scrypt$...) se lib ausente
+  recovery_hash       String?   @unique // SHA256 hex do token opaco de reset; hash-only, single-use, 60min
+  recovery_expires_at DateTime?
+  recovery_used_at    DateTime?
+  mfa_secret_enc      String?   // segredo TOTP cifrado AES-256-GCM (TODO KMS); revelado só no enroll
+  mfa_verified_at     DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt @default(now())
+
+  @@map("credentials")
+}
+
+model AuthSession {
+  id             String   @id @default(cuid())
+  identity       UserIdentity @relation(fields: [identity_id], references: [id], onDelete: Cascade)
+  identity_id    String
+  family_id      String   // família p/ reuso: reuse de refresh revoga a família inteira
+  device_label   String?
+  status         String   @default("ACTIVE") // ACTIVE | REVOKED | EXPIRED
+  revoked_reason String?  // USER_LOGOUT | REUSE_DETECTED | PASSWORD_CHANGED | ADMIN_REVOKE | SESSION_REVOKE
+  expires_at     DateTime // absoluta (30d do login)
+  last_seen_at   DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  tokens RefreshToken[]
+
+  @@index([identity_id, status])
+  @@index([family_id])
+  @@map("auth_sessions")
+}
+
+model RefreshToken {
+  id          String    @id @default(cuid())
+  session     AuthSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  session_id  String
+  family_id   String
+  token_hash  String    @unique // SHA256 hex do token opaco 256-bit; nunca plaintext
+  parent_hash String?    // hash do token anterior (cadeia de rotação p/ forense)
+  status      String    @default("ACTIVE") // ACTIVE | ROTATED | REVOKED | REUSED
+  expires_at  DateTime
+  rotated_at  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([family_id, status])
+  @@map("refresh_tokens")
+}
+
+// Token opaco de verificação de e-mail (24h, hash-only, single-use).
+model EmailVerificationToken {
+  id          String    @id @default(cuid())
+  identity    UserIdentity @relation(fields: [identity_id], references: [id], onDelete: Cascade)
+  identity_id String
+  token_hash  String    @unique // SHA256 hex; raw só no outbox p/ template verify-email
+  expires_at  DateTime
+  consumed_at DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([identity_id])
+  @@map("email_verification_tokens")
+}
+
+// Consents versionados do registro (TERMS + PRIVACY obrigatórios).
+model ConsentGrant {
+  id          String   @id @default(cuid())
+  identity    UserIdentity @relation(fields: [identity_id], references: [id], onDelete: Cascade)
+  identity_id String
+  type        String   // TERMS | PRIVACY
+  version     String   // ex.: "2026-10-10.v1"
+  accepted_at DateTime @default(now())
+
+  @@unique([identity_id, type, version])
+  @@map("consent_grants")
+}
+
+// Outbox para publicação assíncrona via BullMQ/Redis (worker publica, Redis nunca é fonte definitiva).
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  aggregate   String
+  aggregateId String
+  type        String
+  payload     Json
+  occurredAt  DateTime @default(now())
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("outbox_events")
+}

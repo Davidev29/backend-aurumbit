@@ -1,0 +1,603 @@
+- generic [active] [ref=f3e1]:
+  - link "Pular para o conteúdo principal" [ref=f3e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=f3e3]:
+    - banner [ref=f3e4]:
+      - navigation "Navegação principal" [ref=f3e5]:
+        - link "AurumBit - Início" [ref=f3e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f3e7]: AurumBit
+          - generic [ref=f3e9]: Para a sua empresa
+        - generic [ref=f3e10]:
+          - generic "Seções da página" [ref=f3e11]:
+            - link "Produtos" [ref=f3e12] [cursor=pointer]:
+              - /url: "#produtos"
+            - link "Soluções" [ref=f3e13] [cursor=pointer]:
+              - /url: "#solucoes"
+            - link "Serviços" [ref=f3e14] [cursor=pointer]:
+              - /url: "#servicos"
+            - link "IA Especialista" [ref=f3e15] [cursor=pointer]:
+              - /url: "#ia-especialistas"
+            - link "Como funciona" [ref=f3e16] [cursor=pointer]:
+              - /url: "#como-funciona"
+            - link "Dúvidas" [ref=f3e17] [cursor=pointer]:
+              - /url: "#faq"
+          - generic [ref=f3e18]:
+            - button "Alternar para modo claro" [ref=f3e19] [cursor=pointer]
+            - button "Entrar" [ref=f3e26] [cursor=pointer]
+            - button "Começar agora" [ref=f3e27] [cursor=pointer]
+    - main [ref=f3e28]:
+      - region [ref=f3e29]:
+        - generic [ref=f3e41]:
+          - generic [ref=f3e42]:
+            - generic [ref=f3e43]: Software sob medida + IA aplicada ao seu negócio
+            - heading "Sistemas que colocam sua empresa no padrão da tecnologia atual" [level=1] [ref=f3e47]
+            - paragraph [ref=f3e48]:
+              - text: Desenvolvemos sistemas web, dashboards, APIs e automações com Next.js, TypeScript e Postgres — e treinamos
+              - strong [ref=f3e49]: agentes de IA especialistas no seu setor
+              - text: ", conectados direto à base da sua empresa."
+            - list [ref=f3e50]:
+              - listitem [ref=f3e51]:
+                - generic [ref=f3e55]: Sistemas web sob medida para a sua operação
+              - listitem [ref=f3e56]:
+                - generic [ref=f3e64]: APIs, dashboards e automações integradas
+              - listitem [ref=f3e65]:
+                - generic [ref=f3e70]: Agentes de IA treinados na sua base
+            - generic [ref=f3e71]:
+              - button [ref=f3e72] [cursor=pointer]
+              - button "Criar meu agente IA" [ref=f3e76] [cursor=pointer]
+            - list "Resumo da stack" [ref=f3e77]:
+              - listitem [ref=f3e78]:
+                - paragraph [ref=f3e79]: Next.js · TypeScript
+                - paragraph [ref=f3e80]: stack moderna
+              - listitem [ref=f3e81]:
+                - paragraph [ref=f3e82]: APIs · Cloud · Postgres
+                - paragraph [ref=f3e83]: base sólida
+              - listitem [ref=f3e84]:
+                - paragraph [ref=f3e85]: IA no seu setor
+                - paragraph [ref=f3e86]: agente especialista
+          - generic [aria-hidden] [ref=f3e88]:
+            - generic [ref=f3e90]:
+              - generic [ref=f3e91]:
+                - paragraph [ref=f3e96]: aurumbit • production — live
+                - generic [ref=f3e97]: v2 · edge
+              - generic [ref=f3e98]:
+                - generic [ref=f3e101]: SUA BASE
+                - generic [ref=f3e109]: AURUM IA
+                - generic [ref=f3e116]: AGENTE
+                - generic [ref=f3e123]: ● base conectada
+                - generic [ref=f3e126]: ◆ setor do cliente
+              - list [ref=f3e129]:
+                - listitem [ref=f3e130]:
+                  - generic [ref=f3e134]:
+                    - generic [ref=f3e135]: Sistemas sob medida
+                    - generic [ref=f3e136]: Next.js · TypeScript • em produção
+                - listitem [ref=f3e137]:
+                  - generic [ref=f3e145]:
+                    - generic [ref=f3e146]: APIs e integrações
+                    - generic [ref=f3e147]: REST · webhooks • sincronizando
+                - listitem [ref=f3e148]:
+                  - generic [ref=f3e155]:
+                    - generic [ref=f3e156]: Dashboards
+                    - generic [ref=f3e157]: tempo real • live
+                - listitem [ref=f3e158]:
+                  - generic [ref=f3e163]:
+                    - generic [ref=f3e164]: Agentes IA
+                    - generic [ref=f3e165]: treinados na sua base • especialista
+              - generic [ref=f3e166]:
+                - generic [ref=f3e167]:
+                  - generic [ref=f3e172]: deploy — aurumbit cloud
+                  - generic [ref=f3e173]: stable
+                - generic [ref=f3e177]:
+                  - paragraph [ref=f3e178]: $ aurum deploy --prod
+                  - paragraph [ref=f3e179]: ✓ build Next.js + TypeScript — ok
+                  - paragraph [ref=f3e180]: ✓ api /health 200 — 41ms
+                  - paragraph [ref=f3e181]: ✓ agente-ia sincronizado com a base
+                  - paragraph [ref=f3e182]: ● live em produção
+              - generic: edge • 38ms
+              - generic: uptime 99.9%
+            - paragraph [ref=f3e183]: "stack atual: Next.js · TypeScript · Postgres · IA aplicada"
+        - generic [ref=f3e185]:
+          - generic [ref=f3e186]:
+            - paragraph [ref=f3e187]: Sistemas modernos para operação real
+            - paragraph [ref=f3e188]: Do sistema ao agente IA — tudo conectado à base da sua empresa.
+          - generic [ref=f3e190]:
+            - generic [ref=f3e191]:
+              - generic [ref=f3e192]: Sistemas web sob medida com Next.js + TypeScript
+              - generic [ref=f3e197]: APIs, integrações e automações
+              - generic [ref=f3e206]: Dashboards em tempo real com Postgres
+              - generic [ref=f3e214]: Agentes IA treinados na base do cliente
+            - generic [aria-hidden] [ref=f3e220]:
+              - generic [ref=f3e221]: Sistemas web sob medida com Next.js + TypeScript
+              - generic [ref=f3e226]: APIs, integrações e automações
+              - generic [ref=f3e235]: Dashboards em tempo real com Postgres
+              - generic [ref=f3e243]: Agentes IA treinados na base do cliente
+      - region "Resumo" [ref=f3e249]:
+        - generic [ref=f3e251]:
+          - generic [ref=f3e252]:
+            - term [ref=f3e253]: O que fazemos
+            - definition [ref=f3e254]: Sistemas web sob medida, dashboards, APIs e automações.
+          - generic [ref=f3e255]:
+            - term [ref=f3e256]: Stack atual
+            - definition [ref=f3e257]: Next.js, TypeScript e Postgres, com deploy em cloud.
+          - generic [ref=f3e258]:
+            - term [ref=f3e259]: IA especialista
+            - definition [ref=f3e260]: Agentes treinados no vocabulário do seu setor.
+          - generic [ref=f3e261]:
+            - term [ref=f3e262]: Integração
+            - definition [ref=f3e263]:
+              - text: Conectamos a base da sua empresa à IA. Detalhes em
+              - link "IA especialista" [ref=f3e264] [cursor=pointer]:
+                - /url: "#ia-especialistas"
+              - text: e
+              - link "serviços" [ref=f3e265] [cursor=pointer]:
+                - /url: "#servicos"
+              - text: .
+      - region [ref=f3e266]:
+        - generic [ref=f3e267]:
+          - generic [ref=f3e270]:
+            - generic [ref=f3e271]: Programas prontos
+            - heading "Programas para cada tamanho de empresa" [level=2] [ref=f3e272]
+            - paragraph [ref=f3e273]: Sistemas prontos para cada tamanho de empresa — e sob medida com agentes IA quando a operação pede mais.
+          - generic [ref=f3e276]:
+            - group "Filtrar por categoria" [ref=f3e277]:
+              - button "Todos 3" [pressed] [ref=f3e278] [cursor=pointer]:
+                - text: Todos
+                - generic [ref=f3e279]: "3"
+              - button "Enterprise 1" [ref=f3e280] [cursor=pointer]:
+                - text: Enterprise
+                - generic [ref=f3e281]: "1"
+              - button "Essencial 1" [ref=f3e282] [cursor=pointer]:
+                - text: Essencial
+                - generic [ref=f3e283]: "1"
+              - button "Profissional 1" [ref=f3e284] [cursor=pointer]:
+                - text: Profissional
+                - generic [ref=f3e285]: "1"
+            - list "Produtos" [ref=f3e286]:
+              - listitem [ref=f3e287]:
+                - button "Aurum Pro — ver planos" [ref=f3e288] [cursor=pointer]:
+                  - generic [ref=f3e289]:
+                    - generic [ref=f3e290]: Profissional
+                    - generic [aria-hidden] [ref=f3e291]: ·
+                    - generic [ref=f3e292]: 3 computadores
+                    - generic [aria-hidden] [ref=f3e293]: ·
+                    - generic [ref=f3e294]: 100% offline
+                  - heading "Aurum Pro" [level=3] [ref=f3e295]
+                  - paragraph [ref=f3e296]: O completo para até 3 computadores, com atendimento mais rápido
+                  - generic [ref=f3e297]:
+                    - paragraph [ref=f3e298]: A partir de
+                    - paragraph [ref=f3e299]: R$ 149,90/mês
+                    - paragraph [ref=f3e300]: ou R$ 1.199,00/ano — economize 33%
+                  - list [ref=f3e301]:
+                    - listitem [ref=f3e302]:
+                      - generic [ref=f3e305]: Funciona offline, sem depender da internet
+                    - listitem [ref=f3e306]:
+                      - generic [ref=f3e309]: 3 computadores por chave
+                    - listitem [ref=f3e310]:
+                      - generic [ref=f3e313]: Chave liberada após a confirmação do pagamento
+                  - button [ref=f3e315]
+              - listitem [ref=f3e319]:
+                - button "Aurum Base — ver planos" [ref=f3e320] [cursor=pointer]:
+                  - generic [ref=f3e321]:
+                    - generic [ref=f3e322]: Essencial
+                    - generic [aria-hidden] [ref=f3e323]: ·
+                    - generic [ref=f3e324]: 1 computador
+                    - generic [aria-hidden] [ref=f3e325]: ·
+                    - generic [ref=f3e326]: 100% offline
+                  - heading "Aurum Base" [level=3] [ref=f3e327]
+                  - paragraph [ref=f3e328]: O essencial para quem tem 1 computador
+                  - generic [ref=f3e329]:
+                    - paragraph [ref=f3e330]: A partir de
+                    - paragraph [ref=f3e331]: R$ 1.199,00/ano
+                  - list [ref=f3e332]:
+                    - listitem [ref=f3e333]:
+                      - generic [ref=f3e336]: Funciona offline, sem depender da internet
+                    - listitem [ref=f3e337]:
+                      - generic [ref=f3e340]: 1 computador por chave
+                    - listitem [ref=f3e341]:
+                      - generic [ref=f3e344]: Chave liberada após a confirmação do pagamento
+                  - button [ref=f3e346]
+              - listitem [ref=f3e350]:
+                - button "Aurum Enterprise — ver planos" [ref=f3e351] [cursor=pointer]:
+                  - generic [ref=f3e352]:
+                    - generic [ref=f3e353]: Enterprise
+                    - generic [aria-hidden] [ref=f3e354]: ·
+                    - generic [ref=f3e355]: 50+ computadores
+                    - generic [aria-hidden] [ref=f3e356]: ·
+                    - generic [ref=f3e357]: 100% offline
+                  - heading "Aurum Enterprise" [level=3] [ref=f3e358]
+                  - paragraph [ref=f3e359]: Para operações grandes, com controle e gerente dedicado
+                  - generic [ref=f3e360]:
+                    - paragraph [ref=f3e361]: A partir de
+                    - paragraph [ref=f3e362]: R$ 4.999,00/ano
+                  - list [ref=f3e363]:
+                    - listitem [ref=f3e364]:
+                      - generic [ref=f3e367]: Funciona offline, sem depender da internet
+                    - listitem [ref=f3e368]:
+                      - generic [ref=f3e371]: 50 computadores ou mais por chave
+                    - listitem [ref=f3e372]:
+                      - generic [ref=f3e375]: Instalado dentro da sua empresa
+                  - button [ref=f3e377]
+            - paragraph [ref=f3e381]: Exibindo 3 de 3 produtos
+          - generic [ref=f3e382]:
+            - article [ref=f3e385]:
+              - generic [ref=f3e386]:
+                - paragraph [ref=f3e387]: Essencial
+                - heading "Aurum Base" [level=3] [ref=f3e388]
+                - paragraph [ref=f3e389]: O essencial para quem tem 1 computador
+                - generic [ref=f3e390]:
+                  - generic [ref=f3e391]: 1 computador
+                  - generic [ref=f3e395]: 100% offline
+                  - generic [ref=f3e403]: Ajuda em português
+              - generic [ref=f3e411]:
+                - list [ref=f3e412]:
+                  - listitem [ref=f3e413]: Funciona offline, sem depender da internet
+                  - listitem [ref=f3e416]: 1 computador por chave
+                  - listitem [ref=f3e419]: Chave liberada após a confirmação do pagamento
+                  - listitem [ref=f3e422]: Ajuda em português por e-mail
+                - generic [ref=f3e425]:
+                  - paragraph [ref=f3e426]: A partir de R$ 1.199,00 por ano · licença individual
+                  - button "Ver detalhes do Base" [ref=f3e428] [cursor=pointer]
+            - article [ref=f3e431]:
+              - generic [ref=f3e432]:
+                - paragraph [ref=f3e433]: Profissional
+                - heading "Aurum Pro" [level=3] [ref=f3e434]
+                - paragraph [ref=f3e435]: O completo para até 3 computadores, com atendimento mais rápido
+                - generic [ref=f3e436]:
+                  - generic [ref=f3e437]: 3 computadores
+                  - generic [ref=f3e441]: 100% offline
+                  - generic [ref=f3e449]: Suporte prioritário
+              - generic [ref=f3e457]:
+                - list [ref=f3e458]:
+                  - listitem [ref=f3e459]: Funciona offline, sem depender da internet
+                  - listitem [ref=f3e462]: 3 computadores por chave
+                  - listitem [ref=f3e465]: Chave liberada após a confirmação do pagamento
+                  - listitem [ref=f3e468]: Atendimento prioritário em português
+                - generic [ref=f3e471]:
+                  - paragraph [ref=f3e472]: A partir de R$ 149,90 por mês · licença individual
+                  - button "Ver detalhes do Pro" [ref=f3e474] [cursor=pointer]
+            - article [ref=f3e477]:
+              - generic [ref=f3e478]:
+                - paragraph [ref=f3e479]: Enterprise
+                - heading "Aurum Enterprise" [level=3] [ref=f3e480]
+                - paragraph [ref=f3e481]: Para operações grandes, com controle e gerente dedicado
+                - generic [ref=f3e482]:
+                  - generic [ref=f3e483]: 50+ computadores
+                  - generic [ref=f3e487]: 100% offline
+                  - generic [ref=f3e495]: Gerente dedicado
+              - generic [ref=f3e503]:
+                - list [ref=f3e504]:
+                  - listitem [ref=f3e505]: Funciona offline, sem depender da internet
+                  - listitem [ref=f3e508]: 50 computadores ou mais por chave
+                  - listitem [ref=f3e511]: Instalado dentro da sua empresa
+                  - listitem [ref=f3e514]: Entrada única para a equipe
+                - generic [ref=f3e517]:
+                  - paragraph [ref=f3e518]: Proposta sob medida
+                  - link "Falar com a AurumBit" [ref=f3e520] [cursor=pointer]:
+                    - /url: mailto:contato@aurumbit.com?subject=Quero%20conhecer%20o%20Aurum%20Enterprise
+            - paragraph [ref=f3e521]: Total e condições sempre escritos antes de confirmar. Chave liberada após a confirmação do pagamento.
+      - region [ref=f3e522]:
+        - generic [ref=f3e523]:
+          - generic [ref=f3e526]:
+            - heading "O que trava a sua empresa hoje — e como a AurumBit resolve" [level=2] [ref=f3e527]
+            - paragraph [ref=f3e528]: Sem trocar tudo de lugar, sem parar o atendimento, sem precisar de técnico.
+          - generic [ref=f3e530]:
+            - article [ref=f3e531]:
+              - paragraph [ref=f3e541]: A dor
+              - heading "“A internet caiu e o trabalho parou”" [level=3] [ref=f3e542]
+              - paragraph [ref=f3e543]: O programa funciona offline por natureza — a internet só valida a licença. Quando ela volta, atualiza tudo sozinho.
+              - generic [ref=f3e544]: Como a AurumBit resolve
+            - article [ref=f3e548]:
+              - paragraph [ref=f3e554]: A dor
+              - heading "“Cada computador paga separado e a conta confunde”" [level=3] [ref=f3e555]
+              - paragraph [ref=f3e556]: "Cada chave já inclui os computadores do plano: 1 no Base, 3 no Pro e 50 ou mais no Enterprise."
+              - generic [ref=f3e557]: Como a AurumBit resolve
+            - article [ref=f3e561]:
+              - paragraph [ref=f3e570]: A dor
+              - heading "“Instalar programa novo é complicado”" [level=3] [ref=f3e571]
+              - paragraph [ref=f3e572]: Você paga, recebe a chave após a confirmação do pagamento e instala com um passo a passo simples, sem precisar de técnico.
+              - generic [ref=f3e573]: Como a AurumBit resolve
+            - article [ref=f3e577]:
+              - paragraph [ref=f3e583]: A dor
+              - heading "“Ninguém responde quando você precisa”" [level=3] [ref=f3e584]
+              - paragraph [ref=f3e585]: Atendimento em português, com prioridade para quem é Pro e gerente dedicado para quem é Enterprise.
+              - generic [ref=f3e586]: Como a AurumBit resolve
+            - article [ref=f3e590]:
+              - paragraph [ref=f3e596]: A dor
+              - heading "“Medo de usar dado de cliente errado”" [level=3] [ref=f3e597]
+              - paragraph [ref=f3e598]: Acesso só para quem você autorizar, com cuidado alinhado à lei de proteção de dados (LGPD).
+              - generic [ref=f3e599]: Como a AurumBit resolve
+          - generic [ref=f3e605]:
+            - button "Ver programas e preços" [ref=f3e606] [cursor=pointer]
+            - button "Tirar dúvidas" [ref=f3e607] [cursor=pointer]
+      - region [ref=f3e608]:
+        - generic [ref=f3e609]:
+          - generic [ref=f3e612]:
+            - heading "Do pagamento ao trabalho em 3 passos" [level=2] [ref=f3e613]
+            - paragraph [ref=f3e614]: Sem proposta demorada, sem instalador complicado.
+          - list [ref=f3e617]:
+            - listitem [ref=f3e618]:
+              - generic [aria-hidden] [ref=f3e619]: "01"
+              - generic [ref=f3e620]:
+                - heading "Você escolhe o plano e paga" [level=3] [ref=f3e625]
+                - paragraph [ref=f3e626]: Pix, boleto ou cartão, com o total e as condições escritos antes de confirmar. Sem taxa escondida.
+                - list [ref=f3e627]:
+                  - listitem [ref=f3e628]: Pix, boleto ou cartão
+                  - listitem [ref=f3e631]: Total escrito antes de confirmar
+                  - listitem [ref=f3e634]: Pagamento seguro
+            - listitem [ref=f3e637]:
+              - generic [aria-hidden] [ref=f3e638]: "02"
+              - generic [ref=f3e639]:
+                - heading "Você recebe a chave" [level=3] [ref=f3e645]
+                - paragraph [ref=f3e646]: Liberada logo após a confirmação do pagamento, junto com o passo a passo de instalação.
+                - list [ref=f3e647]:
+                  - listitem [ref=f3e648]: Chave após a confirmação do pagamento
+                  - listitem [ref=f3e651]: Passo a passo junto
+                  - listitem [ref=f3e654]: Ajuda em português se travar
+            - listitem [ref=f3e657]:
+              - generic [aria-hidden] [ref=f3e658]: "03"
+              - generic [ref=f3e659]:
+                - heading "Você instala e usa" [level=3] [ref=f3e664]
+                - paragraph [ref=f3e665]: Nos computadores liberados pelo plano, sempre disponível — mesmo sem internet. Se travar em algo, tem gente de verdade para ajudar em português.
+                - list [ref=f3e666]:
+                  - listitem [ref=f3e667]: Funciona offline, sempre disponível
+                  - listitem [ref=f3e670]: Nos computadores do seu plano
+                  - listitem [ref=f3e673]: Ajuda em português
+          - generic [ref=f3e678]:
+            - paragraph [ref=f3e679]: Pague. Receba a chave. Instale.
+            - generic [ref=f3e680]:
+              - button [ref=f3e681] [cursor=pointer]
+              - button "Ver programas e preços" [ref=f3e685] [cursor=pointer]
+      - region [ref=f3e686]:
+        - generic [ref=f3e687]:
+          - generic [ref=f3e690]:
+            - heading "Desenvolvimento sob medida para o seu CNPJ" [level=2] [ref=f3e691]
+            - paragraph [ref=f3e692]: Quando o programa pronto não basta, adaptamos ou criamos para a sua operação. Proposta com preço fechado e prazo antes de começar — você acompanha cada etapa.
+          - list "Exemplos de escopo sob medida" [ref=f3e693]:
+            - listitem [ref=f3e697]: Integrações
+            - listitem [ref=f3e698]: Relatórios
+            - listitem [ref=f3e699]: Multiusuário
+            - listitem [ref=f3e700]: Instalação local
+            - listitem [ref=f3e701]: Regras do seu segmento
+          - paragraph [ref=f3e702]: Orçamento depende do escopo — você aprova antes de começar.
+          - list [ref=f3e704]:
+            - listitem [ref=f3e705]:
+              - generic [ref=f3e710]:
+                - paragraph [ref=f3e711]: Passo 1 de 5
+                - heading "Conversa para entender a operação do seu CNPJ" [level=3] [ref=f3e712]
+                - paragraph [ref=f3e713]: A gente escuta como a sua empresa trabalha hoje e aponta o melhor caminho — adaptar um programa pronto ou criar um novo, sem compromisso.
+            - listitem [ref=f3e714]:
+              - generic [ref=f3e720]:
+                - paragraph [ref=f3e721]: Passo 2 de 5
+                - heading "Proposta com preço fechado e prazo" [level=3] [ref=f3e722]
+                - paragraph [ref=f3e723]: "Você aprova antes de começar: sabe quanto vai pagar e quando fica pronto. Sem taxa escondida, sem surpresa."
+            - listitem [ref=f3e724]:
+              - generic [ref=f3e728]:
+                - paragraph [ref=f3e729]: Passo 3 de 5
+                - heading "Desenvolvimento e instalação acompanhados" [level=3] [ref=f3e730]
+                - paragraph [ref=f3e731]: Nossa equipe desenvolve, instala nos seus computadores e ajusta tudo com você, até funcionar do seu jeito — offline por natureza.
+            - listitem [ref=f3e732]:
+              - generic [ref=f3e737]:
+                - paragraph [ref=f3e738]: Passo 4 de 5
+                - heading "Treino simples para a sua equipe" [level=3] [ref=f3e739]
+                - paragraph [ref=f3e740]: Sua equipe aprende a usar no dia a dia, sem depender de técnico.
+            - listitem [ref=f3e741]:
+              - generic [ref=f3e750]:
+                - paragraph [ref=f3e751]: Passo 5 de 5
+                - heading "Ajuda em português depois da entrega" [level=3] [ref=f3e752]
+                - paragraph [ref=f3e753]: Depois de pronto, você continua contando com gente de verdade para ajudar.
+          - generic [ref=f3e756]:
+            - link "Pedir proposta sob medida" [ref=f3e757] [cursor=pointer]:
+              - /url: mailto:contato@aurumbit.com?subject=Projeto%20sob%20medida%20para%20meu%20CNPJ
+            - button "Ver programas prontos" [ref=f3e758] [cursor=pointer]
+      - region [ref=f3e759]:
+        - generic [ref=f3e760]:
+          - generic [ref=f3e763]:
+            - generic [ref=f3e764]: IA especialista no seu setor
+            - heading "Treinamos modelos e criamos agentes que trabalham com a sua base" [level=2] [ref=f3e765]
+            - paragraph [ref=f3e766]: "Não é um chatbot genérico: conectamos os dados da sua empresa, treinamos no vocabulário do seu segmento e colocamos um especialista digital dentro de cada etapa da operação."
+          - list "Como o agente nasce" [ref=f3e767]:
+            - listitem [ref=f3e769]:
+              - paragraph [ref=f3e776]: 01 — Conectar
+              - heading "Sua base" [level=3] [ref=f3e777]
+              - paragraph [ref=f3e778]: Postgres, planilhas, ERP, arquivos e APIs que você já usa.
+            - listitem [ref=f3e779]:
+              - paragraph [ref=f3e794]: 02 — Treinar
+              - heading "Modelo no seu setor" [level=3] [ref=f3e795]
+              - paragraph [ref=f3e796]: Vocabulário, regras e exemplos reais da sua operação.
+            - listitem [ref=f3e797]:
+              - paragraph [ref=f3e803]: 03 — Operar
+              - heading "Agente especialista" [level=3] [ref=f3e804]
+              - paragraph [ref=f3e805]: Responde, executa e aprende dentro do seu processo.
+          - generic [ref=f3e806]:
+            - article [ref=f3e807]:
+              - generic [ref=f3e808]: "01"
+              - paragraph [ref=f3e815]: conectores · sync
+              - heading "Integramos a base que você já tem" [level=3] [ref=f3e816]
+              - paragraph [ref=f3e817]: Nada de recomeçar do zero. Conectamos o agente direto aos dados que movem sua empresa — com permissão, trilha e sincronização contínua.
+              - list [ref=f3e818]:
+                - listitem [ref=f3e819]:
+                  - generic [ref=f3e822]: Postgres, planilhas, ERP e APIs
+                - listitem [ref=f3e823]:
+                  - generic [ref=f3e826]: Mapeamento de tabelas e permissões
+                - listitem [ref=f3e827]:
+                  - generic [ref=f3e830]: Sincronização contínua da base
+                - listitem [ref=f3e831]:
+                  - generic [ref=f3e834]: Trilha de acesso alinhada à LGPD
+            - article [ref=f3e835]:
+              - generic [ref=f3e836]: "02"
+              - paragraph [ref=f3e851]: fine-tuning · embeddings
+              - heading "Treinamos no vocabulário do seu setor" [level=3] [ref=f3e852]
+              - paragraph [ref=f3e853]: O modelo aprende os termos, procedimentos e exceções do seu segmento — do balcão ao backoffice — com exemplos reais da sua operação.
+              - list [ref=f3e854]:
+                - listitem [ref=f3e855]:
+                  - generic [ref=f3e858]: Glossário e regras do seu segmento
+                - listitem [ref=f3e859]:
+                  - generic [ref=f3e862]: Exemplos reais do seu atendimento
+                - listitem [ref=f3e863]:
+                  - generic [ref=f3e866]: Avaliação de respostas por caso
+                - listitem [ref=f3e867]:
+                  - generic [ref=f3e870]: Re-treino a cada ciclo de uso
+            - article [ref=f3e871]:
+              - generic [ref=f3e872]: "03"
+              - paragraph [ref=f3e878]: atendimento · vendas · operação
+              - heading "Agentes especialistas por função" [level=3] [ref=f3e879]
+              - paragraph [ref=f3e880]: "Um agente para cada frente: quem atende, quem vende, quem opera e quem analisa. Cada um com missão, limites e ferramentas próprias."
+              - list [ref=f3e881]:
+                - listitem [ref=f3e882]:
+                  - generic [ref=f3e885]: Atendimento com contexto do cliente
+                - listitem [ref=f3e886]:
+                  - generic [ref=f3e889]: Vendas com catálogo e propostas
+                - listitem [ref=f3e890]:
+                  - generic [ref=f3e893]: Operação com checklists e prazos
+                - listitem [ref=f3e894]:
+                  - generic [ref=f3e897]: Análise com dashboards e alertas
+              - list "Exemplos de agentes" [ref=f3e898]:
+                - listitem [ref=f3e899]: Atendimento
+                - listitem [ref=f3e903]: Operação
+                - listitem [ref=f3e910]: Análise
+                - listitem [ref=f3e914]: Vendas
+            - article [ref=f3e918]:
+              - generic [ref=f3e919]: "04"
+              - paragraph [ref=f3e925]: guardrails · humano no loop
+              - heading "Guardrails, avaliação e evolução" [level=3] [ref=f3e926]
+              - paragraph [ref=f3e927]: IA sem controle não entra em produção. Definimos o que o agente pode fazer sozinho, o que pede aprovação e como cada resposta é auditada.
+              - list [ref=f3e928]:
+                - listitem [ref=f3e929]:
+                  - generic [ref=f3e932]: Permissões por papel e ferramenta
+                - listitem [ref=f3e933]:
+                  - generic [ref=f3e936]: Logs de cada decisão do agente
+                - listitem [ref=f3e937]:
+                  - generic [ref=f3e940]: Humano aprova o sensível
+                - listitem [ref=f3e941]:
+                  - generic [ref=f3e944]: Métricas e melhoria contínua
+          - generic [ref=f3e947]:
+            - paragraph [ref=f3e948]: base conectada → modelo treinado → agente em produção
+            - paragraph [ref=f3e949]: Conte como sua empresa opera hoje — mapeamos a base, desenhamos o agente e colocamos a primeira versão no ar com você.
+            - generic [ref=f3e950]:
+              - link "Falar sobre meu agente IA" [ref=f3e951] [cursor=pointer]:
+                - /url: mailto:contato@aurumbit.com?subject=Agente%20IA%20especialista%20para%20minha%20empresa
+              - button "Ver serviços sob medida" [ref=f3e954] [cursor=pointer]
+      - region [ref=f3e955]:
+        - generic [ref=f3e956]:
+          - generic [ref=f3e959]:
+            - heading "Dúvidas comuns" [level=2] [ref=f3e960]
+            - paragraph [ref=f3e961]: Respostas diretas, sem jargão. Se faltar algo, fale com nosso atendimento.
+          - generic [ref=f3e962]:
+            - list [ref=f3e963]:
+              - listitem [ref=f3e964]:
+                - heading [level=3] [ref=f3e965]:
+                  - button "Funciona sem internet mesmo?" [expanded] [ref=f3e966] [cursor=pointer]
+                - region "Funciona sem internet mesmo?" [ref=f3e971]:
+                  - paragraph [ref=f3e972]: Sim. Os programas funcionam offline por natureza — a internet só é usada para validar a licença e trazer novidades. Se a conexão cair no meio do expediente, o trabalho continua.
+              - listitem [ref=f3e973]:
+                - heading [level=3] [ref=f3e974]:
+                  - button "Como instalo? Preciso de técnico?" [ref=f3e975] [cursor=pointer]
+              - listitem [ref=f3e980]:
+                - heading [level=3] [ref=f3e981]:
+                  - button "Em quantos computadores posso usar?" [ref=f3e982] [cursor=pointer]
+              - listitem [ref=f3e987]:
+                - heading [level=3] [ref=f3e988]:
+                  - button "Quais são as formas de pagamento?" [ref=f3e989] [cursor=pointer]
+              - listitem [ref=f3e994]:
+                - heading [level=3] [ref=f3e995]:
+                  - button "Posso cancelar quando quiser?" [ref=f3e996] [cursor=pointer]
+              - listitem [ref=f3e1001]:
+                - heading [level=3] [ref=f3e1002]:
+                  - button "Meus dados e os dos meus clientes estão protegidos?" [ref=f3e1003] [cursor=pointer]
+            - generic [ref=f3e1008]:
+              - generic [ref=f3e1017]:
+                - paragraph [ref=f3e1018]: Ainda com dúvida?
+                - paragraph [ref=f3e1019]: Comece pelo plano ideal ou fale com gente de verdade, em português.
+              - generic [ref=f3e1020]:
+                - button [ref=f3e1021] [cursor=pointer]
+                - button "Falar com atendimento" [ref=f3e1025] [cursor=pointer]
+      - region [ref=f3e1026]:
+        - generic [ref=f3e1031]:
+          - generic [ref=f3e1034]:
+            - generic [ref=f3e1035]: Sem complicação
+            - heading "Sua empresa funcionando sempre, começando hoje" [level=2] [ref=f3e1036]
+            - paragraph [ref=f3e1037]: Escolha o plano, pague do seu jeito e receba a chave com o passo a passo. E se precisar, tem gente de verdade para ajudar em português.
+          - list [ref=f3e1038]:
+            - listitem [ref=f3e1039]:
+              - generic [ref=f3e1044]: Preço claro antes de pagar.
+            - listitem [ref=f3e1045]:
+              - generic [ref=f3e1050]: Chave liberada após a confirmação do pagamento.
+            - listitem [ref=f3e1051]:
+              - generic [ref=f3e1060]: Ajuda em português quando precisar.
+          - generic [ref=f3e1061]:
+            - button [ref=f3e1062] [cursor=pointer]
+            - button "Falar com atendimento" [ref=f3e1066] [cursor=pointer]
+          - paragraph [ref=f3e1067]: "Pagamento seguro: Pix, boleto ou cartão • Ajuda em português"
+    - contentinfo [ref=f3e1068]:
+      - generic [ref=f3e1069]:
+        - generic [ref=f3e1070]:
+          - generic [ref=f3e1071]:
+            - link "AurumBit - Início" [ref=f3e1072] [cursor=pointer]:
+              - /url: /
+              - generic [ref=f3e1073]: AurumBit
+            - paragraph [ref=f3e1074]: Programas prontos para a sua empresa, que continuam funcionando mesmo sem internet. Pagamento do jeito que você prefere e ajuda em português.
+            - generic [ref=f3e1075]:
+              - paragraph [ref=f3e1076]: "Pagamento seguro: Pix, boleto ou cartão."
+              - paragraph [ref=f3e1077]: Dados tratados com cuidado, seguindo a lei de proteção de dados (LGPD).
+            - generic [ref=f3e1078]:
+              - link "Site" [ref=f3e1079] [cursor=pointer]:
+                - /url: https://aurumbit.com
+              - link "Telegram" [ref=f3e1083] [cursor=pointer]:
+                - /url: https://t.me/aurumbit
+              - link "E-mail" [ref=f3e1087] [cursor=pointer]:
+                - /url: mailto:contato@aurumbit.com
+          - navigation "Links de produto" [ref=f3e1091]:
+            - heading "Produto" [level=3] [ref=f3e1092]
+            - list [ref=f3e1093]:
+              - listitem [ref=f3e1094]:
+                - link "Planos e preços" [ref=f3e1095] [cursor=pointer]:
+                  - /url: "#produtos"
+              - listitem [ref=f3e1096]:
+                - link "Como funciona" [ref=f3e1097] [cursor=pointer]:
+                  - /url: "#como-funciona"
+              - listitem [ref=f3e1098]:
+                - link "Serviços sob medida" [ref=f3e1099] [cursor=pointer]:
+                  - /url: "#servicos"
+          - navigation "Links de empresa" [ref=f3e1100]:
+            - heading "Empresa" [level=3] [ref=f3e1101]
+            - list [ref=f3e1102]:
+              - listitem [ref=f3e1103]:
+                - link "Para a sua empresa" [ref=f3e1104] [cursor=pointer]:
+                  - /url: "#solucoes"
+              - listitem [ref=f3e1105]:
+                - link "Dúvidas" [ref=f3e1106] [cursor=pointer]:
+                  - /url: "#faq"
+              - listitem [ref=f3e1107]:
+                - link "Falar com atendimento" [ref=f3e1108] [cursor=pointer]:
+                  - /url: mailto:contato@aurumbit.com
+          - navigation "Links de ajuda" [ref=f3e1109]:
+            - heading "Ajuda" [level=3] [ref=f3e1110]
+            - list [ref=f3e1111]:
+              - listitem [ref=f3e1112]:
+                - button "Começar agora" [ref=f3e1113] [cursor=pointer]
+              - listitem [ref=f3e1114]:
+                - link "Dúvidas" [ref=f3e1115] [cursor=pointer]:
+                  - /url: "#faq"
+              - listitem [ref=f3e1116]:
+                - link "Falar com atendimento" [ref=f3e1117] [cursor=pointer]:
+                  - /url: mailto:contato@aurumbit.com
+          - navigation "Links de legal" [ref=f3e1118]:
+            - heading "Legal" [level=3] [ref=f3e1119]
+            - list [ref=f3e1120]:
+              - listitem [ref=f3e1121]:
+                - link "Seus dados e a LGPD" [ref=f3e1122] [cursor=pointer]:
+                  - /url: "#faq"
+              - listitem [ref=f3e1123]:
+                - link "Preços e condições" [ref=f3e1124] [cursor=pointer]:
+                  - /url: "#produtos"
+              - listitem [ref=f3e1125]:
+                - link "Falar sobre privacidade" [ref=f3e1126] [cursor=pointer]:
+                  - /url: mailto:contato@aurumbit.com?subject=Privacidade%20e%20LGPD
+        - generic [ref=f3e1127]:
+          - paragraph [ref=f3e1128]: © 2026 AurumBit. Todos os direitos reservados.
+          - generic [ref=f3e1129]:
+            - generic [ref=f3e1130]: Feito no Brasil
+            - link "Voltar ao topo" [ref=f3e1131] [cursor=pointer]:
+              - /url: "#top"
+              - text: Topo

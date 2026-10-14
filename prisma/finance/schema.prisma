@@ -1,0 +1,326 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/finance"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_FINANCE")
+}
+
+// Fase 5 — Finance core + Sync billing→finance + Projections (merge).
+// Banco por domínio: sem FK cross-DB. Referências cross-DB
+// (customers.Customer.id, billing.*) viajam como strings opacas.
+// ATENÇÃO — tabelas compartilhadas por 3 superfícies (colunas = UNIÃO):
+// - `receivables`/`payables`: Sync (espelho billing: customerId/invoiceId/
+//   refundId/paymentExternalId/provider/externalId/version/occurredAt/paidAt)
+//   + Core (multi-org: orgId/sourceType/sourceId/categoryId/dueDate/
+//   receivedAt/accountId). Status cobrem PREVISTO/PENDENTE/RECEBIDO/
+//   INADIMPLENTE/CANCELADO (recebível) e PREVISTO/PENDENTE/PAGO/CANCELADO
+//   (pagável); cada service valida seu subconjunto via assertTransition.
+// - `finance_transactions`: Sync (eventId UNIQUE p/ replay) + Core
+//   (orgId/accountId/categoryId/idempotencyKey UNIQUE + UNIQUE
+//   (provider, externalId)). accountId/categoryId OPCIONAIS: o sync legado
+//   lança sem conta/categoria; a baixa core sempre informa.
+// - `projection_snapshots`: Sync usa colunas camelCase + `ON CONFLICT
+//   (scope)` (exige `scope @unique`; namespaces `global | org:<id>`) +
+//   Projections-store usa snake_case (`ref_date`, `premises_hash`, ...,
+//   PK composta) + Core exige UNIQUE(org, scope, refDate, premisesHash).
+//   `refDate` é String (o store grava TEXT, ex. `2026-10`); o compute é
+//   dono do formato. Convivência documentada; DDL canônico futuro =
+//   migration do orquestrador (o store ainda faz ensure() próprio).
+// Idempotência (PROJECT.md §5): UNIQUE(provider, externalId) em
+// Receivable/Payable/FinancialTransaction, UNIQUE(eventId) em
+// FinanceProcessedEvent/FinancialTransaction, UNIQUE(idempotencyKey) em
+// FinancialTransaction, UNIQUE(sourceType, sourceId) em Receivable/Payable
+// (condicional "quando INVOICE" no service core: MANUAL sem sourceId recebe
+// `manual:<uuid>`; no PG, NULL não colide).
+// REGRA DE OURO (core): `FinancialAccount.balanceCents` SÓ é mutado pelo
+// caminho de baixa (mark-received/mark-paid via FinancialTransaction,
+// mesma txn). O sync NÃO toca em balanceCents (efeito via Transaction).
+
+// Stub Fase 1 — sem acesso implícito (finance.read é concessão explícita, ver PROJECT.md §3).
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  // Referência opaca cross-DB — origem: customers.Customer.id (organização). Sem @relation cross-DB.
+  orgId       String
+  amountCents Int
+  currency    String   @default("BRL")
+  kind        String   // CREDIT | DEBIT
+  createdAt   DateTime @default(now())
+
+  @@map("ledger_entries")
+}
+
+model PayoutRequest {
+  id          String   @id @default(cuid())
+  // Referência opaca cross-DB — origem: customers.Customer.id (organização). Sem @relation cross-DB.
+  orgId       String
+  amountCents Int
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt @default(now())
+
+  @@map("payout_requests")
+}
+
+// Recebível: espelho billing (sync) + conta a receber multi-org (core).
+model Receivable {
+  id          String    @id @default(cuid())
+  orgId       String? // core: customers.Customer.id opaco (sync legado escreve sem org)
+  // Sync — referências opacas cross-DB (billing.*). Sem @relation cross-DB.
+  customerId  String?
+  invoiceId   String?
+  provider    String    @default("ASAAS")
+  externalId  String?
+  // Core — origem própria.
+  sourceType  String? // INVOICE | MANUAL
+  sourceId    String? // INVOICE → billing.Invoice.id; MANUAL → `manual:<uuid>`
+  category    FinancialCategory? @relation(fields: [categoryId], references: [id])
+  categoryId  String?
+  amountCents Int
+  // Core: PREVISTO | PENDENTE | RECEBIDO | CANCELADO | INADIMPLENTE.
+  // Sync: PENDENTE | RECEBIDO | INADIMPLENTE.
+  status      String    @default("PREVISTO")
+  version     Int       @default(1)
+  occurredAt  DateTime?
+  dueDate     DateTime?
+  paidAt      DateTime? // sync: quitação no provider
+  receivedAt  DateTime? // core: data da baixa
+  accountId   String? // core: conta da baixa (financial_accounts.id, opaco intra-DB)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt @default(now())
+
+  @@unique([provider, externalId])
+  @@unique([sourceType, sourceId])
+  @@index([customerId])
+  @@index([orgId])
+  @@index([status])
+  @@index([orgId, status])
+  @@index([orgId, dueDate])
+  @@map("receivables")
+}
+
+// Pagável: reembolso espelhado (sync) + conta a pagar multi-org (core).
+model Payable {
+  id                String    @id @default(cuid())
+  orgId             String? // core: customers.Customer.id opaco (sync legado escreve sem org)
+  // Sync — referências opacas cross-DB (billing.*). Sem @relation cross-DB.
+  refundId          String?
+  paymentExternalId String?
+  provider          String    @default("ASAAS")
+  externalId        String?
+  // Core — origem própria.
+  sourceType        String? // REFUND | MANUAL | SUPPLIER
+  sourceId          String?
+  category          FinancialCategory? @relation(fields: [categoryId], references: [id])
+  categoryId        String?
+  amountCents       Int
+  // Core: PREVISTO | PENDENTE | PAGO | CANCELADO. Sync: PENDENTE | PAGO.
+  status            String    @default("PREVISTO")
+  version           Int       @default(1)
+  occurredAt        DateTime?
+  dueDate           DateTime?
+  paidAt            DateTime?
+  accountId         String? // core: conta da baixa (financial_accounts.id, opaco intra-DB)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt @default(now())
+
+  @@unique([provider, externalId])
+  @@unique([sourceType, sourceId])
+  @@index([orgId])
+  @@index([status])
+  @@index([orgId, dueDate])
+  @@map("payables")
+}
+
+// Movimento realizado (sync: 1 linha por efeito econômico; core: extrato +
+// ÚNICO mutador de FinancialAccount.balanceCents via baixa).
+model FinancialTransaction {
+  id             String    @id @default(cuid())
+  orgId          String? // core: customers.Customer.id opaco (sync legado escreve sem org)
+  account        FinancialAccount?  @relation(fields: [accountId], references: [id])
+  accountId      String? // core: obrigatório na baixa; sync não informa
+  category       FinancialCategory? @relation(fields: [categoryId], references: [id])
+  categoryId     String? // core: obrigatório na baixa; sync não informa
+  kind           String // INCOME | EXPENSE
+  amountCents    Int
+  provider       String    @default("ASAAS") // sync: ASAAS; core: ASAAS | MANUAL
+  externalId     String?
+  eventId        String?   @unique // sync: replay por evento (PROJECT.md §5)
+  idempotencyKey String?   @unique // core: replay por chave
+  // Referências opacas intra-DB (finance.Receivable.id / finance.Payable.id).
+  receivableId   String?
+  payableId      String?
+  occurredAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime? @updatedAt @default(now())
+
+  @@unique([provider, externalId])
+  @@index([kind])
+  @@index([orgId, occurredAt])
+  @@index([accountId])
+  @@index([receivableId])
+  @@index([payableId])
+  @@map("finance_transactions")
+}
+
+// Idempotência do consumidor sync (PROJECT.md §5). UNIQUE(eventId): o efeito
+// e este registro nascem na MESMA transação (ON CONFLICT DO NOTHING).
+model FinanceProcessedEvent {
+  id         String   @id @default(cuid())
+  eventId    String   @unique
+  type       String
+  occurredAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@map("finance_processed_events")
+}
+
+// Outbox do sync (contrato do relay: `outbox_events`, claim SKIP LOCKED,
+// jobId=eventId). Tipos: FinanceTransactionPosted, ReceivableOverdue,
+// ProjectionRecomputed.
+model FinanceOutboxEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  aggregate   String
+  aggregateId String
+  type        String
+  payload     Json
+  occurredAt  DateTime @default(now())
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("outbox_events")
+}
+
+// Snapshot de projeção (persistência compartilhada; o compute é dono do
+// formato/conteúdo — core NÃO implementa cálculo). `scope @unique` atende o
+// `ON CONFLICT (scope)` do sync (namespaces `global | org:<id>`);
+// `@@unique([scope, refDate, premisesHash])` atende o upsert do store;
+// `@@unique([orgId, scope, refDate, premisesHash])` é o contrato core
+// (mesmas premissas no mesmo período → mesmo snapshot, idempotente).
+model ProjectionSnapshot {
+  id            String    @id @default(cuid())
+  orgId         String? // core: customers.Customer.id opaco
+  scope         String    @unique // sync: ex. global | org:<id>; core/store: MONTHLY/... (namespaces distintos por workstream)
+  valid         Boolean   @default(true) // sync: invalidação sem recálculo
+  computedAt    DateTime? // sync (camelCase)
+  invalidatedAt DateTime? // sync (camelCase)
+  refDate       String?   @map("ref_date") // store TEXT (ex. 2026-10) + core (ISO)
+  premisesHash  String?   @map("premises_hash") // store + core (SHA256 premissas)
+  tz            String?   @default("America/Sao_Paulo") // store
+  periodStart   DateTime? @map("period_start") // store
+  periodEnd     DateTime? @map("period_end") // store
+  payload       Json? // store + core
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime? @updatedAt @default(now()) // sync (camelCase)
+  storedAt      DateTime? @map("updated_at") // store (snake_case)
+
+  @@unique([scope, refDate, premisesHash])
+  @@unique([orgId, scope, refDate, premisesHash])
+  @@index([orgId, scope])
+  @@map("projection_snapshots")
+}
+
+// Plano de contas por organização (core). `code` único por org.
+model FinancialCategory {
+  id           String                 @id @default(cuid())
+  orgId        String // opaco cross-DB: customers.Customer.id (organização)
+  code         String
+  name         String?
+  type         String // INCOME | EXPENSE
+  active       Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt @default(now())
+  receivables  Receivable[]
+  payables     Payable[]
+  transactions FinancialTransaction[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+  @@map("financial_categories")
+}
+
+// Contas financeiras por organização (core). balanceCents: SOMENTE via
+// FinancialTransaction (baixa core). Sem escrita direta; sync não toca aqui.
+model FinancialAccount {
+  id           String                 @id @default(cuid())
+  orgId        String // opaco cross-DB: customers.Customer.id (organização)
+  code         String
+  name         String?
+  type         String // CASH | BANK | ASAAS_WALLET
+  balanceCents Int                    @default(0)
+  active       Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt @default(now())
+  transactions FinancialTransaction[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+  @@map("financial_accounts")
+}
+
+// Outbox do core (baixas: finance.receivable.received.v1,
+// finance.payable.paid.v1). Relay publica; consumidores idempotentes por
+// eventId — mesmo padrão de billing.outbox_events.
+model FinanceOutbox {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  orgId       String?
+  aggregate   String // Receivable | Payable | FinancialTransaction
+  aggregateId String
+  type        String
+  payload     Json
+  occurredAt  DateTime @default(now())
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([published])
+  @@map("finance_outbox")
+}
+
+// Jobs da automação financeira (despesas via Asaas Bill Payments +
+// receitas via cobrança automática). Idempotência (PROJECT.md §5):
+// UNIQUE(idempotencyKey) — replay da mesma chave retorna o existente sem
+// reexecutar o provider. Nunca toca em saldo (REGRA DE OURO intacta).
+model FinanceAutomationJob {
+  id             String    @id @default(cuid())
+  idempotencyKey String    @unique
+  orgId          String // opaco cross-DB: customers.Customer.id (organização)
+  kind           String // BILL_PAY | AUTO_CHARGE
+  payableId      String?
+  receivableId   String?
+  barcodeMasked  String? // máscara p/ suporte (nunca o número integral)
+  scheduleDate   DateTime?
+  provider       String    @default("ASAAS")
+  externalId     String?
+  status         String    @default("QUEUED") // QUEUED | SCHEDULED | RUNNING | DONE | FAILED | CANCELED
+  attempts       Int       @default(0)
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt @default(now())
+
+  @@index([orgId, payableId])
+  @@index([orgId, receivableId])
+  @@map("finance_automation_jobs")
+}
+
+// Notificações in-system do financeiro (sino do terminal administrativo).
+// Idempotência (PROJECT.md §5): UNIQUE(eventId) — replay não duplica.
+// Corpo sem código de barras integral (só máscara) — LGPD.
+model FinanceNotification {
+  id        String   @id @default(cuid())
+  orgId     String // opaco cross-DB: customers.Customer.id (organização)
+  eventId   String   @unique
+  kind      String // EXPENSE_CREATED | BILL_SCHEDULED | BILL_PAID | BILL_PAY_FAILED | CHARGE_ISSUED | CHARGE_FAILED | ...
+  title     String
+  body      String
+  severity  String   @default("INFO") // INFO | WARN | ERROR
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([orgId, read])
+  @@map("finance_notifications")
+}

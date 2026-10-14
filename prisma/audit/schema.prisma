@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/audit"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_AUDIT")
+}
+
+// Append-only: a aplicação nunca faz update/delete neste modelo.
+// Retenção e purge documentados em LGPD.md. Trilha p/ license.reveal, finance.read, etc.
+model AuditEvent {
+  id        String   @id @default(cuid())
+  // Referência opaca cross-DB — origem: auth.UserIdentity.id (ator). Sem @relation cross-DB.
+  actorId   String?
+  action    String   // ex.: license.reveal, finance.grant
+  entity    String
+  // Referência opaca cross-DB — origem: DB do domínio da entidade. Sem @relation cross-DB.
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@map("audit_events")
+}

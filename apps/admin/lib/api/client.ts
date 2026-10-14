@@ -1,0 +1,57 @@
+import type { ApiError } from "../types";
+
+export class ApiClientError extends Error {
+  status: number;
+  code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/**
+ * Cliente HTTP do Admin → BFF (`/api/*`) ou Nest direto.
+ * - `credentials: "include"` (cookies httpOnly, nunca localStorage p/ token).
+ * - Em 401 tenta `POST /api/auth/refresh` UMA vez e repete a requisição.
+ */
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const doFetch = async (): Promise<Response> =>
+    fetch(path, {
+      ...init,
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+    });
+
+  let res = await doFetch();
+
+  if (res.status === 401 && !path.endsWith("/auth/refresh")) {
+    const refreshed = await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
+    if (refreshed.ok) {
+      res = await doFetch();
+    }
+  }
+
+  if (!res.ok) {
+    let code = "INTERNAL";
+    let message = `Falha na requisição (${res.status}).`;
+    try {
+      const body = (await res.json()) as Partial<ApiError>;
+      if (typeof body.code === "string") code = body.code;
+      if (typeof body.message === "string") message = body.message;
+    } catch {
+      // Mantém mensagem padrão.
+    }
+    throw new ApiClientError(res.status, code, message);
+  }
+
+  if (res.status === 204) return undefined as unknown as T;
+  return (await res.json()) as T;
+}
+
+export const apiGet = <T>(path: string, init?: RequestInit): Promise<T> =>
+  apiFetch<T>(path, { ...init, method: "GET" });
+
+export const apiPost = <T>(path: string, body?: unknown, init?: RequestInit): Promise<T> =>
+  apiFetch<T>(path, { ...init, method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });

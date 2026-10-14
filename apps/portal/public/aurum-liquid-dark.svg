@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340">
+  <title>aurum</title>
+  <defs>
+    <linearGradient id="au" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#755D2E"/>
+      <stop offset=".35" stop-color="#C0A060"/>
+      <stop offset=".5" stop-color="#EADAB6"/>
+      <stop offset=".65" stop-color="#C0A060"/>
+      <stop offset="1" stop-color="#755D2E"/>
+    </linearGradient>
+  </defs>
+  <text x="600" y="176" text-anchor="middle" dominant-baseline="central" font-family="'Space Grotesk','Sora',system-ui,-apple-system,'Segoe UI',sans-serif" font-weight="600" font-size="300" letter-spacing="-12" fill="url(#au)">aurum</text>
+</svg>

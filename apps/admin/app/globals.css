@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+ * Aurum DS v1 — fundação visual (fonte única: docs/design-system/DS.md)
+ * §1 tokens canônicos — NÃO editar valores aqui, proponha revisão do DS.
+ * =================================================================== */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-0: #e7e9ee; --bg-1: #f4f5f7; --bg-2: #ffffff;
+  --text-1: #14161a; --text-2: rgba(20,22,26,.68); --text-3: rgba(20,22,26,.48);
+  --border-1: rgba(20,22,26,.08); --border-2: rgba(20,22,26,.16); --border-3: rgba(20,22,26,.32);
+  --accent: #8a5e0e; --accent-strong: #8a5e0e; --accent-ink: #ffffff; --accent-soft: rgba(138,94,14,.12);
+  --brand-gold: #e8b34b; /* marca/fundo com tinta, nunca texto funcional */
+  --danger: #c92a30; --danger-ink: #ffffff; --danger-soft: rgba(201,42,48,.12);
+  --ok: #157f46; --ok-ink: #ffffff; --ok-soft: rgba(21,127,70,.12);
+  --warn: #8a5e0e; --warn-soft: rgba(138,94,14,.14);
+  --info: #0b6bcb; --info-soft: rgba(11,107,203,.12);
+  --ring: #8a5e0e;
+  --scrim: rgba(20,22,26,.6);
+  --shadow-1: 0 1px 2px rgba(20,22,26,.08);
+  --shadow-2: 0 4px 16px rgba(20,22,26,.12);
+  --shadow-3: 0 12px 40px rgba(20,22,26,.22);
+  --specular: inset 0 1px 0 rgba(255,255,255,.5);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "JetBrains Mono", Consolas, Menlo, monospace;
+  /* z-index canônico (DS §7) — nada fora desta tabela. */
+  --z-chrome: 30; --z-dropdown: 40; --z-drawer: 46; --z-modal: 50; --z-tooltip: 70;
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-0: #0b0d10; --bg-1: #0f1115; --bg-2: #171b22;
+  --text-1: #f2efe6; --text-2: rgba(242,239,230,.68); --text-3: rgba(242,239,230,.44);
+  --border-1: rgba(255,255,255,.08); --border-2: rgba(255,255,255,.14); --border-3: rgba(255,255,255,.24);
+  --accent: #e8b34b; --accent-strong: #e8b34b; --accent-ink: #1a1405; --accent-soft: rgba(232,179,75,.14);
+  --brand-gold: #e8b34b;
+  --danger: #f2555a; --danger-ink: #1a0505; --danger-soft: rgba(242,85,90,.12);
+  --ok: #3ec97f; --ok-ink: #06130c; --ok-soft: rgba(62,201,127,.12);
+  --warn: #e8b34b; --warn-soft: rgba(232,179,75,.14);
+  --info: #5eb1ef; --info-ink: #06121f; --info-soft: rgba(94,177,239,.12);
+  --ring: #e8b34b;
+  --scrim: rgba(0,0,0,.6);
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 4px 16px rgba(0,0,0,.45);
+  --shadow-3: 0 12px 40px rgba(0,0,0,.5);
+  --specular: inset 0 1px 0 rgba(255,255,255,.08);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "JetBrains Mono", Consolas, Menlo, monospace;
+  --z-chrome: 30; --z-dropdown: 40; --z-drawer: 46; --z-modal: 50; --z-tooltip: 70;
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg1 text-text1 font-sans text-body antialiased;
+  }
+
+  a {
+    @apply text-accent-strong dark:text-accent;
+  }
+
+  /* Ring de foco: 100ms, SÓ :focus-visible (DS §6). */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px var(--ring);
+    transition: box-shadow 100ms ease-out;
+  }
+
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline: 2px solid CanvasText;
+      outline-offset: 2px;
+      box-shadow: none;
+      transition: none;
+    }
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+  }
+
+  /* Dinheiro/IDs/MFA/JSON: sempre mono + tabular-nums, nunca truncar (DS §3). */
+  .mono,
+  .tnum,
+  td[data-numeric],
+  .kpi-value[data-kind="currency"] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  /* th canônico: 12.5px/700 uppercase (DS §3). Hierarquia por peso, nunca só cor. */
+  table.data thead th {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  /* Truncamento padrão p/ nav/células de nome (DS 02 §3.1). */
+  .truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* LEGADO — alias p/ telas/shell que ainda usam a classe; o ring real vem de :focus-visible acima. */
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px var(--ring);
+  }
+
+  /* Fallback sólido quando sem backdrop-filter (DS §2). */
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-chrome {
+      background: var(--bg-2);
+    }
+    .glass-modal {
+      background: var(--bg-2);
+    }
+  }
+
+  /* Transparência reduzida → tudo sólido (DS §2/§5). */
+  @media (prefers-reduced-transparency: reduce) {
+    .glass-chrome {
+      background: var(--bg-2);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .glass-modal {
+      background: var(--bg-2);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
+  /* Movimento reduzido → sem shimmer/shake (DS §6). */
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton,
+    .animate-shimmer,
+    .animate-shake {
+      animation: none;
+    }
+  }
+}
+
+@layer components {
+  /* Vidro de chrome: sidebar/topbar (DS §2). 50% + blur 24px saturate 1.6 + specular, raio 0. */
+  .glass-chrome {
+    background: color-mix(in srgb, var(--bg-2) 50%, transparent);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    border-radius: 0;
+    box-shadow: var(--specular);
+  }
+  /* Cards/modal/dropdown são OPACOS (DS §2) — sem .glass-card nesta fundação.
+     Exceção aprovada: `.glass-modal` (E3 Liquid Glass p/ o modal do cliente) —
+     surface-2 72% + blur(30px) saturate(1.5) + specular + sombra L3 em duas
+     camadas (2 sombras + 1 inset, teto do DS §5). */
+  .glass-modal {
+    background: color-mix(in srgb, var(--bg-2) 72%, transparent);
+    backdrop-filter: blur(30px) saturate(1.5);
+    -webkit-backdrop-filter: blur(30px) saturate(1.5);
+    border: 1px solid var(--border-1);
+    box-shadow: var(--specular), var(--shadow-2), var(--shadow-3);
+  }
+
+  /* === LEGADO — shims mínimos p/ telas ainda não migradas. Não usar em código novo. === */
+  .auth-wrap {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: var(--bg-0);
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 25rem;
+  }
+  .card {
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    box-shadow: var(--shadow-1);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-2);
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .muted {
+    color: var(--text-2);
+  }
+  .feedback {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-2);
+  }
+  .feedback h2 {
+    color: var(--text-1);
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-2) 25%, var(--border-2) 50%, var(--bg-2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s linear infinite;
+    border-radius: 6px;
+    min-height: 1rem;
+  }
+}
+
+/* Skip-link (sempre presente, DS §8). Fora de layers p/ vencer em qualquer contexto. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 0 0 8px 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0;
+}
+
+/* Scrollbar fina 6px. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-3);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}

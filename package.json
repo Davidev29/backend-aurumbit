@@ -1,0 +1,29 @@
+{
+  "name": "aurum-bit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aurum Bit monorepo (T1 fundacao: pnpm+turbo; T2 scripts preservados).",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "build:api": "npm --prefix apps/api run build",
+    "build:workers": "npm --prefix apps/workers run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test:e2e": "npm --prefix apps/api run test:e2e",
+    "knowledge:build": "node docs/knowledge/build.js",
+    "knowledge:ask": "node docs/knowledge/query.js",
+    "migrate:all": "bash deploy/scripts/migrate-all.sh",
+    "seed:all": "bash deploy/scripts/seed-all.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

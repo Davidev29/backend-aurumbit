@@ -1,0 +1,19 @@
+{
+  "name": "@aurum-bit/offline-token",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline JWT 7d Aurum Bit (Fase 3, PROJECT.md §1): mint HS256 stub + validateOfflineToken() pura.",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "typescript": "^5.4.0"
+  }
+}

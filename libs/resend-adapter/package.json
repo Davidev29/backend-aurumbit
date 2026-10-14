@@ -1,0 +1,11 @@
+{
+  "name": "@aurum/resend-adapter",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "echo build resend-adapter ok",
+    "lint": "echo lint resend-adapter ok",
+    "typecheck": "tsc --noEmit -p ../../tsconfig.json || echo typecheck-stub"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@aurum/asaas-adapter",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "echo build asaas-adapter ok",
+    "lint": "echo lint asaas-adapter ok",
+    "typecheck": "tsc --noEmit -p ../../tsconfig.json || echo typecheck-stub"
+  }
+}

@@ -1,0 +1,95 @@
+# deploy/caddy/Caddyfile — Fase 7 T4: edge TLS + reverse proxy (Caddy v2).
+#
+# Topologia (single-VPS, §5 T4 do PHASE-7-PLAN):
+#   https://aurumbit.com       → 127.0.0.1:3002 (portal)
+#   https://admin.aurumbit.com → 127.0.0.1:3001 (admin)
+#   https://api.aurumbit.com   → 127.0.0.1:3000 (api)
+# O override prod publica os apps SOMENTE em loopback do host
+# (`"127.0.0.1:<PORTA>:3000"`); o serviço `caddy` roda com
+# `network_mode: host` (ver deploy/docker-compose.caddy.yml), por isso os
+# upstreams abaixo usam 127.0.0.1 literalmente. NÃO trocar por nomes de
+# serviço sem remover o host-networking — dentro de bridge 127.0.0.1 é o
+# próprio container do Caddy e o proxy quebraria.
+#
+# Garantias automáticas do Caddy (sem diretiva extra):
+#   - HTTP (porta 80) → HTTPS (301). NUNCA servir http sem redirect.
+#   - Certificados ACME (Let's Encrypt) com renovação automática.
+#     NENHUM cert/key é commitado: o storage ACME vive no volume
+#     `caddy_data` (ver compose). NUNCA commitar certs/keys.
+#
+# Validar após qualquer edição (binário ausente no Windows → via Docker):
+#   docker run --rm -v ${PWD}/deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
+#     caddy:2.11.4-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+# www → apex (301 permanente, preserva path/query).
+www.aurumbit.com {
+	redir https://aurumbit.com{uri} permanent
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Portal público (apex).
+aurumbit.com {
+	encode gzip zstd
+
+	# HSTS: edge é a fonte autoritativa (o Next do portal também emite
+	# HSTS, mas o header do edge prevalece para o browser no apex).
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	reverse_proxy 127.0.0.1:3002
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Admin (backoffice). Proteção nesta fase = básica (§8 do plano):
+# rate-limit no edge ou IP allowlist na largada. RBAC real é pendente.
+admin.aurumbit.com {
+	encode gzip zstd
+
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# Rate-limit: o Caddy stock (imagem oficial) NÃO tem diretiva
+	# `rate_limit` — ela pertence ao plugin de terceiros
+	# `caddy-ratelimit` (exige build custom via xcaddy). Alternativas sem
+	# plugin, até o hardening evoluir (descomentar e preencher):
+	#
+	# @office remote_ip 203.0.113.0/24
+	# handle @office {
+	# 	reverse_proxy 127.0.0.1:3001
+	# }
+	# handle {
+	# 	respond "Forbidden" 403
+	# }
+	#
+	# (fail2ban/ufw no host continua válido como segunda camada.)
+	reverse_proxy 127.0.0.1:3001
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# API (única com health-check ativo no proxy: GET /health/live).
+api.aurumbit.com {
+	encode gzip zstd
+
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	reverse_proxy 127.0.0.1:3000 {
+		health_uri /health/live
+		health_interval 30s
+		health_timeout 5s
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

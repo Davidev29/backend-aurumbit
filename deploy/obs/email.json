@@ -1,0 +1,49 @@
+{
+  "title": "Aurum Bit — Email (Fase 6 stub)",
+  "uid": "aurum-email",
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "version": 1,
+  "description": "Stub Fase 6: envios por template/resultado, DLQ comm, lag do tópico de e-mail. Requer Prometheus com scrape de GET /metrics.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Envios por template/resultado",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (template, result) (rate(email_send_total[5m]))",
+          "legendFormat": "{{template}} {{result}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "DLQ comm.email.send",
+      "type": "stat",
+      "targets": [{ "expr": "bullmq_dlq_depth{queue=~\"comm.*\"}", "legendFormat": "{{queue}}" }]
+    },
+    {
+      "id": 3,
+      "title": "Lag tópico email.requested",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "outbox_lag_seconds{topic=\"communications.email.requested.v1\"}",
+          "legendFormat": "lag s"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "DLQ rate (5m)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (template) (rate(email_send_total{result=\"dlq\"}[5m]))",
+          "legendFormat": "{{template}}"
+        }
+      ]
+    }
+  ]
+}

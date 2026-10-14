@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/licensing"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_LICENSING")
+}
+
+// Stub Fase 1 — chaves conforme PROJECT.md §2: nunca plaintext, só hash/prefixo/sufixo + encriptado p/ reemissão.
+// Fase 3 (aditivo): vigência + token_version + limite de devices (PROJECT.md §§1-2, §4). Sem reescrever o core.
+model License {
+  id        String   @id @default(cuid())
+  // Referência opaca cross-DB — origem: customers.Customer.id (titular). Sem @relation cross-DB.
+  ownerType String // CUSTOMER | ORGANIZATION (titular opaco cross-DB)
+  ownerId   String
+  // Referência opaca cross-DB — origem: products.Product.id / products.Plan.id. Sem @relation cross-DB.
+  productId String
+  planId    String?
+  contractItemId String? // opaco cross-DB: access.ContractItem.id (origem da contratacao)
+  kind String @default("monthly") // monthly | annual
+
+  key_hash   String  @unique // SHA256(key)
+  key_prefix String  // 4 chars p/ suporte
+  key_last4  String  // últimos 4 p/ suporte
+  key_enc    String? // AES-256-GCM/KMS, só p/ reemissão auditada
+
+  // Vigência (PROJECT.md §1): inicia na confirmação do pagamento.
+  // expires_at = starts_at + 1M/12M calendário UTC; grace_until = expires_at + 3d.
+  issuedAt DateTime @default(now())
+  startsAt     DateTime?
+  expiresAt    DateTime?
+  graceUntil   DateTime?
+  // Rótulo de exibição do titular (mask-friendly, ex. nome fantasia) p/
+  // agregados admin sem lookup cross-DB (LGPD: só o necessário p/ suporte).
+  ownerLabel String?
+  // Revogação: bump invalida JWTs e offline-tokens no próximo online (PROJECT.md §2).
+  tokenVersion Int      @default(1)
+  // Limite de máquinas vinculadas (enforcement no backend, Fase 3).
+  maxDevices   Int      @default(3)
+  // Feature codes congelados no momento da emissão (opaco p/ offline-token `feat`).
+  features     Json?
+  // Feature codes congelados no momento da emissão (opaco p/ offline-token `feat`).
+  features     Json?
+
+  status    String   @default("pending_payment") // pending_payment | active | suspended | revoked (+ grace/expired derivados na leitura)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
+
+  devices LicenseDevice[]
+
+  @@index([ownerType, ownerId])
+  @@index([status])
+  @@index([status, expiresAt])
+  @@map("licenses")
+}
+
+model LicenseDevice {
+  id         String   @id @default(cuid())
+  license    License  @relation(fields: [licenseId], references: [id])
+  licenseId  String
+  // HMAC(secret_rotativo, license_id || app_instance_id). Nunca hardware cru (ver PROJECT.md §4).
+  device_hash String
+  // Rótulo do aparelho cifrado (AES-256-GCM/KMS). Stub: base64 até KMS existir.
+  device_label_enc String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  // IP mascarado /24 p/ detecção (raw só em memória; PROJECT.md §4).
+  ip_hint String?
+  ip_hash String?
+  // active | blocked | rotated | unlinked (unlinked = vínculo removido, hash em trilha/outbox).
+  status String @default("active")
+  // Clone: mesmo hash com sinais impossíveis (geo/IP, iat futuro, contador divergente).
+  cloned_suspect  Boolean @default(false)
+  cloned_evidence Json?
+  // Rotate: hash sucessor + expiração da janela de duplo-aceite (15min).
+  rotated_to        String?
+  rotate_expires_at DateTime?
+  // Contador monotônico do token offline (divergência = rollback/replay = clone).
+  last_ctr     Int?
+  last_country String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt @default(now())
+
+  @@unique([licenseId, device_hash])
+  @@map("license_devices")
+}
+
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  aggregate   String
+  aggregateId String
+  type        String
+  payload     Json
+  occurredAt  DateTime @default(now())
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("outbox_events")
+}

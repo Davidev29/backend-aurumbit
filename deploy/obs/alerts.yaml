@@ -1,0 +1,29 @@
+# Alertas Fase 6 (stub) — Prometheus alerting rules.
+# TODO: ligar `receiver: slack-pager` (Slack webhook + PagerDuty) no Alertmanager;
+# hoje as regras só avaliam (sem receiver configurado). Ver docs/SLOs.md § Alertas.
+groups:
+  - name: aurum-bit-dlq
+    interval: 1m
+    rules:
+      - alert: BullMQDlqNonEmpty
+        expr: max by (queue) (bullmq_dlq_depth) > 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "DLQ {{ $labels.queue }} com mensagens retidas"
+          runbook: "docs/RUNBOOKS/health.md"
+      - alert: OutboxLagHigh
+        expr: max by (topic) (outbox_lag_seconds) > 300
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Outbox {{ $labels.topic }} com lag > 5min"
+      - alert: BillingReconDiverged
+        expr: sum by (result) (rate(billing_recon_total{result=\"diverged\"}[1h])) > 0
+        for: 0m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Reconciliação Asaas divergiu (PROJECT.md §5)"

@@ -1,0 +1,41 @@
+{
+  "title": "Aurum Bit — Audit (Fase 6 stub)",
+  "uid": "aurum-audit",
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "version": 1,
+  "description": "Stub Fase 6: eventos de auditoria por ação, projeções finance, retenção/purge. Requer Prometheus com scrape de GET /metrics.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Eventos de auditoria por ação",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (action) (rate(audit_events_total[5m]))",
+          "legendFormat": "{{action}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Projeções finance hit/miss",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(finance_projection_total[5m]))",
+          "legendFormat": "{{result}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Retenção: runs + purgados",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "sum by (job, result) (rate(retention_runs_total[1h]))", "legendFormat": "{{job}} {{result}}" },
+        { "expr": "sum by (job) (rate(retention_purged_total[1h]))", "legendFormat": "purged {{job}}" }
+      ]
+    }
+  ]
+}

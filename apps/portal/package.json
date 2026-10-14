@@ -1,0 +1,35 @@
+{
+  "name": "@aurum/portal",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3002",
+    "build": "next build",
+    "start": "next start -p 3002",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.18.2",
+    "lucide-react": "^1.55.0",
+    "next": "14.2.5",
+    "next-themes": "^0.4.6",
+    "ogl": "^1.0.11",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-hook-form": "^7.54.2",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^3.24.1",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "20.12.12",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.29",
+    "tailwindcss": "^3.4.19",
+    "typescript": "5.4.5"
+  }
+}

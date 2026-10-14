@@ -1,0 +1,6 @@
+# SHIM mínimo criado em T2 Fase 1. T1 é dono deste arquivo e pode expandir (libs/*, tooling).
+packages:
+  - "apps/*"
+  - "libs/*"
+minimumReleaseAgeExclude:
+  - prettier@3.9.10

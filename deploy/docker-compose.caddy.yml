@@ -1,0 +1,61 @@
+# deploy/docker-compose.caddy.yml — Fase 7 T4: edge TLS (Caddy) como overlay.
+#
+# ESCOLHA DECLARADA: composição SEPARADA (não editar `docker-compose.prod.yml`
+# aqui). Motivo: o override prod (T1) está sendo criado em paralelo por outra
+# frente — um arquivo próprio elimina risco de sobrescrita/merge conflitante.
+# Subir combinado:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  -f docker-compose.caddy.yml up -d
+# (enquanto o prod.yml não existir: `-f docker-compose.yml -f docker-compose.caddy.yml`)
+# Merge futuro (T1 pronto): copiar o serviço `caddy` abaixo para dentro de
+# `docker-compose.prod.yml` e remover este arquivo.
+#
+# Rede: `network_mode: host` (Linux/VPS). É o que torna os upstreams
+# `127.0.0.1:300X` do Caddyfile alcançáveis: os apps publicam SOMENTE em
+# loopback do host (`"127.0.0.1:<PORTA>:3000"` no override prod). Sob
+# `network_mode: host` o bloco `ports:` é documental (o Caddy binda 80/443
+# direto no host) — NÃO remover, serve de inventário das portas do edge.
+# Consequência: este overlay só roda em Docker Linux (VPS), nunca no
+# Windows/Mac local — validação local = `docker compose config` apenas.
+
+name: aurum
+
+services:
+  caddy:
+    # Versão fixa (nunca :latest flutuante). Digest verificado localmente em
+    # 2026-10-14 para caddy:2-alpine (= v2.11.4):
+    #   sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    image: caddy:2.11.4-alpine
+    container_name: aurum-caddy
+    restart: unless-stopped
+    network_mode: host
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # storage ACME (certs/keys) — NUNCA commitar, vive só no volume
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      admin:
+        condition: service_started
+      # TODO(T0): reativar quando o serviço `portal` existir no compose base
+      # (hoje ausente → referência quebraria o `config`). Alvo final:
+      #   portal:
+      #     condition: service_started
+    # Admin API do Caddy (default localhost:2019) responde config carregada =
+    # prova de vida sem depender de DNS nem de vhost.
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/products"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_PRODUCTS")
+}
+
+// Fase 2 — Products base (sem Licensing devices/offline-token, sem Billing/Asaas).
+// Catálogo imutável (REQUIREMENTS.md §2): preço NUNCA muda via UPDATE.
+// Novo preço = nova linha ProductPlan (code + valid_from UNIQUE); linha antiga
+// vai para ARCHIVED com superseded_by apontando a sucessora.
+// Nota Fase 1: model Plan (stub) foi substituído por ProductPlan; sem migrations
+// geradas até aqui, a primeira migration já nasce com o desenho final.
+
+// Produto vendável. code é o identificador estável cross-DB
+// (access.ContractItem.productId referencia este code/id como String opaca).
+model Product {
+  id          String   @id @default(cuid())
+  code        String   @unique // ex.: AURUM_TERMINAL
+  name        String
+  slug        String   @unique // compat Fase 1 (rotas/SEO)
+  description String?
+  status      String   @default("ACTIVE") // DRAFT | ACTIVE | ARCHIVED
+  // Limite padrão de máquinas por licença do produto (1..100; UI valida).
+  // Sem migrations versionadas até aqui: coluna aplicada via `prisma db push`
+  // (baseline de migrations TBD depois do push inicial).
+  machinesAllowed Int @default(3) @map("machines_allowed")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt @default(now())
+
+  versions ProductVersion[]
+  plans    ProductPlan[]
+  images   ProductImage[]
+
+  @@map("products")
+}
+
+model ProductVersion {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  version   String // ex.: 1.0.0
+  changelog String?
+  createdAt DateTime @default(now())
+
+  @@unique([productId, version])
+  @@map("product_versions")
+}
+
+// Capacidade concedível. kind: BOOLEAN (liga/desliga) | QUOTA (renovável,
+// ex.: assentos) | LIMIT (teto, ex.: req/min). Valor concreto vai em
+// PlanFeature.value; Entitlement.quotaValue espelha o concedido.
+model Feature {
+  id          String   @id @default(cuid())
+  code        String   @unique // ex.: TERMINAL_REALTIME
+  name        String
+  description String?
+  kind        String // BOOLEAN | QUOTA | LIMIT
+  unit        String? // ex.: seats, req/min (só QUOTA/LIMIT)
+  // Fase 8: canal da capability (WEB | DESKTOP | BOTH). Default BOTH =
+  // comportamento legado (sem gating por canal). Servidor filtra no
+  // check-access; app replica a matriz p/ UX (nunca autoriza sozinho).
+  channel     String   @default("BOTH") // WEB | DESKTOP | BOTH
+  createdAt   DateTime @default(now())
+
+  plans PlanFeature[]
+
+  @@map("features")
+}
+
+// Linha de catálogo. priceCents é IMUTÁVEL por contrato de aplicação
+// (sem endpoint de update; só create + archive).
+model ProductPlan {
+  id              String   @id @default(cuid())
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId       String
+  code            String // ex.: TERMINAL_PRO_MONTHLY
+  name            String
+  priceCents      Int // centavos, congelado na linha
+  billingInterval String // MONTH | YEAR | ONE_TIME
+  validFrom       DateTime
+  validTo         DateTime?
+  status          String   @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
+  successor       ProductPlan?  @relation("PlanSupersession", fields: [supersededBy], references: [id], onDelete: SetNull)
+  supersededBy    String?
+  predecessors  ProductPlan[] @relation("PlanSupersession")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt @default(now())
+
+  features PlanFeature[]
+
+  @@unique([code, validFrom])
+  @@index([productId, status])
+  @@index([status, validFrom])
+  @@map("product_plans")
+}
+
+// PK composta plan+feature. value: QUOTA/LIMIT = quantidade ("5");
+// BOOLEAN = "true"/"false". Ausência da linha = feature não incluída.
+model PlanFeature {
+  plan      ProductPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId    String
+  feature   Feature     @relation(fields: [featureId], references: [id], onDelete: Restrict)
+  featureId String
+  value     String?
+  createdAt DateTime    @default(now())
+
+  @@id([planId, featureId])
+  @@map("plan_features")
+}
+
+// Galeria em disco (VPS): metadados no PG, bytes em PRODUCT_IMAGES_DIR
+// (default <cwd>/data/product-images; NUNCA dentro do repo).
+// filename é `uuid+ext` gerado no backend (único, sem path — anti traversal).
+model ProductImage {
+  id           String   @id @default(cuid())
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId    String   @map("product_id")
+  filename     String   @unique // ex.: 550e8400-....png (basename, sem diretório)
+  originalName String   @map("original_name")
+  mime         String
+  sizeBytes    Int      @map("size_bytes")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  aggregate   String
+  aggregateId String
+  type        String
+  payload     Json
+  occurredAt  DateTime @default(now())
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("outbox_events")
+}

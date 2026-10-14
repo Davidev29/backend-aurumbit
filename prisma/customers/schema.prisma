@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/customers"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_CUSTOMERS")
+}
+
+// Titular: PF global (identity) + Organização PJ opcional via OrganizationMembership
+// (OWNER/ADMIN/FINANCE/MEMBER). Sem FK cross-DB: identityId é referência opaca a
+// auth.UserIdentity.id; organizationId é FK local p/ Organization.
+
+enum CustomerKind {
+  PF
+  PJ
+}
+
+enum CustomerStatus {
+  PROSPECT
+  PENDING_PAYMENT
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  FINANCE
+  MEMBER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum ConsentPurpose {
+  TERMS
+  PRIVACY
+  MARKETING
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+model CustomerProfile {
+  id             String         @id @default(cuid())
+  kind           CustomerKind   @default(PF)
+  // XOR PF/PJ (aplicado na camada de aplicação + CHECK na migração SQL, ver comentário abaixo):
+  //   PF => identityId NOT NULL AND organizationId NULL
+  //   PJ => identityId NULL AND organizationId NOT NULL
+  // CHECK não pode ser expresso em Prisma schema; a migração deve conter:
+  //   CHECK ((kind='PF' AND identity_id IS NOT NULL AND organization_id IS NULL)
+  //       OR (kind='PJ' AND identity_id IS NULL AND organization_id IS NOT NULL))
+  identityId     String?        @unique @map("identity_id")
+  organizationId String?        @unique @map("organization_id")
+  organization   Organization?  @relation(fields: [organizationId], references: [id])
+  status         CustomerStatus @default(PROSPECT)
+  name           String         @default("")
+  // E-mail normalizado (NFKC + lowercase) na aplicação antes de persistir.
+  email          String         @default("")
+  // Vigência da licença: inicia na confirmação do pagamento (Fase 4 ativa via PaymentConfirmed).
+  vigenciaInicio DateTime?      @map("vigencia_inicio")
+  vigenciaFim    DateTime?      @map("vigencia_fim")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @default(now()) @map("updated_at")
+
+  @@index([status])
+  @@map("customer_profiles")
+}
+
+model Organization {
+  id          String             @id @default(cuid())
+  // CNPJ: nunca plaintext. Guarda hash SHA256 + last4 p/ suporte.
+  cnpjHash    String             @unique @map("cnpj_hash")
+  cnpjLast4   String             @map("cnpj_last4")
+  razaoSocial String             @map("razao_social")
+  status      OrganizationStatus @default(ACTIVE)
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @default(now()) @map("updated_at")
+
+  profiles    CustomerProfile[]
+  memberships OrganizationMembership[]
+
+  @@map("organizations")
+}
+
+model OrganizationMembership {
+  id             String           @id @default(cuid())
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  organizationId String           @map("organization_id")
+  // Referência opaca cross-DB — origem: auth.UserIdentity.id. Sem @relation cross-DB.
+  identityId     String           @map("identity_id")
+  role           MembershipRole   @default(MEMBER)
+  status         MembershipStatus @default(INVITED)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @default(now()) @map("updated_at")
+
+  @@unique([organizationId, identityId])
+  @@index([identityId])
+  @@map("organization_memberships")
+}
+
+model ConsentRecord {
+  id         String         @id @default(cuid())
+  // Referência opaca cross-DB — origem: auth.UserIdentity.id.
+  identityId String         @map("identity_id")
+  purpose    ConsentPurpose
+  version    String
+  status     ConsentStatus
+  policyHash String         @map("policy_hash")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @default(now()) @map("updated_at")
+
+  @@unique([identityId, purpose, version])
+  @@index([identityId])
+  @@map("consent_records")
+}
+
+// Outbox para publicação assíncrona via BullMQ/Redis (worker publica, Redis nunca é fonte definitiva).
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  aggregate   String
+  aggregateId String
+  type        String
+  payload     Json
+  occurredAt  DateTime @default(now())
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("outbox_events")
+}

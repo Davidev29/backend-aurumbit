@@ -1,0 +1,605 @@
+{
+  "version": 1,
+  "skills": {
+    "adapt": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/adapt/SKILL.md",
+      "computedHash": "a25371087807209a864e6c930b271d86aa44033509701c55724a8b6783103bca"
+    },
+    "admin-ui-builder": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/admin-ui-builder/SKILL.md",
+      "computedHash": "91d7627b505ce658a3813e06b8819df0f57257b46a439815dd12737534e5c0fc"
+    },
+    "admin-ui-orchestrator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/admin-ui-orchestrator/SKILL.md",
+      "computedHash": "a21f632dc2ead7e014c41a8eed447c4848facbe55447a3dccdd853df36e3b50e"
+    },
+    "agent-progress-visualizer": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/agent-progress-visualizer/SKILL.md",
+      "computedHash": "32e37335f35acc2a5834db69c96aa5b62579063cf96d104de46908ba069be1ee"
+    },
+    "analytics-setup-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/analytics-setup-architect/SKILL.md",
+      "computedHash": "e1373f2c32225ee1bf62d94f8d7115cbb2da073b8a9d1113988989fdaf8e4aee"
+    },
+    "animate": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/animate/SKILL.md",
+      "computedHash": "98eb19c8e0a5e4d9547e74a8a7913ebf3d26fbe1487f22bbd1359b08ed499cea"
+    },
+    "apple-design": {
+      "source": "dickwu/apple-design-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "e86d69af5d909f3bb877e51b51693c2d3cb4fc0fcf1401c67c49eedcb57462cc"
+    },
+    "audit": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/audit/SKILL.md",
+      "computedHash": "f70c80e5fbdfa3d43d17d124ccfc471a7021209e62933d012db981d84e239a37"
+    },
+    "backlink-quality-validator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/backlink-quality-validator/SKILL.md",
+      "computedHash": "bfad2edbbd079704e0d7a70c2cee139fa0986582cbed35cd591a421f95b8e575"
+    },
+    "bolder": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/bolder/SKILL.md",
+      "computedHash": "3dae4c1df05c3cfad8ebdde63765682e4775e596939221b1e1343a0a8213ceed"
+    },
+    "brief": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/brief/SKILL.md",
+      "computedHash": "44de6a6c9e08b822338531ab87ec2b502751f906d7b3651184a4b13669f575d8"
+    },
+    "clarify": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/clarify/SKILL.md",
+      "computedHash": "fa5411824e32d7e9dd0ae4058673c3cce6b78d84d236181df2e3e9323e53287f"
+    },
+    "colorize": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/colorize/SKILL.md",
+      "computedHash": "c27f9584856443ebc2a0fd95f4637b6259f32c6f811e498852b698930a503e39"
+    },
+    "concept-prototyper": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/concept-prototyper/SKILL.md",
+      "computedHash": "dd6542a2a62076e7e0130ad2971ca181eb247a69b1e3e35d7c941f15c544fb08"
+    },
+    "craft": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/craft/SKILL.md",
+      "computedHash": "58aaa2082825bf660300c28cd567f2ab3c01ab7f80aff99d67dd7a68ca2b5a7f"
+    },
+    "critique": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/critique/SKILL.md",
+      "computedHash": "12147784f1e5872f8bb9bd10f05a86b33ba1dbcabf3bfc5a0ccea2ae1d3558d1"
+    },
+    "cursor-reveal-hero": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/cursor-reveal-hero/SKILL.md",
+      "computedHash": "87be2d17ce4b5506391cf6b80743df25271c806fc63d004515cffb1d12a70bb7"
+    },
+    "delight": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/delight/SKILL.md",
+      "computedHash": "9fec580584bb030a4d22e607df48dba4c1be0cd703ee5a22485565cfc40f723a"
+    },
+    "deploy-orchestrator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/deploy-orchestrator/SKILL.md",
+      "computedHash": "0169ea81436dc43cbdcd426021559fb337626fba074d7ced7015d7cdc9b4cafa"
+    },
+    "design-critic-skill": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/design-critic-skill/SKILL.md",
+      "computedHash": "b38860fea27d568354ce90785b3599e86293d21101a4f56cd05424415f8d3224"
+    },
+    "design-feedback-collector": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/design-feedback-collector/SKILL.md",
+      "computedHash": "d6b7aa0c7d940c6543557e913dec2dd99564a6c90bddbdb2b41f9c3cc5f96f90"
+    },
+    "distill": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/distill/SKILL.md",
+      "computedHash": "572104f5aae32adb2820d7fd220240dc4090c6215208adb663cfc5b90781f1c1"
+    },
+    "domain-dns-configurator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/domain-dns-configurator/SKILL.md",
+      "computedHash": "e9dcb1f9e35dc7b54e25923f8078befdb2f8cdc94f79bd3f752a67650f747239"
+    },
+    "domain-name-generator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/domain-name-generator/SKILL.md",
+      "computedHash": "11893aa3cb51dae45ef85c6fbd88fc3bcf1a547bd84b6ba594e6cf502aef5e33"
+    },
+    "domain-registrar-advisor": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/domain-registrar-advisor/SKILL.md",
+      "computedHash": "851aaad1f81cb091dcbbd18facdd31763ef28221103ae2da3ac29bb8648af6c7"
+    },
+    "editorial-quality-gate": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/editorial-quality-gate/SKILL.md",
+      "computedHash": "b76b500f2ae25b6203a5cec075fbc6ce0a20b8bab9c987f8c731c0c421358815"
+    },
+    "existing-site-analyzer": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/existing-site-analyzer/SKILL.md",
+      "computedHash": "9bb7c82c313d84c2d6ec69310648fe7c0973f3ec804057698b17ca9fee9331b7"
+    },
+    "external-authority-placement-scout": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/external-authority-placement-scout/SKILL.md",
+      "computedHash": "c4f504d60c054beb39b5cbe0857ade06a9f89d489acd5b9d456a3a34d744ee6e"
+    },
+    "extract": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/extract/SKILL.md",
+      "computedHash": "f3a08a73af0f7afd59627ffa2e1b4cd2536d441444cbaea5625a079b6f484e1d"
+    },
+    "figma-apply-effects": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-apply-effects/SKILL.md",
+      "computedHash": "0f11a0ee807c335e0e483169d713e0ef50c3bf1cd35d5eaaebef91bdbf0123d6"
+    },
+    "figma-assets-manager": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-assets-manager/SKILL.md",
+      "computedHash": "f0de01e15920f02cf25e60a28d554f904d74d18c8f594a61ed82fbe728732c48"
+    },
+    "figma-canvas-editor": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-canvas-editor/SKILL.md",
+      "computedHash": "ac22ca7141f71c48ae6baed87ca2a4ba904edc005de1eb35fdc2d2169c780830"
+    },
+    "figma-code-to-canvas": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-code-to-canvas/SKILL.md",
+      "computedHash": "8e8091eeff75c78cdb3a6352bdc08592fb52da11921e7ff02abdad291a8beed0"
+    },
+    "figma-context-reader": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-context-reader/SKILL.md",
+      "computedHash": "48e702d15ae9b0bd178c0de170b5f8638c15c418b8c46a11df220b8dc73eaff2"
+    },
+    "figma-design-system-sync": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-design-system-sync/SKILL.md",
+      "computedHash": "e3677e157c1e39a67dcab08d6fc0e96be5bc6a62e5642174146fc49df273046b"
+    },
+    "figma-design-to-code-bridge": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-design-to-code-bridge/SKILL.md",
+      "computedHash": "0ec312152b78617d5292df0482da8027b0fc1889eab6926943c0d598f66ba4e5"
+    },
+    "figma-workflow-auditor": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/figma-workflow-auditor/SKILL.md",
+      "computedHash": "8cee6067a6fd2d3e4ada3a82dc3fdb6cced3200d47fa2cc4cf15b1d6c0f120de"
+    },
+    "finalize": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/finalize/SKILL.md",
+      "computedHash": "defe8e7f8faf3b40452e1d593b2fe9a08e845482833b5acc1fb0e99f57444c5c"
+    },
+    "friction-log": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/friction-log/SKILL.md",
+      "computedHash": "1d42054b4ec114e2a554c96f97ee93e2951261b924f086c16a3b3115aa671956"
+    },
+    "harden": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/harden/SKILL.md",
+      "computedHash": "e673a00fcddf74ebbe4563b1d4aacde2a45af606cd41cef0198124a871dd9e2b"
+    },
+    "heuristic": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/heuristic/SKILL.md",
+      "computedHash": "2c09f913be12e444e68b8ed2f1dad9488f89be125dea8d88728346042904d081"
+    },
+    "image-layer-alignment-validator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/image-layer-alignment-validator/SKILL.md",
+      "computedHash": "aeb235045193237d3437dc26decb05fc821e863b866716d5ef4983e701c17cc8"
+    },
+    "information-architecture-seo": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/information-architecture-seo/SKILL.md",
+      "computedHash": "1d4db590f1b6e03584b7b83707b1b2c10e62372ef212bc7320fe65524fcf3304"
+    },
+    "infra-launch-orchestrator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/infra-launch-orchestrator/SKILL.md",
+      "computedHash": "abe50b4e827dfbfad3572aa7a77d94e09ee993375a5dba01b47de8fc8ef643c1"
+    },
+    "internal-link-graph-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/internal-link-graph-architect/SKILL.md",
+      "computedHash": "7ec628c78f41fb85c9c8c6f3e9789e4dda703a266a6251345455ae58997f8c9c"
+    },
+    "launch-readiness-auditor": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/launch-readiness-auditor/SKILL.md",
+      "computedHash": "bb12a58a8c28b38f769bcd1536825d40ce6f19b2c37c1122c130b2a22cfe943b"
+    },
+    "llm-citation-monitor": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/llm-citation-monitor/SKILL.md",
+      "computedHash": "3092f4c9951f3e99de3a835c2ee2cbb697071e71176d52ee29ee3ce74274e1e5"
+    },
+    "llm-friendly-site-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/llm-friendly-site-architect/SKILL.md",
+      "computedHash": "2f857f6260e9d3a12da878a6a3f6a1080922c70c6c072626d2067a51b62b33fd"
+    },
+    "llm-friendly-site-optimizer": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/llm-friendly-site-optimizer/SKILL.md",
+      "computedHash": "a37d20644f95e3aa2fd36741f42a241e5c5c96e55f81827e6b05424464b2776b"
+    },
+    "llm-wiki-maintainer": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/llm-wiki-maintainer/SKILL.md",
+      "computedHash": "0fd49e215e2dc06586f46015ab502fe85a7978ffdac7f2fd05c9145eb0396126"
+    },
+    "marketing-site-skill": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/marketing-site-skill/SKILL.md",
+      "computedHash": "5c84326a977b5154a857c97198387da204cabc81ac92221db2971a8bbfee7006"
+    },
+    "migration-planner": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/migration-planner/SKILL.md",
+      "computedHash": "77fd5aa1fec1e6c9a4aa371fad89f72268e7f4e56515f037efa9ac4d9c3181cd"
+    },
+    "omnichannel-comms-builder": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/omnichannel-comms-builder/SKILL.md",
+      "computedHash": "edc87625c3085ad45e554cb3fc5f6adab89447c9a9c2acffaee08dc9bc8f5ae6"
+    },
+    "open-design": {
+      "source": "sugarforever/open-design-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "5a736383765ca335454f89c4baf256996afe85bd9459828bc29f05905172b039"
+    },
+    "paid-traffic-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/paid-traffic-architect/SKILL.md",
+      "computedHash": "8875f49654f5f3f87e862fa941c0f04edaa32d24b22c5c68c1d295841e70cd48"
+    },
+    "pencil-design-bridge": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/pencil-design-bridge/SKILL.md",
+      "computedHash": "ab44538507d17f079aabd6068db50726fb4a914a18bd66c6cb2c9fd782602b87"
+    },
+    "polish": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/polish/SKILL.md",
+      "computedHash": "57d5a1d0e1ddb0567fe861292933d310a1622c4aed7bea856ef453cf4ca4608f"
+    },
+    "project-wiki-manager": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/project-wiki-manager/SKILL.md",
+      "computedHash": "779b04313d5ab33f2c24ab64e89ef0e31ceb82afb8bcf3a29b2355f953c1fb02"
+    },
+    "quieter": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/quieter/SKILL.md",
+      "computedHash": "f56f9b424da7b61753d75f20519859be333dc4a5895555eb419f90ab0cada5de"
+    },
+    "rebuild-or-improve-advisor": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/rebuild-or-improve-advisor/SKILL.md",
+      "computedHash": "47c6e66de19d43d8f51019871accaf47dbd9f3f328c8c9c741751105c6b1cded"
+    },
+    "redesign": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/redesign/SKILL.md",
+      "computedHash": "ad225021cc688fd11fd7e729ef67e17bbd2d132c8dd09b3d2900c48da8a20454"
+    },
+    "remember": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/remember/SKILL.md",
+      "computedHash": "1021381a93ce7163c3bb20319415ec7a2b450d0d8571199269c8a48e43375a83"
+    },
+    "sddesign": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/sddesign/SKILL.md",
+      "computedHash": "6fa85947b3a35865521ce92e1c229313ac6d17076ebc3367601cc15bc7cc17f8"
+    },
+    "semantic-core-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/semantic-core-architect/SKILL.md",
+      "computedHash": "7e0b72a852a861a6b0da4a7b6314fab99caa7e58f3d806bd2038c018f583c4b4"
+    },
+    "semantic-core-builder": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/semantic-core-builder/SKILL.md",
+      "computedHash": "07598af1e8c2e6f08f6e7c85745fcb56903604130cb66fd03b898a8aeedd6abf"
+    },
+    "senior-figma-orchestrator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/senior-figma-orchestrator/SKILL.md",
+      "computedHash": "7b3797a3c9c81a0cdd2671c33ed41d6f304e0f3a23eb57a46e43e597da80aec5"
+    },
+    "senior-ui-ux-orchestrator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/senior-ui-ux-orchestrator/SKILL.md",
+      "computedHash": "ff7802981b9e60907d27e22ece25aaa1ba0093cada5833b0415bf133e9fc70dc"
+    },
+    "seo-llm-site-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/seo-llm-site-architect/SKILL.md",
+      "computedHash": "6070e76f700bfe5e52dfedf2a722ce73a0350d26c039f78c4192d68128af81ba"
+    },
+    "seo-regression-validator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/seo-regression-validator/SKILL.md",
+      "computedHash": "2348d878ce648b77096aa92f11a25661ae93a45c7a1fdb23c9d2b1c0fd6c05fa"
+    },
+    "serp-keyword-harvester": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/serp-keyword-harvester/SKILL.md",
+      "computedHash": "30d9ea82afb0d75637bbdabab9e56e52a314457c3340d0e73fff3bade0c501aa"
+    },
+    "serp-source-configurator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/serp-source-configurator/SKILL.md",
+      "computedHash": "2932ee3997d198358387bc1dc4a43c997d1895c3cd03adc16c3f228d8ec045bd"
+    },
+    "server-log-crawler-analyst": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/server-log-crawler-analyst/SKILL.md",
+      "computedHash": "6bf9decbfde4a468d1dab4a3c77572d909c35c46be60ab7cc5ce08e1d830c4db"
+    },
+    "server-provisioner": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/server-provisioner/SKILL.md",
+      "computedHash": "3eeab94969590e889525030a640b07859b0f1a91d282adc95f8bf1ab43e37a49"
+    },
+    "server-selector": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/server-selector/SKILL.md",
+      "computedHash": "6e3849cbcfcb54eca6fb727fcba28bd2e4bc33b9651d650e47b03d24401b47d7"
+    },
+    "shape": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/shape/SKILL.md",
+      "computedHash": "284e53f2af198b3e6c0edcce527f3a81622114669f7d7a57969c5fae9ab2a2ae"
+    },
+    "site-ai-assistant-builder": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/site-ai-assistant-builder/SKILL.md",
+      "computedHash": "8eb7950ad39bdab1e2c5b41c0fc0648498451c8a7d05409c2d3ba785d1f7c220"
+    },
+    "site-growth-orchestrator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/site-growth-orchestrator/SKILL.md",
+      "computedHash": "073ffebaf7ad5377afb3f9009a4297fcbdeb03334bfae9eba5d266fdcfd98a6c"
+    },
+    "ssl-and-security-hardener": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/ssl-and-security-hardener/SKILL.md",
+      "computedHash": "ed5aaa072db8e378078b58f823b4f86ccfe7d9587a91d12dfa5de50a4dd1a565"
+    },
+    "start": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/start/SKILL.md",
+      "computedHash": "45e95d4d4efef30fa385a217843a93bec6de6c96dc97c596d1e92962e4093120"
+    },
+    "stitch-design-bridge": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/stitch-design-bridge/SKILL.md",
+      "computedHash": "bba9c2e700dfe0c7fe09a566c44f621975f62e3550df828e9609efde7e9bf530"
+    },
+    "task-plan-v2-orchestrator": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/task-plan-v2-orchestrator/SKILL.md",
+      "computedHash": "e48e8dcb555a7111cb9aca460bca32785bd67772b6d6e1342a47bcc8b06a4cd1"
+    },
+    "tech-stack-selector": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/tech-stack-selector/SKILL.md",
+      "computedHash": "f3676226d5557fb7912cbfe8de8f9ba21e5db679eda15dc26c886886f59d6869"
+    },
+    "technical-seo-schema-engineer": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/technical-seo-schema-engineer/SKILL.md",
+      "computedHash": "5fe63baf5d2eccba9ed0f7434d722564c6fc4237aa480710ffddc7f1b3fb0571"
+    },
+    "tokens": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/tokens/SKILL.md",
+      "computedHash": "bc8e81d7178528fe0bdb4897788d199326abcce389d2cf046a546b96ebf5b0a7"
+    },
+    "typeset": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/typeset/SKILL.md",
+      "computedHash": "ee6304cee25bbec938071e24e0166cb1ea71a9f031607bb3d72db26e59e6b31f"
+    },
+    "ui-craft": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": "skills/ui-craft/SKILL.md",
+      "computedHash": "ab873cafac2a371f12b660a1f9df0f187e808785b4aa2709e42f5fcf9e32beab"
+    },
+    "ui-craft-dense-dashboard": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": "skills/ui-craft-dense-dashboard/SKILL.md",
+      "computedHash": "17a0a86c2f4031f4b2aab66c9936dde543c75698a6f2c727fd6a96c14f2eb559"
+    },
+    "ui-craft-editorial": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": "skills/ui-craft-editorial/SKILL.md",
+      "computedHash": "85d7d45e7b1422811253de9a20f1ebf6f4465d20d46bbf095388f118e75a75c5"
+    },
+    "ui-craft-minimal": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": "skills/ui-craft-minimal/SKILL.md",
+      "computedHash": "4609195a2d0b0b246d18279152fce7ccac5d64d9b263552c8d56750d17176036"
+    },
+    "ui-ux-llm-product-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/ui-ux-llm-product-architect/SKILL.md",
+      "computedHash": "93d58820579a67850401b813e3cf75e1e6c187592fe7dd7f3d3e24667f8fded3"
+    },
+    "ui-ux-pro-max": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "b4b282446c848d2ec4adad6002b07f09eb38b08b683633e344b8f3b4e69f21fb"
+    },
+    "unhappy": {
+      "source": "educlopez/ui-craft",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/unhappy/SKILL.md",
+      "computedHash": "83187cfea60f662ad7021aff589debdef4f2eb45c09c6f28e05cd2aa3670c63a"
+    },
+    "ux-audit-skill": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/ux-audit-skill/SKILL.md",
+      "computedHash": "a7e381fbf292e9e00a35d03fcf69fd1e10186d36280853f17bea6ebd53c64961"
+    },
+    "ux-journey-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/ux-journey-architect/SKILL.md",
+      "computedHash": "79af60640bd846d8cd5106b1eb3b4dd60c84e4c427a2f6877514b715a2e11e6a"
+    },
+    "visual-content-director": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/visual-content-director/SKILL.md",
+      "computedHash": "37480877e80c87347d31d34618d2041376bd21d1ad0fea74dfb73dbfa052adac"
+    },
+    "web-security-architect": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/web-security-architect/SKILL.md",
+      "computedHash": "cd1d04b053b8870b16c4e1ad2b9b40f1e295fc18b774b78eeee45b34cf17a693"
+    },
+    "webapp-ui-skill": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/webapp-ui-skill/SKILL.md",
+      "computedHash": "cd0f0a8a4052209d266ed6e743884622007929993cacacfa0ee8538357fe2eb8"
+    },
+    "webmaster-registrar": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/webmaster-registrar/SKILL.md",
+      "computedHash": "dd629a0916afa636011d1628d22d454531508cc72c745a51966e87e8e3ed3e31"
+    },
+    "website-to-hyperframes": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/website-to-hyperframes/SKILL.md",
+      "computedHash": "398cb64faa7244c2b82e1b7d0feee4543b41225dfa1297781a4eba2339c6e996"
+    },
+    "workflow-compliance-supervisor": {
+      "source": "sergekostenchuk/ui-ux-agent-skill-system",
+      "sourceType": "github",
+      "skillPath": "core/skills/workflow-compliance-supervisor/SKILL.md",
+      "computedHash": "e405e7c567187807b344528e0eee60bb533ed7b32504d733ac5edfda52e8a03e"
+    }
+  }
+}

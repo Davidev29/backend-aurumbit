@@ -1,0 +1,231 @@
+# deploy/docker-compose.prod.yml — override de PRODUÇÃO (single-VPS, Fase 7 T1).
+# Uso (a partir da RAIZ do repo):
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+# Requer Compose >= 2.39 (tags `!reset`/`!override` abaixo; validado com v5.4.0).
+# ATENÇÃO v5.4.0: `!reset` ZERA o valor e descarta o conteúdo do override
+# (validado: ports e depends_on sumiram com `!reset`) — por isso este arquivo
+# usa `!override` (substitui pelo valor do override). NÃO usar `!reset` aqui.
+# Princípios: nada exposto na WAN (só 127.0.0.1; o Caddy/T4 faz proxy
+# 127.0.0.1:3002 portal / 3001 admin / 3000 api), sem `:latest` flutuante,
+# sem mailhog em prod (SMTP real via T2/Resend), migrate one-shot antes da api.
+#
+# Rollback por tags (nunca `:latest`):
+#   - Build gera `aurum-<svc>:local`; `deploy/scripts/tag-images.sh` congela
+#     em `aurum-<svc>:<GIT_SHA>` (ex.: aurum-api:a3f9c1e).
+#   - Voltar para a tag anterior: `GIT_SHA=<sha-anterior> docker compose
+#     -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d`
+#   - Listar retenção: `docker images | grep aurum`
+#     (manter as N anteriores; ex. N=5 — podar excedente só à mão:
+#     `docker images --format '{{.Repository}}:{{.Tag}}' | grep aurum` e
+#     `docker rmi` nas tags antigas, nunca na tag em uso nem em `:local`).
+#
+# Dimensionamento (mem_limit abaixo): limites somam ~4,3 GB nos serviços
+# de vida longa (api 1g + workers 1g + postgres 1g + admin/portal 512m cada +
+# redis 256m; migrate 512m é transitório, mailhog 128m é só dev). Limite não
+# é uso real (Node/PG usam menos), mas o teto deve caber na VPS:
+# piso 4 GB **com swap obrigatório** (ex.: 4 GB via fallocate + swapon +
+# fstab), confortável 8 GB. Sem swap, OOM-killer derruba api/workers sob pico.
+
+services:
+  postgres:
+    # Imagem pinada no base (postgres:16-alpine) — sem :latest.
+    restart: unless-stopped # reafirme: auto-cura pós-reboot (T1 verifica, não inova).
+    ports: !override ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"] # só loopback: PG nunca na WAN.
+    logging: # teto de disco: 5 arquivos de 10 MB por serviço.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 1g # maior consumidor estável; ver nota de swap/VPS no topo.
+    networks:
+      - aurum-net
+
+  redis:
+    restart: unless-stopped
+    ports: !override ["127.0.0.1:${REDIS_PORT:-6379}:6379"] # só loopback.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 256m # cache/filas; estouro = evict, não crash (maxmemory policy no comando do base).
+    networks:
+      - aurum-net
+
+  mailhog:
+    # Fora da prod: só sobe com `--profile dev`. SMTP de prod vem do T2 (Resend).
+    profiles: [dev]
+    restart: unless-stopped
+    ports: !override ["127.0.0.1:${MAILHOG_SMTP_PORT:-1025}:1025", "127.0.0.1:${MAILHOG_HTTP_PORT:-8025}:8025"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 128m
+    networks:
+      - aurum-net
+
+  migrate:
+    # One-shot: aplica `migrate-all.sh` nos 9 DBs e termina (exit 0).
+    # Exceção proposital ao `unless-stopped`: serviço concluído não deve
+    # reiniciar (loop pós-reboot). A api só sobe com `completed_successfully`.
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: aurum-api:${GIT_SHA:-local} # mesma imagem da api: rollback único.
+    container_name: aurum-migrate
+    restart: "no" # one-shot concluído fica parado (ver comentário acima).
+    user: "0:0" # só p/ instalar bash do one-shot; api/workers seguem non-root.
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      PRISMA_VERSION: ${PRISMA_VERSION:-6}
+      # URLs internas de container (host `postgres`). O script só lê o .env
+      # da raiz se ele existir no mount — aqui montamos só prisma + script,
+      # então estas vars vencem (sem `localhost` vazando p/ dentro do container).
+      DATABASE_URL: postgresql://aurum:aurum@postgres:5432/auth?schema=public
+      DATABASE_URL_AUTH: postgresql://aurum:aurum@postgres:5432/auth?schema=public
+      DATABASE_URL_CUSTOMERS: postgresql://aurum:aurum@postgres:5432/customers?schema=public
+      DATABASE_URL_PRODUCTS: postgresql://aurum:aurum@postgres:5432/products?schema=public
+      DATABASE_URL_ACCESS: postgresql://aurum:aurum@postgres:5432/access?schema=public
+      DATABASE_URL_LICENSING: postgresql://aurum:aurum@postgres:5432/licensing?schema=public
+      DATABASE_URL_BILLING: postgresql://aurum:aurum@postgres:5432/billing?schema=public
+      DATABASE_URL_FINANCE: postgresql://aurum:aurum@postgres:5432/finance?schema=public
+      DATABASE_URL_AUDIT: postgresql://aurum:aurum@postgres:5432/audit?schema=public
+      DATABASE_URL_COMMUNICATIONS: postgresql://aurum:aurum@postgres:5432/communications?schema=public
+    volumes: # montes mínimos p/ o script achar ROOT/prisma (sem montar o .env).
+      - ../prisma:/repo/prisma:ro
+      - ./scripts/migrate-all.sh:/repo/deploy/scripts/migrate-all.sh:ro
+    # node:22-alpine não tem bash: instala e executa o script canônico (npx
+    # baixa prisma pinado; exige rede na VPS — já exigida por Asaas/Resend).
+    command: ["sh", "-c", "apk add --no-cache bash >/dev/null 2>&1 && exec bash /repo/deploy/scripts/migrate-all.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 512m # transitório (sai após migrar).
+    networks:
+      - aurum-net
+
+  api:
+    image: aurum-api:${GIT_SHA:-local} # tag fixa por SHA; nunca :latest.
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NODE_ENV: production # pina prod (base herdava development).
+      # CORS prod, sem origem local. ATENÇÃO: a API lê `CORS_ORIGINS` (plural,
+      # ver apps/api/src/main.ts + env.schema.ts); o `CORS_ORIGIN` do base é
+      # ignorado pelo zod — aqui definimos ambas com o mesmo valor prod.
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://aurumbit.com,https://admin.aurumbit.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://aurumbit.com,https://admin.aurumbit.com}
+      # SMTP de prod (Resend) vem do T2 via .env; nada de mailhog aqui.
+    ports: !override ["127.0.0.1:${API_PORT:-3000}:3000"] # edge Caddy → 127.0.0.1:3000.
+    depends_on: !override # cadeia saudável postgres→migrate→api (sem mailhog: dev-only).
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 1g
+    networks:
+      - aurum-net
+
+  workers:
+    image: aurum-workers:${GIT_SHA:-local}
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NODE_ENV: production
+    depends_on: !override # sem migrate concluído, worker não parte (evita outbox órfã).
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 1g
+    networks:
+      - aurum-net
+
+  admin:
+    image: aurum-admin:${GIT_SHA:-local}
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NODE_ENV: production
+      # URL pública da API (assada no build Next: trocar exige rebuild + retag).
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.aurumbit.com}
+    ports: !override ["127.0.0.1:${ADMIN_PORT:-3001}:3000"] # edge Caddy → 127.0.0.1:3001.
+    depends_on:
+      api:
+        condition: service_healthy # base usava service_started; prod exige saudável.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 512m
+    networks:
+      - aurum-net
+
+  portal:
+    # Portal público + área do cliente (Next.js standalone). Sem
+    # API_INTERNAL_URL o BFF cai em stubs silenciosos — o teste negativo do T0
+    # cobre isso; aqui o default já aponta p/ o serviço interno `api`.
+    build:
+      context: ..
+      dockerfile: apps/portal/Dockerfile
+    image: aurum-portal:${GIT_SHA:-local}
+    container_name: aurum-portal
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3000}
+      # URL pública do site (SEO/OG + metadataBase; assada no build: rebuild a cada troca).
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://aurumbit.com}
+    ports: !override ["127.0.0.1:${PORTAL_PORT:-3002}:3000"] # edge Caddy → 127.0.0.1:3002.
+    depends_on:
+      api:
+        condition: service_healthy # fecha a cadeia postgres→migrate→api→portal.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 512m
+    networks:
+      - aurum-net

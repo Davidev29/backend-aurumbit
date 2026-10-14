@@ -1,0 +1,18 @@
+{
+  "name": "@aurum-bit/events",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Envelope + tópicos de eventos Aurum Bit (Fase 1, sem negócio): *.v1 forward-compatible, Outbox/BullMQ/Resend ready.",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

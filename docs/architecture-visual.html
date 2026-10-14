@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Aurum Bit — Mapa Visual da Arquitetura</title>
+<style>
+  :root{--bg:#0b1020;--card:#141b33;--line:#2a3560;--txt:#e8ecff;--mut:#9aa6d0;--gold:#f2c14e;--grn:#3ddc84;--amb:#ffb020;--red:#ff5d5d;--blu:#5aa9ff}
+  *{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#1b2450,transparent),var(--bg);color:var(--txt);font:15px/1.5 system-ui,Segoe UI,Roboto,Arial}
+  header{padding:28px 28px 8px}header h1{margin:0;font-size:26px}header h1 span{color:var(--gold)}header p{color:var(--mut);margin:6px 0 0}
+  main{padding:18px 28px 40px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+  .card{background:linear-gradient(180deg,#161d38,#10162c);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h2{margin:0 0 4px;font-size:15px;letter-spacing:.4px;text-transform:uppercase;color:var(--gold)}
+  .card p.sub{margin:0 0 12px;color:var(--mut);font-size:13px}
+  .row{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .box{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px;background:#0e1430}
+  .box b{display:block;font-size:13.5px}.box small{color:var(--mut)}
+  .arrow{color:var(--gold);font-weight:700}
+  .pill{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;margin:2px 4px 2px 0;color:var(--mut)}
+  .g{color:var(--grn)}.a{color:var(--amb)}.r{color:var(--red)}.b{color:var(--blu)}
+  .grid9{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .db{border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;background:#0d1330;font-size:12.5px}
+  .flow{font-size:13px;background:#0d1330;border:1px dashed var(--line);border-radius:10px;padding:10px}
+  footer{padding:0 28px 30px;color:var(--mut);font-size:12.5px}
+  a{color:var(--gold)}
+</style>
+</head>
+<body>
+<header>
+  <h1>✨ Aurum Bit — <span>Mapa Visual</span></h1>
+  <p>Monólito modular NestJS · 9 Postgres · Outbox + BullMQ · Asaas · Resend · Admin Next.js — abra este arquivo no navegador.</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1 · Visão de serviços</h2>
+    <p class="sub">Tráfego real em produção. Redis nunca é fonte definitiva.</p>
+    <div class="row"><div class="box"><b>📱 Produtos</b><small>Win / Mac / Web / App</small></div><span class="arrow">─HTTPS /v1─►</span><div class="box"><b>🧩 API NestJS :3000</b><small>JWT 15min · guards · /health · /metrics</small></div></div>
+    <div class="row"><div class="box"><b>🗄️ Postgres :5432</b><small>9 databases por domínio</small></div><span class="arrow">◄──►</span><div class="box"><b>⚙️ Workers</b><small>BullMQ + crons · via API interna</small></div><span class="arrow">◄──►</span><div class="box"><b>📮 Redis :6379</b><small>filas + cache 60s</small></div></div>
+    <div class="row"><div class="box"><b>💳 Asaas</b><small>Sandbox-first · webhook + recon</small></div><span class="arrow">◄──►</span><div class="box"><b>✉️ Resend</b><small>14 templates · idempotente</small></div><span class="arrow">◄──</span><div class="box"><b>🖥️ Admin :3001</b><small>BFF httpOnly proxy-ou-mock</small></div></div>
+    <div><span class="pill">139 endpoints Nest</span><span class="pill">25 BFF</span><span class="pill">11 queues + 4 tickers</span><span class="pill">377 unit · 42 e2e</span></div>
+  </section>
+  <section class="card">
+    <h2>2 · Bancos por domínio</h2>
+    <p class="sub">Sem FK cross-DB. Referência opaca + eventos versionados.</p>
+    <div class="grid9">
+      <div class="db">🔐<br/><b>auth</b><br/><small>identidade · sessão · refresh</small></div>
+      <div class="db">👥<br/><b>customers</b><br/><small>PF/PJ · members · consents</small></div>
+      <div class="db">📦<br/><b>products</b><br/><small>catálogo imutável</small></div>
+      <div class="db">🔑<br/><b>access</b><br/><small>contracts · entitlements</small></div>
+      <div class="db">📜<br/><b>licensing</b><br/><small>chaves hash · devices</small></div>
+      <div class="db">💳<br/><b>billing</b><br/><small>Asaas · webhook</small></div>
+      <div class="db">📊<br/><b>finance</b><br/><small>previsto/realizado</small></div>
+      <div class="db">🕵️<br/><b>audit</b><br/><small>append-only 5a</small></div>
+      <div class="db">✉️<br/><b>comms</b><br/><small>templates v1</small></div>
+    </div>
+  </section>
+  <section class="card">
+    <h2>3 · Compra → acesso (fluxo canônico)</h2>
+    <p class="sub">Replay = duplicate 200 · ilegal = REJECTED · fora-de-ordem nunca regride.</p>
+    <div class="flow">Order → Invoice <span class="a">pending</span> → Asaas charge → webhook <span class="b">RECEIVED→VALIDATED→APPLIED</span> → Payment <span class="g">CONFIRMED</span> → outbox → <b>fanout</b> → Entitlement + License + Receivable/Transaction + e-mail</div>
+    <div style="margin-top:8px"><span class="pill">hourly recon &lt;7d</span><span class="pill">daily 03:00 SP 30d</span><span class="pill">jobId = eventId</span><span class="pill">DLQ + replay</span></div>
+  </section>
+  <section class="card">
+    <h2>4 · Licença: validade × graça × offline</h2>
+    <p class="sub">Grace 3d vence mesmo offline. Teto offline 7d sem contato.</p>
+    <div class="flow"><span class="g">● ALLOW</span> até <b>expires_at</b> &nbsp;→&nbsp; <span class="a">● degradado</span> até <b>grace_until +3d</b> &nbsp;→&nbsp; <span class="r">● DENY EXPIRED</span><br/>Token: <b>off_exp = min(iat+7d, expires+7d)</b> → após = <span class="r">DENY OFFLINE_EXPIRED</span> (exige online)</div>
+    <div style="margin-top:8px"><span class="pill">key_hash UNIQUE</span><span class="pill">keyMasked ••••-AB12</span><span class="pill">reveal auditado + MFA</span><span class="pill">device HMAC</span></div>
+  </section>
+  <section class="card">
+    <h2>5 · Filas e crons</h2>
+    <p class="sub">Retry 5x exp · poison → DLQ direta · workers aplicam via API interna.</p>
+    <div class="flow">licensing.evaluate ⏱5min · licensing.sync → DLQ · billing.webhook.apply → DLQ · billing.recon ⏱1h · billing.fanout → DLQ · finance.sync → DLQ · projection.compute → DLQ · comm.send · relay ⏱30s ×9 DBs</div>
+  </section>
+  <section class="card">
+    <h2>6 · Papéis</h2>
+    <p class="sub">Frontend oculta · backend nega 403 de verdade.</p>
+    <div class="flow"><b>admin</b> total+MFA (manage, reveal, replay) · <b>manager</b> operacional + billing.read; <b>finance.read só explícito por org</b> (default deny) · <b>user</b> sem financeiro/bônus</div>
+  </section>
+</main>
+<footer>Detalhe textual: <b>docs/ARCHITECTURE.md</b> · inventário: <b>.planning/ENDPOINTS-INVENTORY.md</b> · diagramas como código: <b>docs/ARCHITECTURE-VISUAL.md</b></footer>
+</body>
+</html>

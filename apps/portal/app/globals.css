@@ -1,0 +1,1246 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+ * AurumBit Portal — Design Tokens (Dark Tech + Dourado Premium)
+ * =================================================================== */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-0: #F7F4ED;
+  --bg-1: #FFFFFF;
+  --bg-2: #ECE5D3;
+  --text-1: #14161a;
+  --text-2: rgba(20,22,26,.68);
+  --text-3: rgba(20,22,26,.48);
+  --border-1: rgba(117,93,46,.16);
+  --border-2: rgba(117,93,46,.32);
+  --border-3: rgba(117,93,46,.55);
+  --accent: #755D2E;
+  --accent-strong: #6B5320;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(192,160,96,.16);
+  --danger: #c92a30;
+  --danger-ink: #ffffff;
+  --danger-soft: rgba(201,42,48,.12);
+  --ok: #157f46;
+  --ok-ink: #ffffff;
+  --ok-soft: rgba(21,127,70,.12);
+  --warn: #755D2E;
+  --warn-soft: rgba(117,93,46,.14);
+  --info: #0b6bcb;
+  --info-ink: #ffffff;
+  --info-soft: rgba(11,107,203,.12);
+  --ring: #755D2E;
+  --scrim: rgba(20,22,26,.6);
+  --gold-700: #755D2E;
+  --gold-500: #C0A060;
+  --gold-300: #D8B879;
+  --gold-200: #EADAB6;
+  --shadow-1: 0 1px 2px rgba(20,22,26,.08);
+  --shadow-2: 0 4px 16px rgba(20,22,26,.12);
+  --shadow-3: 0 12px 40px rgba(20,22,26,.22);
+  --specular: inset 0 1px 0 rgba(255,255,255,.5);
+  --font-display: "Space Grotesk", "Sora", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-accent: "Playfair Display", Georgia, serif;
+  --z-chrome: 30; --z-dropdown: 40; --z-drawer: 46; --z-modal: 50; --z-tooltip: 70;
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-0: #090806;
+  --bg-1: #100E0A;
+  --bg-2: #1A1712;
+  --text-1: #F5F5F4;
+  --text-2: #9C958A;
+  --text-3: #8E8E93;
+  --border-1: rgba(192,160,96,0.25);
+  --border-2: rgba(255,255,255,0.08);
+  --border-3: rgba(255,255,255,0.14);
+  --accent: #C0A060;
+  --accent-strong: #D8B879;
+  --accent-ink: #17150F;
+  --accent-soft: rgba(192,160,96,0.14);
+  --danger: #F87171;
+  --danger-ink: #1a0505;
+  --danger-soft: rgba(248,113,113,0.12);
+  --ok: #4ADE80;
+  --ok-ink: #06130c;
+  --ok-soft: rgba(74,222,128,0.12);
+  --warn: #D8B879;
+  --warn-soft: rgba(216,184,121,0.14);
+  --info: #60A5FA;
+  --info-ink: #06121f;
+  --info-soft: rgba(96,165,250,0.12);
+  --ring: #C0A060;
+  --scrim: rgba(0,0,0,.7);
+  --gold-700: #755D2E;
+  --gold-500: #C0A060;
+  --gold-300: #D8B879;
+  --gold-200: #EADAB6;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 4px 16px rgba(0,0,0,.45);
+  --shadow-3: 0 12px 40px rgba(0,0,0,.5);
+  --specular: inset 0 1px 0 rgba(255,255,255,.08);
+  --font-display: "Space Grotesk", "Sora", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-accent: "Playfair Display", Georgia, serif;
+  --z-chrome: 30; --z-dropdown: 40; --z-drawer: 46; --z-modal: 50; --z-tooltip: 70;
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-bg0 text-text1 font-sans text-body antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Links de texto seguem o acento; botões (.btn*) definem a própria cor. */
+  a:not(.btn):not(.btn-primary):not(.btn-ghost):not(.btn-outline) {
+    @apply text-accent-strong dark:text-accent transition-colors duration-150;
+  }
+
+  /* Ring de foco: 100ms, SÓ :focus-visible */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px var(--ring);
+    transition: box-shadow 100ms ease-out;
+  }
+
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline: 2px solid CanvasText;
+      outline-offset: 2px;
+      box-shadow: none;
+      transition: none;
+    }
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+  }
+
+  /* Mono + tabular-nums para dinheiro/IDs */
+  .mono,
+  .tnum,
+  td[data-numeric],
+  .kpi-value[data-kind="currency"] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  /* Truncamento padrão */
+  .truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Fallback sólido quando sem backdrop-filter */
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-chrome,
+    .glass-card,
+    .glass-modal {
+      background: var(--bg-2);
+    }
+  }
+
+  /* Transparência reduzida → tudo sólido */
+  @media (prefers-reduced-transparency: reduce) {
+    .glass-chrome,
+    .glass-card,
+    .glass-modal {
+      background: var(--bg-2);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .modal-overlay {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
+  /* Movimento reduzido → sem shimmer/shake */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    .skeleton,
+    .animate-shimmer,
+    .animate-shake,
+    .animate-pulse-glow,
+    .animate-float,
+    .animate-drift,
+    .animate-marquee,
+    .animate-orb-a,
+    .animate-orb-b,
+    .animate-orb-c,
+    .animate-gold-breathe,
+    .animate-aurora,
+    .animate-spin-slower,
+    .animate-halo,
+    .sys-spin-slow,
+    .sys-halo,
+    .sys-float,
+    .sys-flow,
+    .sys-flow-slow,
+    .sys-beam,
+    .sys-ping,
+    .llm-token,
+    .llm-dot,
+    .llm-flow,
+    .llm-node,
+    .llm-draw,
+    .terminal-caret,
+    .rise-dot,
+    .aurum-mark-float,
+    .aurum-mark-bridge,
+    .aurum-word,
+    .aurum-dot,
+    .aurum-hint-dot,
+    .type-caret,
+    .hero-particle,
+    .hero-panel,
+    .pulse-ring,
+    .data-packet,
+    .animate-ping,
+    .block-wave {
+      animation: none !important;
+      transition: none !important;
+    }
+    .particle-field,
+    .server-pulse,
+    .floating-panel {
+      display: none !important;
+    }
+  }
+}
+
+@layer components {
+  /* Vidro de chrome: header/navbar */
+  .glass-chrome {
+    background: color-mix(in srgb, var(--bg-2) 60%, transparent);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    border-radius: 0;
+    box-shadow: var(--specular);
+    border-bottom: 1px solid var(--border-1);
+  }
+
+  /* Cards glassmorphism */
+  .glass-card {
+    background: color-mix(in srgb, var(--bg-2) 50%, transparent);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border: 1px solid var(--border-2);
+    border-radius: 14px;
+    box-shadow: var(--specular), var(--shadow-2);
+    transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms, box-shadow 150ms;
+  }
+  .glass-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-3);
+    box-shadow: var(--specular), var(--shadow-3);
+  }
+
+  /* Modal glassmorphism premium */
+  .glass-modal {
+    background: color-mix(in srgb, var(--bg-2) 72%, transparent);
+    backdrop-filter: blur(30px) saturate(1.5);
+    -webkit-backdrop-filter: blur(30px) saturate(1.5);
+    border: 1px solid var(--border-1);
+    border-radius: 18px;
+    box-shadow: var(--specular), var(--shadow-2), var(--shadow-3);
+  }
+
+  /* Botões */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    font-size: 0.94rem;
+    font-weight: 600;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out, transform 150ms ease-out;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--gold-700) 0%, var(--gold-500) 45%, var(--gold-200) 100%);
+    color: #1A140B;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+    border: 0;
+    box-shadow: 0 0 20px rgba(192,160,96,0.1);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 0 40px rgba(192,160,96,0.15);
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border-2);
+    color: var(--text-1);
+  }
+  .btn-ghost:hover {
+    background: var(--bg-2);
+    color: var(--accent);
+  }
+  .btn-outline {
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+  }
+  .btn-outline:hover {
+    background: var(--accent-soft);
+  }
+  .btn-outline:active {
+    transform: scale(0.98);
+  }
+
+  /* Inputs */
+  .input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.625rem 1rem;
+    border-radius: 10px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-2);
+    color: var(--text-1);
+    transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+  }
+  .input::placeholder {
+    color: var(--text-3);
+  }
+  .input:focus-visible {
+    border-color: var(--accent);
+    outline: none;
+  }
+  .input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .input-error {
+    border-color: var(--danger);
+  }
+  .input-error:focus {
+    border-color: var(--danger);
+  }
+  .label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-2);
+    margin-bottom: 0.375rem;
+  }
+  .error-text {
+    font-size: 0.8rem;
+    color: var(--danger);
+    margin-top: 0.25rem;
+  }
+
+  /* Badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.625rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-gold {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid var(--border-1);
+  }
+  .badge-neutral {
+    background: var(--bg-2);
+    color: var(--text-2);
+    border: 1px solid var(--border-2);
+  }
+
+  /* Skeleton loading — pulso de opacity (sem background-position/filter) */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-2) 25%, var(--border-2) 50%, var(--bg-2) 75%);
+    animation: shimmer 1.6s ease-in-out infinite;
+    border-radius: 10px;
+    min-height: 1rem;
+  }
+  @keyframes shimmer {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  /* Link underline animado */
+  .link-underline {
+    position: relative;
+  }
+  .link-underline::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 0;
+    background: linear-gradient(135deg, var(--gold-700), var(--gold-500), var(--gold-200));
+    transition: width 150ms ease-out;
+  }
+  .link-underline:hover::after {
+    width: 100%;
+  }
+
+  /* Glassmorphism highlight interno */
+  .glass-highlight {
+    position: relative;
+  }
+  .glass-highlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  /* Borda gradiente dourada via pseudo-elemento */
+  .gold-border {
+    position: relative;
+  }
+  .gold-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, var(--gold-700), var(--gold-500), var(--gold-200));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    border-width: 1px;
+    border-style: solid;
+    opacity: 0;
+    transition: opacity 150ms;
+  }
+  .gold-border:hover::before {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  /* Scrollbar fina */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-3) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--border-3);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Skip link */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    border-radius: 0 0 8px 0;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .skip-link:focus,
+  .skip-link:focus-visible {
+    left: 0;
+  }
+
+  /* Texto sobre ouro (gradiente ou sólido claro): marrom-quase-preto nos 2 temas.
+     O token --accent-ink é branco no light (ilegível no ouro) — não usar aqui. */
+  .text-on-gold {
+    color: #1A140B;
+  }
+
+  /* Text gradient gold */
+  .text-gradient-gold {
+    background: linear-gradient(135deg, var(--gold-700) 0%, var(--gold-500) 50%, var(--gold-200) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  @media (forced-colors: active) {
+    .text-gradient-gold {
+      background: none;
+      -webkit-text-fill-color: CanvasText;
+      color: CanvasText;
+    }
+  }
+
+  /* Container padrão */
+  .container-portal {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 80rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px) {
+    .container-portal {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+  @media (min-width: 768px) {
+    .container-portal {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .container-portal {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  /* Section spacing — degraus suaves 64 → 96 → 112 → 128 */
+  .section-py {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+  @media (min-width: 640px) {
+    .section-py {
+      padding-top: 6rem;
+      padding-bottom: 6rem;
+    }
+  }
+  @media (min-width: 768px) {
+    .section-py {
+      padding-top: 6.5rem;
+      padding-bottom: 6.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .section-py {
+      padding-top: 8rem;
+      padding-bottom: 8rem;
+    }
+  }
+}
+
+/* Animações customizadas para hero */
+@keyframes particle-drift {
+  0%, 100% { transform: translate(0, 0); opacity: 0.3; }
+  25% { transform: translate(30px, -30px); opacity: 0.6; }
+  50% { transform: translate(-20px, 20px); opacity: 0.4; }
+  75% { transform: translate(25px, 15px); opacity: 0.5; }
+}
+
+@keyframes panel-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-15px) rotate(0.5deg); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+@keyframes data-packet {
+  0% { stroke-dashoffset: 100; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+/* Hero specific classes */
+.hero-particle {
+  animation: particle-drift 20s ease-in-out infinite;
+}
+
+.hero-panel {
+  animation: panel-float 6s ease-in-out infinite;
+}
+
+.hero-panel:nth-child(2) { animation-delay: -2s; }
+.hero-panel:nth-child(3) { animation-delay: -4s; }
+
+.pulse-ring {
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+.data-packet {
+  animation: data-packet 3s linear infinite;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 40;
+}
+
+/* Tooltip */
+.tooltip {
+  position: absolute;
+  z-index: 70;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+}
+
+/* Âncoras sob header fixo (64–80px): compensa o scroll suave */
+section[id] {
+  scroll-margin-top: 76px;
+}
+
+/* Frutos da árvore: foco visível sem outline:none (HIG agency) */
+.tree-fruit:focus {
+  outline: none;
+}
+.tree-fruit:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+  border-radius: 50%;
+}
+
+/* === Refatoração visual: utilitários premium (CSS puro, sem @apply) === */
+
+/* Marquee elegante (pausa no hover + máscara nas bordas) */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 32s linear infinite;
+  will-change: transform;
+}
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.marquee-hover:hover .animate-marquee {
+  animation-play-state: paused;
+}
+
+/* Grid dourado sutil para fundos de banner */
+.bg-grid-gold {
+  background-image:
+    linear-gradient(rgba(192, 160, 96, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(192, 160, 96, 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+/* Acento superior dourado que acende no hover do card */
+.card-accent-top {
+  position: relative;
+}
+.card-accent-top::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 12%;
+  right: 12%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--gold-500), var(--gold-200), transparent);
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+}
+.card-accent-top:hover::before {
+  opacity: 1;
+}
+
+/* Orbes do banner à deriva (lento, só transform — barato para o compositor) */
+@keyframes orb-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(60px, 40px) scale(1.15); }
+}
+@keyframes orb-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1.1); }
+  50% { transform: translate(-70px, -30px) scale(1); }
+}
+.animate-orb-a {
+  animation: orb-drift-a 16s ease-in-out infinite;
+  will-change: transform;
+}
+.animate-orb-b {
+  animation: orb-drift-b 19s ease-in-out infinite;
+  will-change: transform;
+}
+.animate-orb-c {
+  animation: orb-drift-a 22s ease-in-out infinite reverse;
+  will-change: transform;
+}
+
+/* Respiro dourado do título do banner — só opacity, nunca filter */
+@keyframes gold-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.78; }
+}
+.animate-gold-breathe {
+  animation: gold-breathe 5s ease-in-out infinite;
+}
+
+/* Onda ambiente da grade de blocos (delay diagonal por célula via inline style) */
+@keyframes block-wave {
+  0%, 100% { background-color: rgba(192, 160, 96, 0.015); }
+  50% { background-color: rgba(192, 160, 96, 0.055); }
+}
+.block-wave {
+  animation: block-wave 7s ease-in-out infinite;
+}
+
+/* === Banner vivo: movimento em camadas (só transform/opacity) === */
+
+/* Faixa aurora que atravessa o fundo devagar */
+@keyframes aurora-drift {
+  0%, 100% { transform: translateX(-12%) skewX(-8deg); }
+  50% { transform: translateX(12%) skewX(-8deg); }
+}
+.animate-aurora {
+  animation: aurora-drift 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Respiro do anel cônico atrás do globo */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slower {
+  animation: spin-slow 48s linear infinite;
+  will-change: transform;
+}
+
+/* Partículas subindo (dados sincronizando) — cada ponto usa vars inline */
+@keyframes rise {
+  0% { transform: translateY(24px) scale(0.7); opacity: 0; }
+  15% { opacity: var(--rise-opacity, 0.5); }
+  80% { opacity: var(--rise-opacity, 0.5); }
+  100% { transform: translateY(-46vh) scale(1); opacity: 0; }
+}
+.rise-dot {
+  animation: rise linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Pulso suave do halo do globo */
+@keyframes halo-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+.animate-halo {
+  animation: halo-breathe 9s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* === Base do banner: clara no light, mesh escura no dark === */
+.hero-base {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 32%, rgba(117, 93, 46, 0.12), transparent 70%),
+    linear-gradient(180deg, #faf9f6 0%, var(--bg-0) 100%);
+}
+.dark .hero-base,
+[data-theme="dark"] .hero-base {
+  background: linear-gradient(135deg, #0a0908 0%, #161310 50%, #0a0908 100%);
+}
+
+/* === Console vivo do banner (HeroSystemOrbit) — só transform/opacity/dash === */
+
+/* Anel cônico orbital atrás do console (preserva a centralização -50%/-50%) */
+@keyframes sys-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.sys-spin-slow {
+  animation: sys-spin 42s linear infinite;
+  will-change: transform;
+}
+
+/* Halo do console (preserva a centralização -50%/-50%) */
+@keyframes sys-halo-breathe {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.85; transform: translate(-50%, -50%) scale(1.07); }
+}
+.sys-halo {
+  animation: sys-halo-breathe 8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* Fluxo de dados nos trilhos (base → IA → agente) */
+@keyframes sys-dash {
+  to { stroke-dashoffset: -28; }
+}
+.sys-flow {
+  stroke-dasharray: 6 8;
+  animation: sys-dash 1.3s linear infinite;
+}
+.sys-flow-slow {
+  animation: sys-dash 2.8s linear infinite;
+}
+
+/* Ping do núcleo IA */
+@keyframes sys-ping-soft {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.sys-ping {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: sys-ping-soft 2.4s ease-out infinite;
+}
+
+/* Flutuação dos módulos e chips */
+@keyframes sys-float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.sys-float {
+  animation: sys-float-soft 7s ease-in-out infinite;
+  will-change: transform;
+}
+.sys-float-delayed {
+  animation-delay: -3.5s;
+}
+
+/* Cursor do terminal */
+@keyframes sys-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.terminal-caret {
+  animation: sys-caret 1s steps(1) infinite;
+}
+
+/* Feixe vertical de dados no fundo do hero */
+@keyframes sys-beam-drift {
+  0%, 100% { opacity: 0.35; transform: translateX(-50%) scaleY(1); }
+  50% { opacity: 0.7; transform: translateX(-50%) scaleY(1.04); }
+}
+.sys-beam {
+  transform: translateX(-50%);
+  animation: sys-beam-drift 9s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* === Placa de vidro sobre o fundo de treino === */
+.hero-glass {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-0) 62%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 28%, transparent) 45%,
+    color-mix(in srgb, var(--bg-0) 12%, transparent) 100%
+  );
+  backdrop-filter: blur(3px) saturate(1.15);
+  -webkit-backdrop-filter: blur(3px) saturate(1.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* === Fundo de treino LLM — só transform/opacity/dashoffset === */
+
+/* Tokens da operação subindo */
+@keyframes llm-rise {
+  0% { transform: translateY(20px) scale(0.85); opacity: 0; }
+  12% { opacity: 0.55; }
+  82% { opacity: 0.55; }
+  100% { transform: translateY(-54vh) scale(1); opacity: 0; }
+}
+.llm-token {
+  animation: llm-rise linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Onda dos embeddings */
+@keyframes llm-dot-wave {
+  0%, 100% { opacity: 0.05; }
+  50% { opacity: 0.3; }
+}
+.llm-dot {
+  animation: llm-dot-wave 6s ease-in-out infinite;
+}
+
+/* Fluxo nos arcos de atenção */
+@keyframes llm-dash {
+  to { stroke-dashoffset: -30; }
+}
+.llm-flow {
+  stroke-dasharray: 5 9;
+  animation: llm-dash 3.4s linear infinite;
+}
+
+/* Pulso dos nós das camadas */
+@keyframes llm-node-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.7; }
+}
+.llm-node {
+  animation: llm-node-pulse 4.2s ease-in-out infinite;
+}
+
+/* Desenho da curva de aprendizado (pathLength=1) */
+@keyframes llm-draw {
+  0% { stroke-dashoffset: 1; }
+  55% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; }
+}
+.llm-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: llm-draw 7s ease-in-out infinite;
+}
+
+/* === Fundo aurora da vitrine (#produtos): vidro byte-igual ao do banner === */
+.prod-aurora{position:absolute;inset:0;pointer-events:none}
+.prod-aurora-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.prod-aurora-static{position:absolute;inset:0;
+  background:radial-gradient(ellipse 70% 55% at 50% 32%, var(--accent-soft), transparent 70%)}
+.prod-aurora-veil{position:absolute;inset:0;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--bg-0) 88%,transparent) 0%,color-mix(in srgb,var(--bg-0) 18%,transparent) 26%,transparent 45%,transparent 60%,var(--bg-0) 100%)}
+.prod-aurora-glass{position:absolute;inset:0;
+  background:color-mix(in srgb,var(--bg-0) 24%,transparent);
+  backdrop-filter:blur(9px) saturate(1.25);
+  -webkit-backdrop-filter:blur(9px) saturate(1.25);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+@media (prefers-reduced-transparency:reduce){
+  .prod-aurora-glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:color-mix(in srgb,var(--bg-0) 55%,transparent)}
+}
+@media (forced-colors: active){
+  .prod-aurora-canvas,.prod-aurora-glass,.prod-aurora-veil{display:none}
+}
+
+/* === Logomarca AurumBit desenhada em CSS (banner HeroBrandBanner) === */
+/* Símbolo = pastilha escura + 2 quadrados ouro + ponte a 45° (cf. icon-192.png).
+   Wordmark = gradiente bronze→champanhe (cf. aurum-liquid-*.svg).
+   Tudo em var(--*): nenhum hex solto fora dos stops do gradiente da marca. */
+
+.hero-brand{position:relative;display:flex;flex-direction:column;overflow:hidden;isolation:isolate;
+  background:var(--bg-0);color:var(--text-1);min-height:100svh}
+.hero-brand-photo{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.hero-brand-photo img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+.hero-brand-veil{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--bg-0) 88%,transparent) 0%,color-mix(in srgb,var(--bg-0) 18%,transparent) 26%,transparent 45%,transparent 60%,var(--bg-0) 100%)}
+.hero-brand-glass{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:color-mix(in srgb,var(--bg-0) 24%,transparent);
+  backdrop-filter:blur(9px) saturate(1.25);
+  -webkit-backdrop-filter:blur(9px) saturate(1.25);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.hero-brand-inner{position:relative;z-index:2;width:100%;margin:auto;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  gap:clamp(16px,3vh,28px);padding:calc(80px + clamp(24px,5vh,56px)) 1rem clamp(40px,7vh,72px)}
+.hero-brand-eyebrow{display:flex;align-items:center;gap:12px;margin:0;
+  font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.62}
+.hero-brand-eyebrow::before{content:"";width:28px;height:1px;background:currentColor;opacity:.7}
+.hero-brand-h1{margin:0;font-family:var(--font-display);font-weight:500;
+  font-size:clamp(2.25rem,6vw,4rem);line-height:1.02;letter-spacing:-.03em;text-wrap:balance}
+.hero-brand-body{margin:0;max-width:44rem;font-size:clamp(.95rem,2.4vw,1.06rem);
+  line-height:1.55;opacity:.78;text-wrap:pretty}
+.hero-brand-ctas{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px}
+
+/* Lockup da logo */
+.aurum-logo{display:flex;flex-direction:column;align-items:center;
+  gap:clamp(10px,2vh,18px)}
+.aurum-logo-tilt{will-change:transform}
+.aurum-mark{position:relative;width:var(--aurum-mark-size,clamp(104px,17vw,168px));
+  aspect-ratio:1/1;border-radius:27%;
+  background:linear-gradient(145deg,#1a1512 0%,#0a0908 62%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 18px 48px rgba(0,0,0,.38),0 0 52px rgba(192,160,96,.16)}
+.aurum-mark-tile{position:absolute;width:41%;aspect-ratio:1/1;border-radius:30%;
+  background:linear-gradient(135deg,var(--gold-700) 0%,var(--gold-500) 55%,var(--gold-200) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.aurum-mark-a{top:11%;left:11%;z-index:2}
+.aurum-mark-b{bottom:11%;right:11%;z-index:2}
+.aurum-mark-bridge{position:absolute;left:50%;top:50%;width:58%;height:23%;z-index:1;
+  border-radius:999px;
+  background:linear-gradient(135deg,var(--gold-700) 0%,var(--gold-500) 55%,var(--gold-200) 100%);
+  transform:translate(-50%,-50%) rotate(45deg);
+  animation:bridge-breathe 3.2s ease-in-out infinite}
+@keyframes bridge-breathe{0%,100%{opacity:1}50%{opacity:.7}}
+.aurum-mark-float{animation:mark-float 7s ease-in-out infinite;will-change:transform}
+@keyframes mark-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.aurum-word{font-family:var(--font-display);font-weight:600;letter-spacing:-.045em;
+  line-height:1;font-size:clamp(3rem,11vw,6.5rem)}
+/* Gradiente POR LETRA (não no pai): filhos com transform criam stacking
+   context e o background-clip:text do ancestral falha no Chromium,
+   apagando o texto. Com o gradiente na própria letra, cada uma tem seu
+   brilho — com delays em cascata, o sheen atravessa a palavra. */
+.aurum-word-letter{display:inline-block;will-change:transform;
+  background:linear-gradient(180deg,#6B5320 0%,#C0A060 32%,#EADAB6 50%,#D8B879 66%,#755D2E 100%);
+  background-size:100% 220%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:word-sheen 9s ease-in-out infinite}
+@keyframes word-sheen{0%,100%{background-position:50% 0%}50%{background-position:50% 100%}}
+.aurum-sub{display:flex;align-items:center;gap:.9em;
+  font-size:clamp(.68rem,2.4vw,.8rem);font-weight:500;letter-spacing:.3em;color:var(--text-2)}
+.aurum-sub-dots{display:inline-flex;align-items:center;gap:.55em}
+.aurum-dot{display:inline-block;border-radius:999px;background:var(--accent);
+  animation:dot-wave 2.6s ease-in-out infinite}
+@keyframes dot-wave{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+.aurum-hint{display:flex;align-items:center;gap:10px;margin:4px 0 0;white-space:nowrap;
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.6;
+  transition:opacity .8s ease}
+.aurum-hint-dot{width:6px;height:6px;border-radius:50%;background:currentColor;
+  animation:sh-pulse 2.4s ease-in-out infinite}
+.aurum-hint[data-touched="1"]{opacity:0}
+@media (prefers-reduced-transparency:reduce){
+  .hero-brand-glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:color-mix(in srgb,var(--bg-0) 55%,transparent)}
+}
+@media (forced-colors: active){
+  .hero-brand-photo,.hero-brand-glass{display:none}
+  .aurum-word-letter{background:none;-webkit-text-fill-color:CanvasText;color:CanvasText;animation:none}
+  .aurum-mark-tile,.aurum-mark-bridge,.aurum-dot{background:CanvasText;animation:none}
+  .aurum-mark{box-shadow:none;border:1px solid CanvasText}
+  .lm-stage{border:1px solid CanvasText}
+  .type-caret{background:CanvasText;animation:none}
+}
+
+/* === Hero líquido: logo persistente + palavras digitadas === */
+.hero-liquid-grid{display:grid;gap:clamp(20px,4vh,40px);align-items:center;width:100%}
+@media (min-width:1024px){
+  .hero-liquid-grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(24px,4vw,64px)}
+}
+.hero-liquid-stage{display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0}
+.hero-liquid-copy{display:flex;flex-direction:column;align-items:center;text-align:center;
+  gap:clamp(2px,0.8vh,8px);min-width:0}
+/* Eixo único centralizado em todas as larguras (logo + textos). */
+@media (min-width:1024px){
+  .hero-liquid-copy{align-items:center;text-align:center}
+  .hero-liquid-copy .hero-brand-ctas{justify-content:center}
+}
+.hero-brand-eyebrow{justify-content:center}
+
+/* Palco da marca líquida + fallback estático (mesma caixa) */
+.liquid-mark{width:clamp(220px,60vw,400px);aspect-ratio:1/1}
+.lm-stage{position:relative;overflow:hidden}
+.lm-host{position:absolute;inset:0;z-index:1}
+.lm-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;
+  transition:opacity .5s ease}
+.lm-stage[data-gl="on"] .lm-canvas{opacity:1}
+.lm-stage[data-swap="1"] .lm-canvas{opacity:0;transition-duration:.25s}
+.lm-fallback{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:contain;
+  pointer-events:none;transition:opacity .3s ease}
+.lm-stage[data-gl="on"] .lm-fallback{opacity:0;visibility:hidden}
+img.liquid-mark{object-fit:contain}
+
+/* Palavra líquida sobreposta à digitada (crossfade sem shift de layout).
+   A caixa tem o aspecto do quadro (1400×520): o líquido rende em tamanho
+   real e o DOM centraliza dentro dela. */
+/* Caixa da palavra unificada: aspecto do quadro (1600×340) + container units
+   para o sizer/caret usar a MESMA escala do canvas (font-size em cqw). */
+.liquid-word-wrap{position:relative;width:100%;max-width:680px;margin-inline:auto;
+  margin-bottom:-10px;aspect-ratio:1800/360;container-type:inline-size}
+.liquid-type{position:absolute;inset:0;overflow:visible}
+.liquid-h1{overflow:visible}
+/* Sizer invisível: só posiciona o caret no fim do prefixo (métrica = canvas). */
+.word-sizer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;visibility:hidden;white-space:nowrap;
+  font-family:var(--font-display);font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.word-sizer .type-caret{visibility:visible}
+/* Fallback estático dentro do palco (WebGL ausente = prefixo em texto). */
+.lm-type-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;margin:0;font-family:var(--font-display);font-weight:700;letter-spacing:-.02em;
+  line-height:1.15;color:var(--text-1);font-size:clamp(1.5rem,0.875rem + 2.5vw,2.5rem)}
+@media (min-width:1280px){
+  .lm-type-fallback{font-size:2.75rem}
+}
+.liquid-h1{width:100%;aspect-ratio:1600/340}
+
+/* H1 líquido persistente */
+.liquid-h1-wrap{width:100%;max-width:640px;margin-inline:auto}
+@media (min-width:1024px){
+  .hero-liquid-copy .liquid-h1-wrap{max-width:680px}
+}
+/* Fallback em texto do H1: escondido, exceto sem arte ou alto contraste. */
+.liquid-h1-fallback{display:none}
+.liquid-h1-wrap:not([data-ready]) .liquid-h1-fallback{display:block}
+@media (forced-colors:active){
+  .liquid-type,.liquid-h1{display:none}
+  .word-sizer{visibility:visible}
+  .word-sizer-text{background:none;color:CanvasText}
+  .liquid-h1-fallback{display:block}
+}
+.hero-liquid-copy,.liquid-word-wrap,.liquid-h1-wrap,.hero-typed{min-width:0}
+
+/* Palavra digitada: TAMANHO ÚNICO em todas (1 linha sempre).
+   23ch (maior palavra) cabem a 360px (23px) e na coluna lg (36px). */
+.hero-typed{margin:0;max-width:100%;font-family:var(--font-display);font-weight:700;
+  letter-spacing:-.02em;line-height:1.15;white-space:nowrap;
+  font-size:clamp(1.5rem,0.875rem + 2.5vw,2.5rem);min-height:1.3em;text-align:center}
+@media (min-width:1280px){
+  .hero-typed{font-size:2.75rem}
+}
+.type-caret{display:inline-block;width:.09em;height:1em;margin-left:.1em;vertical-align:-.12em;
+  border-radius:2px;background:var(--accent);animation:caret-blink 1.1s steps(1) infinite}
+@keyframes caret-blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* =====================================================================
+ * Transição de tema Dark/Light — micro-interação (120Hz no compositor)
+ * Orquestrada por lib/theme-transition.ts. Regras:
+ * - Só tinta (bg/border/color/fill/stroke...). transform/opacity/filter/
+ *   backdrop-filter ficam DE FORA: orbes, drawers e o ícone do toggle
+ *   seguem no compositor sem jank. Nunca `transition: all`.
+ * - Curva expo-out do DS (0.16,1,0.3,1), 950ms fallback / 1050ms reveal:
+ *   duração longa de propósito — a troca deve ser percebida como fluxo.
+ * =================================================================== */
+
+/* 1. Fallback sem View Transitions: interpola os tokens em toda a árvore.
+ * Duração longa (950ms) para a troca ser percebida como fluxo, não corte. */
+html.theme-animating *,
+html.theme-animating *::before,
+html.theme-animating *::after {
+  transition-property: background-color, border-color, color, fill, stroke,
+    outline-color, text-decoration-color, caret-color, column-rule-color, box-shadow;
+  transition-duration: 950ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: 0s;
+}
+
+/* Fundos grandes respiram um pouco mais devagar que o conteúdo. */
+html.theme-animating body,
+html.theme-animating header,
+html.theme-animating main,
+html.theme-animating footer,
+html.theme-animating section {
+  transition-duration: 1100ms;
+}
+
+/* 2. View Transitions: snapshot antigo parado embaixo, novo revela por cima
+ * com clip circular (animado via WAAPI a partir do toggle). */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+  ::view-transition-old(root) {
+    z-index: 0;
+  }
+  ::view-transition-new(root) {
+    z-index: 1;
+  }
+}
+
+/* 3. Ícone Sol/Lua do toggle: só transform + opacity (compositor). */
+.theme-toggle-track {
+  position: relative;
+  display: block;
+  width: 20px;
+  height: 20px;
+  contain: layout style;
+}
+.theme-toggle-icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  will-change: transform, opacity;
+  transition: transform 650ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms ease;
+}
+.theme-toggle-icon[data-active="true"] {
+  transform: rotate(0deg) scale(1);
+  opacity: 1;
+}
+.theme-toggle-icon[data-icon="sun"][data-active="false"] {
+  transform: rotate(120deg) scale(0.4);
+  opacity: 0;
+  pointer-events: none;
+}
+.theme-toggle-icon[data-icon="moon"][data-active="false"] {
+  transform: rotate(-120deg) scale(0.4);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 4. Acessibilidade: movimento reduzido ou alto contraste = corte seco. */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-animating *,
+  html.theme-animating *::before,
+  html.theme-animating *::after {
+    transition: none;
+  }
+  .theme-toggle-icon {
+    transition: none;
+  }
+  .theme-glass-veil {
+    display: none;
+  }
+}
+@media (forced-colors: active) {
+  html.theme-animating *,
+  html.theme-animating *::before,
+  html.theme-animating *::after {
+    transition: none;
+  }
+  .theme-toggle-icon {
+    transition: none;
+  }
+  .theme-glass-veil {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .theme-glass-veil {
+    display: none;
+  }
+}
+
+/* =====================================================================
+ * Véu de vidro da transição de tema (lib/theme-glass.ts)
+ * Overlay fixo criado/removido dentro da jogada. Só opacity anima
+ * (compositor); o blur é estático. z-index 80: acima de tooltip (70)/
+ * modal (50)/drawer (46), abaixo do skip-link (100).
+ * =================================================================== */
+.theme-glass-veil {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100svh;
+  z-index: 80;
+  pointer-events: none;
+  contain: strict;
+  opacity: 0;
+  background: color-mix(in srgb, var(--bg-0) 40%, transparent);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  transition: opacity 450ms ease;
+}
+.theme-glass-veil[data-on="1"] {
+  opacity: 1;
+}

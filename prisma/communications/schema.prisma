@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/communications"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_COMMUNICATIONS")
+}
+
+// Fase 4 — Resend + templates reais (PROJECT.md §§5-6, REQUIREMENTS.md §4).
+// - Idempotência: `eventId` UNIQUE global (= BullMQ jobId = Resend
+//   idempotencyKey). `INSERT ... ON CONFLICT ("eventId") DO NOTHING` →
+//   replay nunca duplica envio (segunda camada: Resend idempotencyKey).
+// - LGPD: e-mail cru NUNCA persiste (só transita fila→Resend em memória).
+//   Guarda `recipientHash` (SHA256 do normalizado, p/ busca) + `recipientMasked`
+//   (`d***@dominio`, p/ suporte). Vars de template sensíveis (code/token)
+//   são redigidas antes de persistir (`variables`); o render usa as vars
+//   do job em memória. Retenção vars 90d (REQUIREMENTS §4).
+enum EmailStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+  BOUNCED
+  COMPLAINED
+}
+
+model EmailMessage {
+  id              String      @id @default(cuid())
+  eventId         String      @unique
+  correlationId   String?
+  recipientHash   String
+  recipientMasked String
+  template        String
+  templateVersion String      @default("v1")
+  resendId        String?     @unique
+  status          EmailStatus @default(QUEUED)
+  variables       Json?
+  attempts        Int         @default(0)
+  lastError       String?
+  sentAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt @default(now())
+
+  @@index([status])
+  @@index([recipientHash])
+  @@index([template, templateVersion])
+  @@map("email_messages")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  version   String   @default("v1")
+  subject   String
+  body      String
+  variables Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
+
+  @@unique([name, version])
+  @@map("email_templates")
+}
+
+// Dedupe de webhooks Resend (PROJECT.md §5: UNIQUE por evento → 200 duplicate).
+// `externalId` = id do evento no Resend; `emailId` = email_id alvo.
+model WebhookReceipt {
+  id         String   @id @default(cuid())
+  provider   String   @default("resend")
+  externalId String   @unique
+  emailId    String?
+  type       String
+  createdAt  DateTime @default(now())
+
+  @@map("webhook_receipts")
+}

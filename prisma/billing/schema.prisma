@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/billing"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_BILLING")
+}
+
+// Fase 4 — Billing core (PROJECT.md §5, REQUIREMENTS.md §3).
+// Banco por domínio: sem FK cross-DB. IDs de outros domínios
+// (customers.Customer.id, products.Plan.id, access.ContractItem.id)
+// viajam como strings opacas. FKs intra-DB: Payment -> Invoice,
+// Refund -> Payment (mesmo database, mesmo schema Prisma).
+// Idempotência: UNIQUE(provider, externalId) em Payment/WebhookReceipt,
+// UNIQUE(idempotencyKey) em Subscription/Payment/Refund (+ Invoice
+// opcional), UNIQUE(number/orderId) em Invoice.
+
+// Espelho do titular (origem: customers.Customer.id). O customers é a
+// fonte; aqui só id + asaasCustomerId p/ cobrança.
+model Customer {
+  id              String   @id @default(cuid())
+  userId          String   @unique // opaco cross-DB: customers.Customer.id
+  asaasCustomerId String?  @unique
+  name            String?
+  email           String?
+  cpfCnpj         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt @default(now())
+
+  @@map("customers")
+}
+
+// DRAFT → ACTIVE → PAST_DUE ↔ ... → CANCELLED | EXPIRED.
+// Transições validadas por assertTransition (billing-transitions.ts);
+// ilegal → 422 + alerta, sem sobrescrever.
+model Subscription {
+  id                 String    @id @default(cuid())
+  customerId         String // opaco: billing.Customer.id (mesmo DB, sem relation p/ escrita simples)
+  asaasSubscriptionId String?  @unique
+  status             String    @default("DRAFT") // DRAFT | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED | EXPIRED
+  planRef            String? // opaco cross-DB: products.Plan.id
+  // Fase 8: intervalo comercial validado (MONTH | YEAR | ONE_TIME).
+  // Espelha products.ProductPlan.billingInterval (fonte); sem FK cross-DB.
+  billingInterval    String? // MONTH | YEAR | ONE_TIME
+  idempotencyKey     String    @unique
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  canceledAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt @default(now())
+
+  @@index([customerId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// number INV-AAAA-NNNNNN UNIQUE. orderId UNIQUE NULL = idempotência
+// natural de criação via pedido. Valores em centavos.
+model Invoice {
+  id             String    @id @default(cuid())
+  number         String    @unique // INV-AAAA-NNNNNN
+  customerId     String // opaco: billing.Customer.id
+  subscriptionId String? // opaco: billing.Subscription.id
+  orderId        String?   @unique // opaco cross-DB (origem do pedido)
+  asaasInvoiceId String?   @unique
+  status         String    @default("DRAFT") // DRAFT | PENDING | PAID | OVERDUE | CANCELLED | REFUNDED
+  // Fase 8: intervalo comercial validado (MONTH | YEAR | ONE_TIME).
+  billingInterval String? // MONTH | YEAR | ONE_TIME
+  // Fase 8: refs comerciais opacas do pedido (origem: products).
+  // Permitem ao worker montar issue-from-payment sem ler outro domínio.
+  productId String? // opaco cross-DB: products.Product.id
+  planRef   String? // opaco cross-DB: products.ProductPlan.id
+  amountCents    Int
+  discountCents  Int       @default(0)
+  fineCents      Int       @default(0)
+  interestCents  Int       @default(0)
+  dueDate        DateTime
+  paidAt         DateTime?
+  idempotencyKey String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt @default(now())
+
+  payments Payment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("invoices")
+}
+
+// Stub Fase 1 preservado (provider/externalId/customerId/amountCents/
+// status/createdAt/updatedAt + UNIQUE(provider, externalId)).
+// Fase 4 (aditivo): FK intra-DB invoice, method, idempotencyKey UNIQUE,
+// paidAt + version/occurredAt p/ fora-de-ordem (evento antigo nunca
+// regride terminal CONFIRMED/REFUNDED — PROJECT.md §5).
+model Payment {
+  id             String   @id @default(cuid())
+  provider       String // ex.: ASAAS
+  externalId     String
+  // Referência opaca cross-DB — origem: customers.Customer.id. Sem @relation cross-DB.
+  customerId     String
+  invoice        Invoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId      String?
+  amountCents    Int
+  method         String? // PIX | BOLETO | CREDIT_CARD
+  status         String   @default("PENDING") // PENDING | PROCESSING | AWAITING | CONFIRMED | FAILED | EXPIRED | REFUNDED | CHARGEBACK
+  idempotencyKey String   @unique
+  paidAt         DateTime?
+  version        Int      @default(1)
+  occurredAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt @default(now())
+
+  refunds Refund[]
+
+  @@unique([provider, externalId])
+  @@index([invoiceId])
+  @@index([status])
+  @@map("payments")
+}
+
+// REQUESTED → PROCESSING → COMPLETED | FAILED (FAILED retry → REQUESTED).
+model Refund {
+  id             String   @id @default(cuid())
+  payment        Payment  @relation(fields: [paymentId], references: [id])
+  paymentId      String
+  provider       String   @default("ASAAS")
+  externalId     String?
+  amountCents    Int
+  status         String   @default("REQUESTED") // REQUESTED | PROCESSING | COMPLETED | FAILED
+  idempotencyKey String   @unique
+  reason         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt @default(now())
+
+  @@unique([provider, externalId])
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+// Stub Fase 1 preservado (provider/externalId/status/payload/createdAt
+// + UNIQUE(provider, externalId)). Fase 4 (aditivo): type, signature e
+// updatedAt p/ pipeline RECEIVED → VALIDATED → APPLIED | REJECTED |
+// DUPLICATE (PROJECT.md §5). Dono do controller de webhook: outro
+// workstream — aqui só o modelo + transição.
+model WebhookReceipt {
+  id         String   @id @default(cuid())
+  provider   String
+  externalId String
+  type       String? // ex.: PAYMENT_CONFIRMED, PAYMENT_FAILED...
+  status     String   @default("RECEIVED") // RECEIVED → VALIDATED → APPLIED | REJECTED | DUPLICATE
+  payload    Json?
+  signature  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt @default(now())
+
+  @@unique([provider, externalId])
+  @@index([status])
+  @@map("webhook_receipts")
+}
+
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  aggregate   String
+  aggregateId String
+  type        String
+  payload     Json
+  occurredAt  DateTime @default(now())
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("outbox_events")
+}
