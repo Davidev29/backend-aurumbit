@@ -21,3 +21,9 @@
   `!reset` zerava ports/depends_on no Compose v5.4.0 → `!override`.
   Pendente de VPS/Linux: up real, caddy validate, seed-prod, backup cron,
   smoke --live, clone→ready <10min real, reboot, monitores externos.
+- Fase 8 executada em 2026-10-14 (plano `.planning/PHASE-8-PLAN.md`, report
+  `.planning/PHASE-8-REPORT.md`): modelo comercial ONE_TIME×MONTH/YEAR,
+  kind=lifetime, channel WEB/DESKTOP/BOTH, checkout pós-pagamento real
+  (Asaas→licença, sem done sem cobrança), BFF 12/12 fail-closed,
+  migrations 0001 (9 domínios) + 0002. Unit api 464/464, worker 5/5,
+  builds PASS. Operacional VPS pendente (plano ativo + compra mínima).

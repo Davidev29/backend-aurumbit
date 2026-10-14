@@ -380,3 +380,11 @@ ex. `finance.projection.requested/computed/duplicate/dlq/invalidated`),
 | health | 1 | 2 | 0 | — |
 | outbox relay (infra) | — | — | — | ticker 30s × 9 domínios |
 | **Total** | **21 (19 com rotas)** | **145 definidos / 133 expostos** | **28 BFF** | **11 queues (8 trabalho + 3 DLQ) + 4 tickers/crons** |
+
+## Adendo Fase 8 — Modelo comercial (2026-10-14)
+
+Novos endpoints Nest: POST /v1/billing/checkout, GET /v1/billing/checkout/:orderId, GET /v1/billing/internal/issue-context/:paymentId (@Public + x-internal-key), POST /v1/licenses/internal/issue-from-payment (@Public + x-internal-key).
+
+BFF portal: 12/12 rotas com guarda fail-closed `resolveUpstream` (prod sem upstream = 502 UPSTREAM_MISSING); checkout sem stub `done` (PENDING + polling, COMPLETED + licenseId).
+
+Workers: nova queue logica licensing.issue (PaymentConfirmed -> licenca, claim-first por eventId).

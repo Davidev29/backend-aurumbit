@@ -4,7 +4,7 @@
 
 O Aurum Bit é a plataforma que vende, licencia, cobra e sustenta os produtos Aurum (Windows / Mac / Web / App). Este repositório contém **tudo que roda o negócio**: API, workers assíncronos, painel administrativo, portal público com área do cliente, 9 bancos por domínio, deploy single-VPS com TLS e backup com restore testado.
 
-**Estado (Fases 1–8):** Fases 1–6 entregues e verificadas por execução (builds PASS, unit **429**, e2e **42**). Fase 7 entregou produção single-VPS (código pronto e verificado localmente; up real na VPS pendente). Fase 8 define o modelo comercial — licença perpétua × assinatura — com gating por canal Web × Desktop.
+**Estado (Fases 1–8):** Fases 1–7 entregues e verificadas por execução (builds PASS, e2e **42**). Fase 8 executada — modelo comercial licença × assinatura com gating por canal (unit API **464/464**, worker **5/5**, builds PASS, `prisma validate` 9/9; cerimônia operacional na VPS pendente).
 
 ```text
 Win / Mac / Web / App ──HTTPS──┐
@@ -380,7 +380,8 @@ bash deploy/scripts/pg-restore-probe.sh  # restaura em restore_probe_* e checa 9
 | Gate | Resultado verificado |
 |---|---|
 | Builds `api` + `workers` + `admin` + `portal (tsc)` | PASS |
-| Unit API | **429/429** (44 suites; baseline 377 das Fases 1–6 preservada, sem regressão) |
+| Unit API | **464/464** (47 suites; baseline 429 da Fase 7 preservada, +35 da Fase 8, zero regressão) |
+| Worker | **5/5** (node:test `licensing.issue`: issue → duplicate, DLQ, retry) |
 | E2E API | **42/42** preservados (licensing, offline, billing, finance flows) |
 | Infra como código | `bash -n` 15/15 · `compose config` + validação semântica (loopback, depends, restart, mem) · `prisma validate` 9/9 no CI |
 | Tracer Fase 7 (T0) | Vitrine via API + teste negativo anti-mock (sem API → 502 visível) |
@@ -401,7 +402,7 @@ Qualidade contínua: `lint → typecheck → test → build → prisma validate 
 | 5 — Financeiro | Previsto/pendente/realizado, projeções hit/miss/202, sync billing→finance, `finance.read` escopado | ✅ 326 unit + 42 e2e |
 | 6 — Robustez | DLQ replay, retenção, backup-check, ready warn, helmet/CSP, GDPR real, `/metrics`, smoke | ✅ 377 unit + 42 e2e + ARCHITECTURE + README |
 | 7 — Produção VPS | Portal no compose, override prod loopback, Caddy TLS, `.env` prod, seed real, backup DR + probe + dead-man, smoke prod, runbook, clone→ready | ✅ código verificado localmente; up real + reboot + monitores na VPS pendentes |
-| 8 — Modelo comercial | `billingInterval` + `kind=lifetime` + channel WEB/DESKTOP + gating server-side + checkout real + catálogo `ONE_TIME` + BFF fail-closed total | 📐 planejada ([`PHASE-8-PLAN.md`](.planning/PHASE-8-PLAN.md), tracer primeiro) |
+| 8 — Modelo comercial | `billingInterval` + `kind=lifetime` + channel WEB/DESKTOP + gating server-side + checkout real + catálogo `ONE_TIME` + BFF fail-closed total | ✅ executada (código verificado; cerimônia VPS pendente — plano ONE_TIME ativo + compra mínima) |
 | 9 — Bancos por produto | `APP-DATABASE-CONTRACT.md`, gerador `app_<slug>`, registro dinâmico, piloto 1 produto, backup `9+N` | ⏳ próxima |
 | 10 — Sync offline-first | `SYNC-PROTOCOL.md` (pull cursorado + push idempotente, tombstones, LWW), `SyncCursor`, piloto 1 entidade, motor desktop, `sync_lag_*` | ⏳ por último (depende de 8–9) |
 
