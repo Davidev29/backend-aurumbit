@@ -40,7 +40,6 @@ model License {
   // Limite de máquinas vinculadas (enforcement no backend, Fase 3).
   maxDevices   Int      @default(3)
   // Feature codes congelados no momento da emissão (opaco p/ offline-token `feat`).
-  features     Json?
   // Feature codes congelados no momento da emissão (opaco p/ offline-token `feat`).
   features     Json?
 

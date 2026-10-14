@@ -66,7 +66,7 @@ describe('featureCodesFor', () => {
 
 describe('Fase 8: origin/channel por kind (entitlementUpsertsFor)', () => {
   const base = (kind?: string) =>
-    issued({ kind, featureCodes: ['F1', 'F2'], channels: ['WEB', 'DESKTOP'] });
+    issued({ kind, featureCode: undefined, featureCodes: ['F1', 'F2'], channels: ['WEB', 'DESKTOP'] });
   it('lifetime → LICENSE/30 com channels do envelope', () => {
     const p = parseLicenseEnvelope(base('lifetime'));
     expect(p.ok).toBe(true);

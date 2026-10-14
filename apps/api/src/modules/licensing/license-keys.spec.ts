@@ -16,20 +16,20 @@ const START = new Date('2026-01-15T10:00:00.000Z');
 describe('calcExpiry (PROJECT.md §1 — pura e determinística)', () => {
   it('monthly: +1M calendário UTC, grace +3d', () => {
     const { expiresAt, graceUntil } = calcExpiry(START, 'monthly');
-    expect(expiresAt.toISOString()).toBe('2026-02-15T10:00:00.000Z');
-    expect(graceUntil.toISOString()).toBe('2026-02-18T10:00:00.000Z');
+    expect(expiresAt!.toISOString()).toBe('2026-02-15T10:00:00.000Z');
+    expect(graceUntil!.toISOString()).toBe('2026-02-18T10:00:00.000Z');
   });
 
   it('annual: +12M calendário UTC, grace +3d', () => {
     const { expiresAt, graceUntil } = calcExpiry(new Date('2026-03-10T00:00:00.000Z'), 'annual');
-    expect(expiresAt.toISOString()).toBe('2027-03-10T00:00:00.000Z');
-    expect(graceUntil.toISOString()).toBe('2027-03-13T00:00:00.000Z');
+    expect(expiresAt!.toISOString()).toBe('2027-03-10T00:00:00.000Z');
+    expect(graceUntil!.toISOString()).toBe('2027-03-13T00:00:00.000Z');
   });
 
   it('fim de mês é determinístico (31/jan +1M → 3/mar, overflow UTC documentado)', () => {
     const { expiresAt, graceUntil } = calcExpiry(new Date('2026-01-31T10:00:00.000Z'), 'monthly');
-    expect(expiresAt.toISOString()).toBe('2026-03-03T10:00:00.000Z');
-    expect(graceUntil.toISOString()).toBe('2026-03-06T10:00:00.000Z');
+    expect(expiresAt!.toISOString()).toBe('2026-03-03T10:00:00.000Z');
+    expect(graceUntil!.toISOString()).toBe('2026-03-06T10:00:00.000Z');
   });
 
   it('pura: mesma entrada → mesma saída, sem mutar a entrada', () => {
@@ -48,18 +48,18 @@ describe('calcExpiry (PROJECT.md §1 — pura e determinística)', () => {
     const prev = calcExpiry(new Date('2026-01-01T00:00:00.000Z'), 'monthly'); // exp 01/fev, grace 04/fev
     // Antecipada (now < exp): continua do vencimento, sem sobreposição.
     const early = new Date('2026-01-20T00:00:00.000Z');
-    expect(new Date(Math.max(early.getTime(), prev.expiresAt.getTime())).toISOString()).toBe(
+    expect(new Date(Math.max(early.getTime(), prev.expiresAt!.getTime())).toISOString()).toBe(
       '2026-02-01T00:00:00.000Z',
     );
     // Em grace (exp < now <= grace): starts_at = now; sem lacuna de NEGAÇÃO
     // porque a graça cobre até 04/fev (allow degradado) e a nova vigência
     // começa em 02/fev — janelas sobrepostas, sem dia negado.
     const inGrace = new Date('2026-02-02T12:00:00.000Z');
-    const startsAt = new Date(Math.max(inGrace.getTime(), prev.expiresAt.getTime()));
+    const startsAt = new Date(Math.max(inGrace.getTime(), prev.expiresAt!.getTime()));
     expect(startsAt.toISOString()).toBe('2026-02-02T12:00:00.000Z');
-    expect(prev.graceUntil.getTime()).toBeGreaterThanOrEqual(startsAt.getTime());
+    expect(prev.graceUntil!.getTime()).toBeGreaterThanOrEqual(startsAt.getTime());
     const next = calcExpiry(startsAt, 'monthly');
-    expect(next.expiresAt.toISOString()).toBe('2026-03-02T12:00:00.000Z');
+    expect(next.expiresAt!.toISOString()).toBe('2026-03-02T12:00:00.000Z');
   });
 
   it('renovação após a graça: starts_at = now', () => {

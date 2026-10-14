@@ -1,5 +1,6 @@
--- 0002_fase8_commercial — Snapshot de features por licença (Fase 8).
--- NULL = legado (curinga). Lista [{code, channel}] p/ offline-JWT `ch`
--- e entitlements por feature no consumidor access.
-
-ALTER TABLE "licenses" ADD COLUMN "features" JSONB;
+-- 0002_fase8_commercial — Modelo comercial (Fase 8).
+-- No-op intencional: `licenses.features` (snapshot p/ offline-JWT `ch` e
+-- entitlements) já existia no schema e entrou no 0001_baseline.
+-- Mantido o marco de versão para alinhar os 4 domínios da Fase 8.
+-- SELECT ... features FROM licenses (offline-token.service) agora é válido.
+SELECT 1;

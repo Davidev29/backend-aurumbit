@@ -20,7 +20,7 @@ export function planChannels(plan: Pick<PlanView, "features">): Array<Channel | 
   const feats = plan.features ?? [];
   if (feats.length === 0) return ["BOTH"];
   const set = new Set(feats.map((f) => f.channel ?? "BOTH"));
-  return [...set];
+  return Array.from(set);
 }
 
 /** O plano serve este canal? (BOTH atende tudo.) */
