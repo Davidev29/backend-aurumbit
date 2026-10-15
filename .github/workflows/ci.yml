@@ -156,7 +156,17 @@ jobs:
             echo "tentativa $i/30..."
             sleep 10
             if [ "$i" = "30" ]; then
-              docker compose -f deploy/docker-compose.yml logs --tail=200
+              echo "--- ready body ---"
+              curl -s http://localhost:3000/health/ready || true
+              echo
+              echo "--- ps ---"
+              docker compose -f deploy/docker-compose.yml ps || true
+              echo "--- postgres (init) ---"
+              docker compose -f deploy/docker-compose.yml logs --tail=60 postgres || true
+              echo "--- pgbouncer ---"
+              docker compose -f deploy/docker-compose.yml logs --tail=60 pgbouncer || true
+              echo "--- api (tail) ---"
+              docker compose -f deploy/docker-compose.yml logs --tail=60 api || true
               exit 1
             fi
           done
