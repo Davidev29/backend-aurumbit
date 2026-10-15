@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # deploy/scripts/pg-restore-probe.sh — Fase 7 T5. Prova de restore SEMANAL (não pontual).
 #
-# Pega o timestamp mais recente com as 9 peças `aurum-<ts>-<db>.dump.gpg` do dia,
-# descriptografa (valida passphrase + integridade), restaura cada uma em
-# `restore_probe_<db>` com pg_restore e compara contra o DB vivo:
-#   1. conjunto de tabelas de usuário idêntico (não só SELECT 1);
-#   2. row counts por tabela idênticos (contagens âncora);
+# Pega o dump `aurum-<ts>.dump.gpg` mais recente (DB único `aurumbit`),
+# descriptografa (valida passphrase + integridade), restaura em
+# `restore_probe_aurumbit` com pg_restore e compara contra o DB vivo:
+#   1. conjunto de tabelas de usuário idêntico (schema-qualificado,
+#      `schemaname IN (9 schemas)`, não só SELECT 1);
+#   2. row counts por tabela idênticos (contagens âncora, schema-qualificadas);
 # DB vivo vazio (0 tabelas) + probe vazio = PASS com nota EMPTY (caso seed zerado).
-# Probes SEMPRE dropados ao final (trap), PASS ou FAIL. Log em BACKUP_DIR/probe-<ts>.log.
-# Agendamento: cron semanal (ver deploy/backup/README.md). Saída: 0 = 9/9 PASS; 1 = FAIL.
+# Probe SEMPRE dropado ao final (trap), PASS ou FAIL. Log em BACKUP_DIR/probe-<ts>.log.
+# Agendamento: cron semanal (ver deploy/backup/README.md). Saída: 0 = PASS; 1 = FAIL.
 set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/aurum}"
@@ -17,8 +18,9 @@ PGPORT="${PGPORT:-5432}"
 PGUSER="${POSTGRES_USER:-aurum}"
 export PGPASSWORD="${POSTGRES_PASSWORD:-aurum}"
 
-DBS="auth customers products access licensing billing finance audit communications"
-PREFIX="restore_probe_"
+SINGLE_DB="${SINGLE_DB:-aurumbit}"
+PROBE_DB="restore_probe_aurumbit"
+SCHEMA_LIST="'auth','customers','products','access','licensing','billing','finance','audit','communications'"
 PROBE_LOG=""
 
 : "${BACKUP_PASSPHRASE:?BACKUP_PASSPHRASE env obrigatória (vir de secret file, nunca argv)}"
@@ -34,98 +36,78 @@ decrypt_to() { # $1 src.gpg, $2 dst plain — passphrase via fd 3, nunca argv
     --passphrase-fd 3 --output "$2" "$1" 3< <(printf '%s' "$BACKUP_PASSPHRASE")
 }
 
-latest_ts() { # ts mais recente com as 9 peças presentes; FAIL se incompleto
-  local ts candidate missing
-  candidate="$(ls "$BACKUP_DIR"/aurum-*-auth.dump.gpg 2>/dev/null \
-    | sed 's/.*aurum-\(.*\)-auth\.dump\.gpg/\1/' | sort | tail -n 1 || true)"
-  [ -n "$candidate" ] || { log "FAIL: nenhum dump *-auth.dump.gpg em $BACKUP_DIR"; return 1; }
-  missing=""
-  for db in $DBS; do
-    [ -f "$BACKUP_DIR/aurum-$candidate-$db.dump.gpg" ] || missing="$missing $db"
-  done
-  if [ -n "$missing" ]; then
-    log "FAIL: ts=$candidate incompleto, peças ausentes:$missing"
-    return 1
-  fi
+latest_ts() { # ts mais recente com peça única presente; FAIL se ausente
+  local candidate
+  candidate="$(ls "$BACKUP_DIR"/aurum-*.dump.gpg 2>/dev/null \
+    | grep -v 'aurum-globals-' \
+    | sed 's/.*aurum-\(.*\)\.dump\.gpg/\1/' | sort | tail -n 1 || true)"
+  [ -n "$candidate" ] || { log "FAIL: nenhum dump aurum-*.dump.gpg em $BACKUP_DIR"; return 1; }
+  [ -f "$BACKUP_DIR/aurum-$candidate.dump.gpg" ] || { log "FAIL: ts=$candidate sem peça única"; return 1; }
   echo "$candidate"
 }
 
-user_tables() { # $1 db -> lista ordenada de tabelas de usuário
+user_tables() { # $1 db -> lista ordenada schema.tabela (só os 9 schemas de domínio)
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$1" -tAc \
-    "SELECT tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY 1;"
+    "SELECT schemaname || '.' || tablename FROM pg_tables WHERE schemaname IN ($SCHEMA_LIST) ORDER BY 1;"
 }
 
-row_count() { # $1 db, $2 tabela
-  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$1" -tAc "SELECT count(*) FROM \"$2\";"
+row_count() { # $1 db, $2 schema.tabela (schema-qualificado, parte a parte entre aspas)
+  local schema="${2%%.*}" table="${2#*.}"
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$1" -tAc "SELECT count(*) FROM \"$schema\".\"$table\";"
 }
 
-drop_probes() {
-  for db in $DBS; do
-    psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d postgres -tAc \
-      "SELECT 1 FROM pg_database WHERE datname='$PREFIX$db'" | grep -q 1 \
-      && dropdb -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" "$PREFIX$db" \
-      && log "probe drop: $PREFIX$db" || true
-  done
+drop_probe() {
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d postgres -tAc \
+    "SELECT 1 FROM pg_database WHERE datname='$PROBE_DB'" | grep -q 1 \
+    && dropdb -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" "$PROBE_DB" \
+    && log "probe drop: $PROBE_DB" || true
 }
 
-probe_one_db() { # $1 db, $2 ts -> 0 PASS / 1 FAIL (compara schema + counts, não só SELECT 1)
-  local db="$1" ts="$2" probe="$PREFIX$1"
-  local src="$BACKUP_DIR/aurum-$ts-$db.dump.gpg" tmp live_tables probe_tables
+main() {
+  local ts
+  ts="$(latest_ts)" || { echo "[probe] FAIL: sem dump restaurável" >&2; exit 1; }
+  PROBE_LOG="$BACKUP_DIR/probe-$ts.log"
+  : > "$PROBE_LOG"
+  log "start ts=$ts (peça única $SINGLE_DB) — probe: $PROBE_DB (drop garantido via trap)"
+  trap drop_probe EXIT
+  local src="$BACKUP_DIR/aurum-$ts.dump.gpg" tmp live_tables probe_tables
   tmp="$(mktemp)"
-  decrypt_to "$src" "$tmp" || { log "FAIL [$db]: descriptografia falhou"; rm -f "$tmp"; return 1; }
-  dropdb -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" --if-exists "$probe" >/dev/null 2>&1 || true
-  createdb -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" "$probe" \
-    || { log "FAIL [$db]: createdb $probe"; rm -f "$tmp"; return 1; }
-  if ! pg_restore -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$probe" --no-owner "$tmp" >>"$PROBE_LOG" 2>&1; then
-    log "FAIL [$db]: pg_restore falhou (detalhe no log)"
+  decrypt_to "$src" "$tmp" || { log "FAIL: descriptografia falhou"; rm -f "$tmp"; exit 1; }
+  dropdb -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" --if-exists "$PROBE_DB" >/dev/null 2>&1 || true
+  createdb -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" "$PROBE_DB" \
+    || { log "FAIL: createdb $PROBE_DB"; rm -f "$tmp"; exit 1; }
+  if ! pg_restore -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PROBE_DB" --no-owner "$tmp" >>"$PROBE_LOG" 2>&1; then
+    log "FAIL: pg_restore falhou (detalhe no log)"
     rm -f "$tmp"
-    return 1
+    exit 1
   fi
   rm -f "$tmp"
-  live_tables="$(user_tables "$db")"
-  probe_tables="$(user_tables "$probe")"
+  live_tables="$(user_tables "$SINGLE_DB")"
+  probe_tables="$(user_tables "$PROBE_DB")"
   if [ "$live_tables" != "$probe_tables" ]; then
-    log "FAIL [$db]: tabelas divergem vivo<>probe"
-    log "FAIL [$db]: vivo=[$(echo "$live_tables" | tr '\n' ' ')] probe=[$(echo "$probe_tables" | tr '\n' ' ')]"
-    return 1
+    log "FAIL: tabelas divergem vivo<>probe"
+    log "FAIL: vivo=[$(echo "$live_tables" | tr '\n' ' ')] probe=[$(echo "$probe_tables" | tr '\n' ' ')]"
+    exit 1
   fi
   if [ -z "$live_tables" ]; then
-    log "PASS [$db]: EMPTY (0 tabelas no vivo e no probe)"
-    return 0
+    log "PASS: EMPTY (0 tabelas no vivo e no probe)"
+    exit 0
   fi
   local t live_n probe_n
   for t in $live_tables; do
-    live_n="$(row_count "$db" "$t")"
-    probe_n="$(row_count "$probe" "$t")"
+    live_n="$(row_count "$SINGLE_DB" "$t")"
+    probe_n="$(row_count "$PROBE_DB" "$t")"
     if [ "$live_n" != "$probe_n" ]; then
-      log "FAIL [$db.$t]: count vivo=$live_n probe=$probe_n"
-      return 1
+      log "FAIL [$t]: count vivo=$live_n probe=$probe_n"
+      exit 1
     fi
   done
   local ntables
   ntables="$(echo "$live_tables" | wc -l | tr -d ' ')"
-  log "PASS [$db]: $ntables tabelas, counts idênticos"
-  return 0
-}
-
-main() {
-  local ts pass=0 fail=0
-  ts="$(latest_ts)" || { echo "[probe] FAIL: sem dump restaurável" >&2; exit 1; }
-  PROBE_LOG="$BACKUP_DIR/probe-$ts.log"
-  : > "$PROBE_LOG"
-  log "start ts=$ts (dump do dia) — probes: ${PREFIX}* (drop garantido via trap)"
-  trap drop_probes EXIT
-  for db in $DBS; do
-    if probe_one_db "$db" "$ts"; then
-      pass=$((pass + 1))
-    else
-      fail=$((fail + 1))
-    fi
-  done
+  log "PASS: $ntables tabelas, counts idênticos"
   trap - EXIT
-  drop_probes
-  log "result: PASS=$pass FAIL=$fail (log: $PROBE_LOG)"
-  [ "$fail" -eq 0 ]
+  drop_probe
+  log "result: PASS (log: $PROBE_LOG)"
 }
 
 main "$@"

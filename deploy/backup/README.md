@@ -9,12 +9,13 @@ T5 verde recorrente antes de qualquer purge).
 
 | Script | Papel |
 |---|---|
-| `deploy/scripts/pg-backup.sh` | Dump diário: `pg_dumpall \| gzip` (cluster: roles+globals) + `pg_dump -Fc` por DB (9 peças restauráveis), tudo `gpg AES-256`, `sizes.log`, retenção local 14d, `rclone copy`, snapshot `.env.prod` cifrado + nota `LICENSE_KEY_ENC_KEY`, ping Healthchecks |
-| `deploy/scripts/pg-restore-probe.sh` | Prova semanal: descriptografa, `pg_restore` em `restore_probe_*`, compara **tabelas + row counts** vivo×probe, drop garantido, log `probe-<ts>.log` |
-| `deploy/scripts/backup-check.sh` | Veredito rápido: pg+9 DBs = FAIL hard (Fase 6, inalterado); dump do dia local/remoto = **WARN** até T5 verde recorrente |
+| `deploy/scripts/pg-backup.sh` | Dump diário: `pg_dump -Fc` ÚNICO do DB `aurumbit` (peça restaurável) + `pg_dumpall -g` (só roles/globals), tudo `gpg AES-256`, `sizes.log`, retenção local 14d, `rclone copy`, snapshot `.env.prod` cifrado + nota `LICENSE_MASTER_KEY_PATH`, ping Healthchecks |
+| `deploy/scripts/pg-restore-probe.sh` | Prova semanal: descriptografa, `pg_restore` em `restore_probe_aurumbit`, compara **tabelas (schema-qualificadas, 9 schemas) + row counts** vivo×probe, drop garantido, log `probe-<ts>.log` |
+| `deploy/scripts/backup-check.sh` | Veredito rápido: pg+9 schemas = FAIL hard (Fase 6, inalterado); dump do dia local/remoto = **WARN** até T5 verde recorrente |
 
-Nomes: `BACKUP_DIR/aurum-<UTC:YYYYMMDDTHHMMSSZ>[-<db>].dump.gpg`,
-`env-<UTC>.gpg` + `env-<UTC>.note` (`LICENSE_KEY_ENC_KEY=present|MISSING` — valor nunca em claro).
+Nomes: `BACKUP_DIR/aurum-<UTC:YYYYMMDDTHHMMSSZ>.dump.gpg` (peça única) +
+`BACKUP_DIR/aurum-globals-<UTC>.sql.gz.gpg` (roles),
+`env-<UTC>.gpg` + `env-<UTC>.note` (`LICENSE_MASTER_KEY_PATH=present|MISSING` — valor nunca em claro).
 
 ## Segredos (nunca commitar)
 
@@ -51,29 +52,29 @@ investigar remote); `1` = falha (ping `/fail` + sem dumps confiáveis).
 
 ```bash
 # 1. Localize o ts (local ou off-VPS)
-ls -t /var/backups/aurum/aurum-*-auth.dump.gpg | head -1
+ls -t /var/backups/aurum/aurum-*.dump.gpg | grep -v globals | head -1
 rclone lsl offsite:aurum-backups | sort -r | head -20
 
 # 2. Traga do remoto se preciso + descriptografe (passphrase via fd, nunca argv)
 export BACKUP_PASSPHRASE="$(cat /run/secrets/backup-passphrase)"
-TS=20261014T020000Z; DB=auth
-rclone copy "offsite:aurum-backups/aurum-$TS-$DB.dump.gpg" /tmp/restore/
+TS=20261014T020000Z
+rclone copy "offsite:aurum-backups/aurum-$TS.dump.gpg" /tmp/restore/
 printf '%s' "$BACKUP_PASSPHRASE" | gpg --decrypt --batch --yes --pinentry-mode loopback \
-  --passphrase-fd 0 --output /tmp/restore/$DB.dump /tmp/restore/aurum-$TS-$DB.dump.gpg
+  --passphrase-fd 0 --output /tmp/restore/aurumbit.dump /tmp/restore/aurum-$TS.dump.gpg
 
 # 3. Restaure num DB NOVO primeiro (nunca por cima do vivo sem checkpoint humano)
-createdb -h localhost -U aurum "${DB}_manual_restore"
-pg_restore -h localhost -U aurum -d "${DB}_manual_restore" --no-owner /tmp/restore/$DB.dump
+createdb -h localhost -U aurum "aurumbit_manual_restore"
+pg_restore -h localhost -U aurum -d "aurumbit_manual_restore" --no-owner /tmp/restore/aurumbit.dump
 
-# 4. Confira (tabelas + counts contra o vivo) e só então promova (rename / cutover)
-# 5. Roles/globals (se cluster novo): descriptografe aurum-$TS.dump.gpg (é .sql.gz),
+# 4. Confira (tabelas schema-qualificadas + counts contra o vivo) e só então promova (rename / cutover)
+# 5. Roles/globals (se cluster novo): descriptografe aurum-globals-$TS.sql.gz.gpg,
 #    gunzip e aplique as seções de ROLE necessárias com revisão (não psql -f cego).
 
-# 6. Segredo crítico: descriptografe env-$TS.gpg e confira a LICENSE_KEY_ENC_KEY
+# 6. Segredo crítico: descriptografe env-$TS.gpg e confira a mestra de licença
 printf '%s' "$BACKUP_PASSPHRASE" | gpg --decrypt --batch --yes --pinentry-mode loopback \
   --passphrase-fd 0 --output /tmp/restore/env /tmp/restore/env-$TS.gpg
-grep -c '^LICENSE_KEY_ENC_KEY=.\+' /tmp/restore/env  # 1 = presente
-shred -u /tmp/restore/env /tmp/restore/$DB.dump  # limpe plains após uso
+grep -c '^LICENSE_MASTER_KEY_PATH=.\+' /tmp/restore/env  # 1 = presente
+shred -u /tmp/restore/env /tmp/restore/aurumbit.dump  # limpe plains após uso
 ```
 
 ## Limites conhecidos (não-silenciosos)

@@ -117,7 +117,7 @@ Na ordem (nunca pule migrate/seed — o boot falha de propósito sem DB):
 ```bash
 test -f deploy/scripts/tag-images.sh || { echo "FAIL: tag-images.sh ausente (T1)"; exit 1; }
 bash deploy/scripts/tag-images.sh          # build com tag = git SHA (nunca :latest flutuante)
-bash deploy/scripts/migrate-all.sh         # 9 DBs
+bash deploy/scripts/migrate-all.sh         # 9 domínios no aurumbit
 bash deploy/scripts/seed-all.sh            # admin demo (troca de senha obrigatória) + catálogo mínimo
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d
 ```
@@ -127,7 +127,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml config | grep -i "127.0.0.1" | head -5
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml ps
 curl -fsS http://localhost:3000/health/ready
-bash deploy/scripts/backup-check.sh   # espera: done (ok: pg up + 9 DBs)
+bash deploy/scripts/backup-check.sh   # espera: done (ok: pg up + 9 schemas)
 ```
 
 ## 5. Pré-DNS → corte → TLS → smoke
@@ -170,9 +170,10 @@ curl -fsS https://api.aurumbit.com/health/live
 
 ## 6. Backup cron + dead-man
 
-Backup = DR, não dump local (T5): `pg_dumpall` diário **cifrado** +
-cópia off-VPS (`rclone` → S3/B2) + retenção 14d, incluindo `.env` e
-`LICENSE_KEY_ENC_KEY` cifrados, com tamanho do dump registrado.
+Backup = DR, não dump local (T5): `pg_dump -Fc` ÚNICO do DB `aurumbit`
+(peça restaurável) + `pg_dumpall -g` (roles) **cifrados** + cópia off-VPS
+(`rclone` → S3/B2) + retenção 14d, incluindo `.env` e a mestra de licença
+(`LICENSE_MASTER_KEY_PATH`) cifrados, com tamanho dos artefatos registrado.
 Dead-man switch (Healthchecks.io ou similar): o cron pinga ao final;
 sem ping em 24h → alerta.
 

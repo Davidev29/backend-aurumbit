@@ -67,7 +67,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: migrate deploy (9 DBs, ordem fixa, set -e)
+      - name: migrate deploy (DB único aurumbit, set -e)
         run: |
           set -e
           if [ -f deploy/scripts/migrate-all.sh ]; then
@@ -76,7 +76,16 @@ jobs:
             echo "STUB: deploy/scripts/migrate-all.sh ainda não existe (T3). Nada a migrar."
           fi
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+          DATABASE_URL_AUTH: ${{ secrets.DATABASE_URL_AUTH_PROD }}
+          DATABASE_URL_CUSTOMERS: ${{ secrets.DATABASE_URL_CUSTOMERS_PROD }}
+          DATABASE_URL_PRODUCTS: ${{ secrets.DATABASE_URL_PRODUCTS_PROD }}
+          DATABASE_URL_ACCESS: ${{ secrets.DATABASE_URL_ACCESS_PROD }}
+          DATABASE_URL_LICENSING: ${{ secrets.DATABASE_URL_LICENSING_PROD }}
+          DATABASE_URL_BILLING: ${{ secrets.DATABASE_URL_BILLING_PROD }}
+          DATABASE_URL_FINANCE: ${{ secrets.DATABASE_URL_FINANCE_PROD }}
+          DATABASE_URL_AUDIT: ${{ secrets.DATABASE_URL_AUDIT_PROD }}
+          DATABASE_URL_COMMUNICATIONS: ${{ secrets.DATABASE_URL_COMMUNICATIONS_PROD }}
+          MIGRATOR_DATABASE_URL: ${{ secrets.MIGRATOR_DATABASE_URL_PROD }}
 
   deploy:
     name: rolling-deploy

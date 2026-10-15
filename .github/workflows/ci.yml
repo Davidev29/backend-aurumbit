@@ -105,14 +105,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: prisma validate (9 domínios)
-        run: |
-          set -e
-          for db in auth customers products access licensing billing finance audit communications; do
-            echo "== validate prisma/$db =="
-            pnpm --filter "@aurum-bit/prisma-$db" exec prisma validate --schema "./schema.prisma" || \
-            npx prisma validate --schema "prisma/$db/schema.prisma"
-          done
+      - name: prisma validate (1 entrypoint, 9 schemas)
+        run: bash deploy/scripts/prisma-validate.sh
       - name: migrate diff --check (sem drift)
         run: |
           set -e
@@ -151,6 +145,7 @@ jobs:
         run: |
           set -e
           cp .env.example .env
+          bash deploy/scripts/pgbouncer-userlist.sh
           docker compose -f deploy/docker-compose.yml up --build -d
           docker compose -f deploy/docker-compose.yml ps
       - name: aguarda /health/ready
@@ -201,18 +196,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: prisma validate (9 domínios)
-        run: |
-          set -e
-          for db in auth customers products access licensing billing finance audit communications; do
-            echo "== validate prisma/$db =="
-            pnpm --filter "@aurum-bit/prisma-$db" exec prisma validate --schema "./schema.prisma" || \
-            npx prisma validate --schema "prisma/$db/schema.prisma"
-          done
+      - name: prisma validate (1 entrypoint, 9 schemas)
+        run: bash deploy/scripts/prisma-validate.sh
       - name: bash -n scripts deploy
         run: |
           set -e
-          for s in clone-ready-timer.sh migrate-all.sh seed-all.sh seed-prod.sh verify-dbs.sh migrate-diff-check.sh pg-backup.sh pg-restore-probe.sh backup-check.sh smoke-prod.sh smoke-t0.sh pre-dns-check.sh gen-prod-env.sh tag-images.sh harden-vps.sh disk-check.sh; do
+          for s in clone-ready-timer.sh migrate-all.sh seed-all.sh seed-prod.sh verify-dbs.sh migrate-diff-check.sh prisma-validate.sh pgbouncer-userlist.sh pg-backup.sh pg-restore-probe.sh backup-check.sh smoke-prod.sh smoke-t0.sh pre-dns-check.sh gen-prod-env.sh tag-images.sh harden-vps.sh disk-check.sh audit-partition.sh; do
             echo "== bash -n $s =="
             bash -n "deploy/scripts/$s"
           done
