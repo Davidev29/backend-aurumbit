@@ -7,7 +7,7 @@ import { GoldIcon } from "@/components/ui/GoldIcon";
 import { SectionSkeleton } from "@/components/ui/Skeleton";
 import { useToastHelpers } from "@/components/ui/Toast";
 import { EmptyState } from "@/components/dashboard";
-import { listProducts } from "@/lib/api";
+import { listProducts, createCheckout, ApiClientError } from "@/lib/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { ProductView, PlanView } from "@/types";
 
@@ -36,11 +36,33 @@ export default function ComprarClient() {
   const buy = async (product: ProductView, plan: PlanView) => {
     setBuying(plan.id);
     try {
-      // TODO: POST /api/me/checkout → Asaas. Stub: simula criação de checkout.
-      await new Promise((r) => setTimeout(r, 900));
-      success("Pedido criado", `${product.name} · ${plan.name}. Finalize o pagamento no checkout.`);
+      // Checkout real via BFF (POST /api/me/checkout → Nest/Asaas).
+      // Sem backend o BFF responde 502 visível — nunca simula pedido criado.
+      const session = await createCheckout({
+        items: [{ productCode: product.code, planId: plan.id, quantity: 1 }],
+        paymentMethod: "pix",
+      });
+      if (session.asaasUrl) {
+        success("Pedido criado", `${product.name} · ${plan.name}. Abrindo o pagamento Asaas…`);
+        window.location.href = session.asaasUrl;
+        return;
+      }
+      success(
+        "Pedido criado",
+        `${product.name} · ${plan.name}. Pedido ${session.orderId ?? session.id} aguardando pagamento.`
+      );
     } catch (e) {
-      showError("Falha ao comprar", e instanceof Error ? e.message : "Tente novamente.");
+      if (
+        e instanceof ApiClientError &&
+        (e.status === 502 || e.code === "UPSTREAM_UNAVAILABLE" || e.code === "UPSTREAM_MISSING")
+      ) {
+        showError(
+          "Checkout indisponível",
+          "Backend de cobrança fora do ar. Tente de novo — nenhum pedido foi criado."
+        );
+      } else {
+        showError("Falha ao comprar", e instanceof Error ? e.message : "Tente novamente.");
+      }
     } finally {
       setBuying(null);
     }

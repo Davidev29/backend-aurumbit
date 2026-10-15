@@ -45,6 +45,15 @@ export function CheckoutClient({ code, planId }: { code: string | null; planId: 
   const [email, setEmail] = useState("");
   const [method, setMethod] = useState<Method>("pix");
   const [session, setSession] = useState<CheckoutSession | null>(null);
+  // orderId estável por (code, planId): retry do mesmo clique reaproveita o
+  // pedido (idempotência por orderId no backend). Troca de plano → novo pedido.
+  const orderId = useMemo(() => {
+    const uuid =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return `ord-${uuid}`;
+  }, [code, planId]);
 
   const plan: PlanView | null = useMemo(() => {
     if (!product) return null;
@@ -99,6 +108,7 @@ export function CheckoutClient({ code, planId }: { code: string | null; planId: 
     setStatus("buying");
     try {
       const result = await createCheckout({
+        orderId,
         items: [
           {
             productCode: product.code,

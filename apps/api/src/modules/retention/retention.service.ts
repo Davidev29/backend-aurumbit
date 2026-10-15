@@ -95,7 +95,7 @@ export function retentionSqlFor(policy: RetentionJobName, batch = RETENTION_BATC
   }
 }
 
-export function retentionCountSqlFor(policy: RetentionJobName): { sql: string; params: [string] } {
+export function retentionCountSqlFor(policy: RetentionJobName, now: Date = new Date()): { sql: string; params: [string] } {
   const cutoffDays: Record<RetentionJobName, number> = {
     'retention.outbox-purge': 30,
     'retention.email-vars-anon': 90,
@@ -103,7 +103,7 @@ export function retentionCountSqlFor(policy: RetentionJobName): { sql: string; p
     'retention.ip-hash-purge': 90,
     'retention.device-hash-anon': 365,
   };
-  const cutoff = retentionCutoff(new Date(), cutoffDays[policy]);
+  const cutoff = retentionCutoff(now, cutoffDays[policy]);
   const where: Record<RetentionJobName, string> = {
     'retention.outbox-purge': `published = true AND "occurredAt" < $1`,
     'retention.email-vars-anon': `"createdAt" < $1`,
@@ -144,7 +144,7 @@ export async function runRetentionPolicy(
   const now = opts.now ?? new Date();
   const batch = opts.batch ?? RETENTION_BATCH;
   if (dryRun) {
-    const { sql, params } = retentionCountSqlFor(policy);
+    const { sql, params } = retentionCountSqlFor(policy, now);
     const { rows } = await db.query(sql, params);
     const count = Number((rows[0] as { count?: unknown } | undefined)?.count ?? 0);
     metrics.inc('retention.dry_run');

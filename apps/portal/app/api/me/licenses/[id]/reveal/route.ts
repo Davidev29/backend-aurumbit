@@ -57,7 +57,9 @@ export async function POST(
   }
 
   const tail = Date.now().toString(36).toUpperCase().slice(-4).padStart(4, "0");
+  // Stub dev-only (sem upstream, fora de prod): chave sintética, marcada stub:true.
   return NextResponse.json({
+    stub: true,
     key: `AURUM-DEMO-DEMO-${tail}`,
     auditId: `aud-reveal-${Date.now().toString(36)}`,
   });

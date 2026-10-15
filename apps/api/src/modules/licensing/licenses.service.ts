@@ -280,7 +280,7 @@ export class LicensesService {
     if (prev.status === 'revoked') throw new ConflictException('licença revogada não pode ser renovada');
     // Fase 8: vitalícia não renova (não expira). Downgrade lifetime → mensal/
     // anual = revogar + emitir nova (auditoria explícita, sem reescrever kind).
-    if (prev.kind === 'lifetime') throw new ConflictException('licença vitalícia não precisa de renovação');
+    if (prev.kind === 'lifetime') throw new ConflictException({ code: 'LIFETIME_NO_RENEW', message: 'licença vitalícia não precisa de renovação' });
     if (prev.status === 'pending_payment') throw new ConflictException('licença pendente de pagamento não pode ser renovada');
     if (prev.status === 'suspended') throw new ConflictException('licença suspensa: retome antes de renovar');
     if (!prev.expiresAt) throw new ConflictException('licença sem expiração não pode ser renovada');

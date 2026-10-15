@@ -246,7 +246,7 @@ export class AuthService {
     await this.repo.updateSession(session.id, { lastSeenAt: this.now() });
     return {
       // Continuidade de sessão verificada (login barrou não-verificados).
-      accessToken: signAccessToken({ sub: session.identityId, sid: session.id, fid: rec.familyId, mfa: identity.mfaEnabled ? true : true, email_verified: true }, this.secret, { issuer: this.issuer, audience: this.audience, ttlSec: this.accessTtlSec }),
+      accessToken: signAccessToken({ sub: session.identityId, sid: session.id, fid: rec.familyId, mfa: identity.mfaEnabled, email_verified: true }, this.secret, { issuer: this.issuer, audience: this.audience, ttlSec: this.accessTtlSec }),
       refreshToken: nextRaw,
       tokenType: 'Bearer',
       expiresIn: this.accessTtlSec,

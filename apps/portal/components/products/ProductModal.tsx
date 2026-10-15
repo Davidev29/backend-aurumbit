@@ -269,7 +269,7 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
           {isEnterprise ? (
             <a
               href="mailto:contato@aurumbit.com?subject=Quero%20conhecer%20o%20Aurum%20Enterprise"
-              className="btn-primary inline-flex min-h-[40px] items-center justify-center gap-2 rounded-base px-4 py-2 text-body font-bold shadow-glow-sm transition-[box-shadow,transform] duration-150 ease-out hover:shadow-glow focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/30 active:scale-[0.98]"
+              className="btn-primary inline-flex min-h-[44px] items-center justify-center gap-2 rounded-base px-4 py-2 text-body font-bold shadow-glow-sm transition-[box-shadow,transform] duration-150 ease-out hover:shadow-glow focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/30 active:scale-[0.98]"
             >
               Falar com a AurumBit
             </a>

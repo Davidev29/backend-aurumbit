@@ -59,6 +59,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, { status: upstream.status });
   }
 
+  // Fail-closed em produção: sem upstream nunca cai em mock silencioso
+  // (mesma regra T0 do portal `lib/upstream.ts`; mock só em dev — A-MOCK-001).
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { code: "UPSTREAM_MISSING", message: "Backend indisponível. Tente novamente." },
+      { status: 502 },
+    );
+  }
+
   if (!session) {
     return NextResponse.json({ code: "UNAUTHORIZED", message: "Não autenticado." }, { status: 401 });
   }

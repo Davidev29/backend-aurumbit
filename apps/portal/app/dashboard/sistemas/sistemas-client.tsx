@@ -67,7 +67,13 @@ export default function SistemasClient() {
     try {
       const res = await revealLicense(revealing.id, { reason: reason.trim(), confirm: confirmed });
       setRevealedKey(res);
-      success("Chave revelada", `Auditoria ${res.auditId}. Não compartilhe a chave.`);
+      const isStub = (res as unknown as { stub?: boolean }).stub === true;
+      success(
+        isStub ? "Chave de demonstração (ambiente local)" : "Chave revelada",
+        isStub
+          ? `Sem backend conectado — chave sintética. Auditoria ${res.auditId}.`
+          : `Auditoria ${res.auditId}. Não compartilhe a chave.`
+      );
     } catch (e) {
       showError("Falha ao revelar", e instanceof Error ? e.message : "Tente novamente.");
     } finally {

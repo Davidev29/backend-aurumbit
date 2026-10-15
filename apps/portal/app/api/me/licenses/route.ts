@@ -28,5 +28,7 @@ export async function GET(req: NextRequest) {
       );
     }
   }
-  return NextResponse.json(MOCK_MY_LICENSES);
+  // Stub dev-only (sem upstream, fora de prod). Corpo mantém o contrato
+  // (array) do GET com backend; o cabeçalho x-aurum-stub marca a origem mock.
+  return NextResponse.json(MOCK_MY_LICENSES, { headers: { "x-aurum-stub": "1" } });
 }

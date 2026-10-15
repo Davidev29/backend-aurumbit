@@ -47,6 +47,12 @@ export async function POST(req: NextRequest) {
       { status: 401 }
     );
   }
+  // Idempotency-Key do cliente (apiPost gera um por chamada): repassado ao
+  // backend e usado como orderId quando o corpo não traz um válido — retry do
+  // mesmo clique reaproveita o pedido em vez de abrir fatura duplicada.
+  const incomingKey = req.headers.get("idempotency-key");
+  const keyAsOrderId =
+    incomingKey && /^[A-Za-z0-9-]{8,64}$/.test(incomingKey) ? `ord-${incomingKey}` : null;
   const body = (await req.json().catch(() => ({}))) as Partial<CreateCheckoutRequest>;
   const item = Array.isArray(body.items) ? body.items[0] : undefined;
   if (!item?.productCode || !item?.planId) {
@@ -85,10 +91,16 @@ export async function POST(req: NextRequest) {
     const billingCustomer = mirror.data as { id: string };
     // 3. Pedido idempotente (orderId do cliente ou novo; replay = mesma sessão).
     const orderId =
-      typeof body.orderId === "string" && body.orderId.length >= 8 ? body.orderId : `ord-${randomUUID()}`;
+      typeof body.orderId === "string" && body.orderId.length >= 8
+        ? body.orderId
+        : (keyAsOrderId ?? `ord-${randomUUID()}`);
     const order = await upstreamJson(`${base}/v1/billing/checkout`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session}`,
+        ...(incomingKey ? { "Idempotency-Key": incomingKey } : {}),
+      },
       body: JSON.stringify({
         orderId,
         customerId: billingCustomer.id,

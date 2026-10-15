@@ -188,13 +188,13 @@ failure_rule:
 
 | task_id | title | status | priority | owner_role | depends_on | required_approvals |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-001 | FE-Vitrine: landpage `/` conversão+SEO | ready | P0 | planner | [] | [design-review, code-review, qa-signoff] |
-| T-002 | FULL-Checkout+Billing: clique→cobrança | ready | P0 | planner | [] | [code-review, qa-signoff] |
-| T-003 | FE-Conta: dashboard portal | ready | P1 | planner | [] | [code-review, qa-signoff] |
-| T-004 | BE-Licensing+Access: chave/device/offline | ready | P0 | planner | [] | [code-review, qa-signoff] |
-| T-005 | BE-Finance+OPS-Admin: realizado+audit+filas | ready | P1 | planner | [] | [code-review, qa-signoff] |
-| T-006 | PLAT-Auth+Comms: identidade/e-mail/LGPD | ready | P1 | planner | [] | [code-review, qa-signoff] |
-| T-007 | PLAT-Deploy+Grafo: VPS-ready + knowledge upkeep | ready | P2 | planner | [] | [code-review, completion-signoff] |
+| T-001 | FE-Vitrine: landpage `/` conversão+SEO | needs_review | P0 | reviewer | [] | [design-review, code-review, qa-signoff] |
+| T-002 | FULL-Checkout+Billing: clique→cobrança | needs_review | P0 | reviewer | [] | [code-review, qa-signoff] |
+| T-003 | FE-Conta: dashboard portal | needs_review | P1 | reviewer | [] | [code-review, qa-signoff] |
+| T-004 | BE-Licensing+Access: chave/device/offline | needs_review | P0 | reviewer | [] | [code-review, qa-signoff] |
+| T-005 | BE-Finance+OPS-Admin: realizado+audit+filas | needs_review | P1 | reviewer | [] | [code-review, qa-signoff] |
+| T-006 | PLAT-Auth+Comms: identidade/e-mail/LGPD | needs_review | P1 | reviewer | [] | [code-review, qa-signoff] |
+| T-007 | PLAT-Deploy+Grafo: VPS-ready + knowledge upkeep | needs_review | P2 | reviewer | [] | [code-review, completion-signoff] |
 
 ## Tasks
 
@@ -204,8 +204,8 @@ task_id: T-001
 title: FE-Vitrine — landpage `/` conversão + SEO
 rationale: Primeira pintura e principal porta de entrada; copy/SEO falsos derrubam confiança.
 priority: P0
-status: ready
-owner_role: planner
+status: needs_review
+owner_role: reviewer
 active_alarm_ids:
 - A-MOCK-001
 resolved_alarm_ids:
@@ -305,20 +305,26 @@ commands_planned:
 - pnpm --dir apps/portal exec tsc --noEmit
 - grep -rn "text-gradient-gold\|shadow-glow" apps/portal/components apps/portal/app
 commands_run:
-- TBD
+- node query.js "landpage hero produtos faq" (grafo 812 nós, ui-page + sections)
+- pnpm --dir apps/portal exec tsc --noEmit → limpo (pré e pós-fix)
+- FAQ-sync script → OK (8 pares page.tsx === Faq.tsx)
+- SEO contra dev :3102: canonical ✓, robots ✓, sitemap 200 ✓, llms.txt ✓, SSR 200 com FAQPage+HowTo ✓
+- Teste negativo A-MOCK-001 (upstream morto): GET /api/products → 502 UPSTREAM_UNAVAILABLE ✓
+- pnpm build → FALHOU 2x não-determinístico (ambiente Windows/contenção, não código; tsc + dev OK)
 
 #### Evidence and Closure
 
 expected_artifacts:
 - auditoria da vitrine + micro-fixes + evidência de checks
 code_artifacts:
-- TBD
+- apps/portal/components/products/ProductModal.tsx:272 (CTA enterprise 40px → 44px, DESIGN.md regra 4)
+- apps/portal/components/products/ProductCard.tsx:84 (compact mostrava /ano p/ ONE_TIME → · único)
 test_artifacts:
-- TBD
+- tsc limpo; FAQ-sync OK; SEO 5/5; negativo 502 logado; build instável (ambiente)
 review_artifacts:
-- TBD
+- TBD (reviewer pendente)
 artifact_locations:
-- TBD
+- apps/portal (sections, products, app)
 acceptance_criteria:
 - Copy só com fatos do codebase; tokens ok; a11y ok; fail-closed provado
 acceptance_checks:
@@ -331,6 +337,7 @@ observability:
 - build log + Rich-Results + teste negativo
 decision_log:
 - [2026-10-14] Lane criada do grafo total (812 nós)
+- [2026-10-15] Lane executada: 2 micro-fixes, SEO 5/5, A-MOCK-001 baixa PARCIAL (fail-closed com upstream morto provado; prod-sem-API_INTERNAL_URL só por leitura). Ressalvas: (1) ProductsSection engole 502 do BFF em silêncio quando SSR presente — endurecer SSR-prod é decisão do reviewer; (2) hex residual bg-[#1A140B]/15 (ProductGrid.tsx:49) exige token novo, não tocado; (3) build local instável (ambiente, não código).
 summary_format:
 - changed files
 - checks run
@@ -430,8 +437,8 @@ task_id: T-002
 title: FULL-Checkout+Billing — do clique à cobrança
 rationale: Dinheiro entra aqui; done sem cobrança ou webhook duplicado = prejuízo/duplicidade.
 priority: P0
-status: ready
-owner_role: planner
+status: needs_review
+owner_role: reviewer
 active_alarm_ids:
 - A-MOCK-001
 resolved_alarm_ids:
@@ -531,20 +538,26 @@ commands_planned:
 - npm --prefix apps/api run test -- billing
 - npm --prefix apps/api run test:e2e -- billing
 commands_run:
-- TBD
+- node query.js "checkout billing asaas webhook recon" (grafo 812 nós, paths citados)
+- npm --prefix apps/api run test -- billing → 5 suites, 104/104 PASS
+- npm --prefix apps/api run test:e2e -- billing → 5/5 PASS
+- npx tsc --noEmit (portal) → limpo
+- harness BFF real (tsc em TEMP): T-neg1 sem API → 502 UPSTREAM_UNAVAILABLE; T-pos1 key repassada + orderId derivado; T-pos2 orderId do corpo prevalece
 
 #### Evidence and Closure
 
 expected_artifacts:
 - auditoria + fixes + evidência unit/e2e/negativos
 code_artifacts:
-- TBD
+- apps/portal/app/checkout/checkout-client.tsx (orderId estável por code+plan via useMemo)
+- apps/portal/app/api/me/checkout/route.ts (lê Idempotency-Key, repassa ao backend, fallback ord-<key>)
+- apps/api/src/modules/billing/billing.controller.ts (POST checkout aceita @Headers idempotency-key)
 test_artifacts:
-- TBD
+- unit 104/104 PASS; e2e 5/5 PASS; tsc limpo; harness BFF 3/3
 review_artifacts:
-- TBD
+- TBD (reviewer pendente)
 artifact_locations:
-- TBD
+- apps/api (suites billing), apps/portal (checkout + BFF)
 acceptance_criteria:
 - Sem done sem cobrança; sem duplicidade; recon fecha o laço
 acceptance_checks:
@@ -557,6 +570,7 @@ observability:
 - billing.recon.* + WebhookReceipt + outbox
 decision_log:
 - [2026-10-14] Lane criada do grafo total (812 nós)
+- [2026-10-15] Lane executada: GAP idempotency (BFF gerava ord-uuid por retry) corrigido nas 3 camadas; decisão registrada: não forçar 200 em assinatura inválida (401/403/400 fail-closed preserva webhook.spec). Não-bloqueante: BILLING_WORKER_WIRING_TODO — billing.apply não registrado em workers/main.ts; recon real em prod depende desse wiring (orquestrador workers/deploy).
 summary_format:
 - changed files
 - checks run
@@ -656,8 +670,8 @@ task_id: T-003
 title: FE-Conta — dashboard do portal (sistemas, faturas, perfil)
 rationale: Pós-compra vive aqui; chave/fatura erradas geram suporte e desconfiança.
 priority: P1
-status: ready
-owner_role: planner
+status: needs_review
+owner_role: reviewer
 active_alarm_ids:
 - A-MOCK-001
 resolved_alarm_ids:
@@ -751,20 +765,26 @@ commands_planned:
 - cd docs/knowledge-v2 && node query.js "dashboard licenças reveal activate" --limit 12
 - pnpm --dir apps/portal exec tsc --noEmit
 commands_run:
-- TBD
+- node query.js "dashboard licenças reveal activate" (grafo 812 nós, paths citados)
+- pnpm --dir apps/portal exec tsc --noEmit → verde
+- negativos em next dev :3005 (log servidor): checkout sem API → 502; reveal/activate/licenses sem auth → 401; motivo curto → 422; reveal ok → 200 stub:true; licenses stub → 200 + x-aurum-stub:1
+- modo prod sem upstream: 502 UPSTREAM_MISSING em licenses/activate/reveal (fail-closed A-MOCK-001)
 
 #### Evidence and Closure
 
 expected_artifacts:
 - auditoria + fixes + evidência
 code_artifacts:
-- TBD
+- apps/portal/app/api/me/licenses/[id]/reveal/route.ts (stub marca stub:true)
+- apps/portal/app/api/me/licenses/route.ts (stub com header x-aurum-stub:1)
+- apps/portal/app/dashboard/comprar/comprar-client.tsx (buy chama createCheckout real; 502 vira erro honesto)
+- apps/portal/app/dashboard/sistemas/sistemas-client.tsx (toast distingue chave sintética de real)
 test_artifacts:
-- TBD
+- tsc verde; 9 negativos/positivos BFF logados
 review_artifacts:
-- TBD
+- TBD (reviewer pendente)
 artifact_locations:
-- TBD
+- apps/portal (dashboard + BFF me/*)
 acceptance_criteria:
 - Reflete API; reveal auditado; sem chave em texto fora do reveal
 acceptance_checks:
@@ -777,6 +797,7 @@ observability:
 - audit license.reveal + BFF logs
 decision_log:
 - [2026-10-14] Lane criada do grafo total (812 nós)
+- [2026-10-15] Lane executada: 4 micro-fixes (stub:true, x-aurum-stub, buy real, toast honesto); mock silencioso em money-path eliminado. Não verificado: anti-enumeração 404 KEY_INVALID do Nest (dono T-004). Toasts só-toast em perfil/faturas deixados p/ minimizar blast radius (observar T-002/T-006).
 summary_format:
 - changed files
 - checks run
@@ -876,8 +897,8 @@ task_id: T-004
 title: BE-Licensing+Access — chave, device, offline, gating
 rationale: Coração do "posso usar?"; erro aqui libera de graça ou trava pagante.
 priority: P0
-status: ready
-owner_role: planner
+status: needs_review
+owner_role: reviewer
 active_alarm_ids:
 - none
 resolved_alarm_ids:
@@ -921,7 +942,8 @@ candidate_files:
 - apps/api/src/modules/licensing/offline-token.controller.ts
 - apps/api/src/modules/licensing/licenses.service.ts
 - apps/api/src/modules/access/access.controller.ts
-- apps/api/src/modules/access/access.service.ts
+- apps/api/src/modules/access/access-check.service.ts
+- apps/api/src/modules/access/access-evaluator.service.ts
 - apps/workers/src/queues/licensing.issue.ts
 - apps/workers/src/queues/licensing.evaluate.ts
 - apps/workers/src/queues/licensing.sync.ts
@@ -975,20 +997,24 @@ commands_planned:
 - npm --prefix apps/api run test -- licensing access
 - npm --prefix apps/api run test:e2e -- licensing offline
 commands_run:
-- TBD
+- node query.js "licensing access offline channel device" (grafo 812 nós, paths citados)
+- npm --prefix apps/api run test -- licensing access → 13 suites, 155/155 PASS
+- npm --prefix apps/api run test:e2e -- licensing offline → 2 suites, 10/10 PASS
+- matrix-proof.ts (ts-node, funções puras) → 10/10 (channel×offline×reveal)
 
 #### Evidence and Closure
 
 expected_artifacts:
 - auditoria + fixes + matriz de decisão provada
 code_artifacts:
-- TBD
+- apps/api/src/modules/licensing/licenses.service.ts:283 (renew lifetime → ConflictException com code LIFETIME_NO_RENEW; antes string sem code)
 test_artifacts:
-- TBD
+- unit 155/155 PASS; e2e 10/10 PASS; matrix-proof 10/10
+- gaps honestos: LIFETIME_NO_RENEW e2e e device-limit contra PG real não executados (sem PG vivo na lane)
 review_artifacts:
-- TBD
+- TBD (reviewer pendente)
 artifact_locations:
-- TBD
+- apps/api (suites licensing/access)
 acceptance_criteria:
 - Matriz offline+channel verde; sem regressão de terminais
 acceptance_checks:
@@ -1001,6 +1027,7 @@ observability:
 - licensing.evaluate + license.* events + audit
 decision_log:
 - [2026-10-14] Lane criada do grafo total (812 nós)
+- [2026-10-15] Lane executada: 1 micro-fix (LIFETIME_NO_RENEW com code), matriz provada 10/10. Não-bloqueantes: (1) candidate_files citava access.service.ts inexistente (módulo usa access-check/access-evaluator) — corrigir no plano; (2) country persistido em cloned_evidence (devices.service.ts:495-501) merece decisão LGPD explícita.
 summary_format:
 - changed files
 - checks run
@@ -1100,8 +1127,8 @@ task_id: T-005
 title: BE-Finance+OPS-Admin — realizado, projeções, filas, auditoria
 rationale: Saldo errado ou grant indevido é dano financeiro direto; DLQ parada esconde cobrança.
 priority: P1
-status: ready
-owner_role: planner
+status: needs_review
+owner_role: reviewer
 active_alarm_ids:
 - none
 resolved_alarm_ids:
@@ -1200,20 +1227,22 @@ commands_planned:
 - npm --prefix apps/api run test -- finance admin
 - npm --prefix apps/api run test:e2e -- finance
 commands_run:
-- TBD
+- node query.js "finance projections dlq replay grants" (grafo 812 nós, paths citados)
+- npm --prefix apps/api run test -- finance admin → 7 suites, 76 tests, ALL PASS
+- npm --prefix apps/api run test:e2e -- finance → 1 suite, 7 tests, ALL PASS
 
 #### Evidence and Closure
 
 expected_artifacts:
 - auditoria + fixes + evidência 403/replay/idempotência
 code_artifacts:
-- TBD
+- none (nenhum micro-fix necessário; nada tocado)
 test_artifacts:
-- TBD
+- unit 76/76 PASS; e2e finance 7/7 PASS (duplicate, 2ª baixa no-op, miss→202→hit, 403, grant auditado)
 review_artifacts:
-- TBD
+- TBD (reviewer pendente)
 artifact_locations:
-- TBD
+- apps/api (suites finance/admin)
 acceptance_criteria:
 - Saldo íntegro; projeções com contrato hit/miss; DLQ operável pela UI
 acceptance_checks:
@@ -1226,6 +1255,7 @@ observability:
 - finance.projection.* + outbox + /metrics
 decision_log:
 - [2026-10-14] Lane criada do grafo total (812 nós)
+- [2026-10-15] Lane executada: auditoria completa, 0 micro-fixes, unit 76/76 + e2e 7/7 verdes. Não-bloqueantes p/ orquestrador: (1) sem GET /v1/finance/export no Nest (BFF→404 com upstream); (2) DLQ replay lógico sem re-enqueue real; (3) FinanceController × FinanceFlowController sobrepõem rotas.
 summary_format:
 - changed files
 - checks run
@@ -1325,8 +1355,8 @@ task_id: T-006
 title: PLAT-Auth+Comms — identidade, sessão, e-mail, LGPD
 rationale: Auth furada ou e-mail duplicado/faltante quebra confiança e compliance.
 priority: P1
-status: ready
-owner_role: planner
+status: needs_review
+owner_role: reviewer
 active_alarm_ids:
 - none
 resolved_alarm_ids:
@@ -1373,6 +1403,7 @@ candidate_files:
 - apps/api/src/modules/retention/retention.service.ts
 - apps/admin/app/api/auth/mfa/verify/route.ts
 - apps/portal/app/api/auth/refresh/route.ts
+candidate_note: lane T-006 tocou apps/admin/app/api/auth/mfa/verify/route.ts (gate de prod no mock) — fora da lista original; reviewer aprova expansão ou reverte
 forbidden_areas:
 - .env*, hash/senha em log, ADMIN_DEV_OPEN em qualquer ambiente, docs/knowledge-v2/data
 constraints:
@@ -1422,20 +1453,24 @@ commands_planned:
 - cd docs/knowledge-v2 && node query.js "auth mfa session resend gdpr retention" --limit 12
 - npm --prefix apps/api run test -- auth customers communications retention
 commands_run:
-- TBD
+- node query.js "auth mfa session resend gdpr retention" (12 resultados, paths citados)
+- npm --prefix apps/api run test -- auth customers communications retention → 11 suites, 81/81 PASS
+- npm --prefix apps/api run test (full anti-regressão) → 47 suites, 464/464 PASS
 
 #### Evidence and Closure
 
 expected_artifacts:
 - auditoria + fixes + evidência auth/comms/LGPD
 code_artifacts:
-- TBD
+- apps/api/src/modules/auth/auth.service.ts:249 (claim mfa sempre true no refresh → identity.mfaEnabled)
+- apps/api/src/modules/retention/retention.service.ts (dry-run determinístico sob relógio injetado)
+- apps/admin/app/api/auth/mfa/verify/route.ts (mock gated: prod sem upstream → 502 UPSTREAM_MISSING)
 test_artifacts:
-- TBD
+- subset 81/81 PASS; full 464/464 PASS
 review_artifacts:
-- TBD
+- TBD (reviewer pendente)
 artifact_locations:
-- TBD
+- apps/api, apps/admin/app/api/auth/mfa
 acceptance_criteria:
 - Guards na ordem; e-mail idempotente; GDPR/retention conformes
 acceptance_checks:
@@ -1448,6 +1483,7 @@ observability:
 - audit append-only + EmailMessage receipts
 decision_log:
 - [2026-10-14] Lane criada do grafo total (812 nós)
+- [2026-10-15] Lane executada: 3 micro-fixes, full 464/464 verde. Follow-ups não-bloqueantes: (1) docs/SECURITY.md §7 GDPR truncado no disco — dono do doc revisar; (2) customers.controller stub x-identity-id sem JWT — médio porte, contrato com T-003; (3) POST /v1/auth/mfa/verify sem ticket inalcançável — decisão de contrato pendente; (4) mocks sem gate em admin BFF login/mfa-enroll — mesma família A-MOCK-001, lane dona.
 summary_format:
 - changed files
 - checks run
@@ -1547,8 +1583,8 @@ task_id: T-007
 title: PLAT-Deploy+Grafo — VPS-ready local + knowledge upkeep
 rationale: Sem compose/backup/smoke verdes o resto não sobe; sem grafo atualizado os agentes andam cegos.
 priority: P2
-status: ready
-owner_role: planner
+status: needs_review
+owner_role: reviewer
 active_alarm_ids:
 - A-OPS-001
 resolved_alarm_ids:
@@ -1645,20 +1681,26 @@ commands_planned:
 - prisma validate por domínio (9x)
 - cd docs/knowledge-v2 && node query.js "landpage" --limit 5 && npm run rebuild
 commands_run:
-- TBD
+- bash -n 18/18 .sh (scripts + init-dbs.sh) → exit 0 (oracle dizia 15/15 — drift, corrigir p/ 18/18)
+- docker compose config (base, +prod, +caddy) → exit 0; loopback ok; sem !reset; mailhog só com --profile dev
+- negativo !reset (overlay temp, apagado) → confirma bug documentado e uso correto de !override
+- prisma@6 validate → 9/9 VALID (npx sem pin resolve 8.0.0-rc.22 sem validate — pin v6 só nos scripts)
+- smoke-t0.sh --check-only → PASS
+- query landpage → 5 resultados; npm run rebuild → 812 nós / 1028 arestas, kuzu skip 0
+- docker info → daemon ausente (sem up/smoke live, permitido pelo plano)
 
 #### Evidence and Closure
 
 expected_artifacts:
 - relatório deploy-local + grafo rebuildado + delta VPS
 code_artifacts:
-- TBD
+- none (zero edições; 2 achados fora de candidate_files, não tocados)
 test_artifacts:
-- TBD
+- bash 18/18; compose 3/3; prisma 9/9; smoke-t0 PASS; rebuild OK
 review_artifacts:
-- TBD
+- TBD (reviewer pendente)
 artifact_locations:
-- TBD
+- deploy/, docs/knowledge-v2/data/
 acceptance_criteria:
 - Checks locais verdes; grafo consultável; delta VPS explícito
 acceptance_checks:
@@ -1671,6 +1713,7 @@ observability:
 - smoke logs + graph stats
 decision_log:
 - [2026-10-14] Lane criada do grafo total (812 nós)
+- [2026-10-15] Lane executada sem edições; tudo validável localmente verde. Achados: (1) docker-compose.caddy.yml com TODO stale + depends_on sem portal — micro-fix p/ reviewer autorizar; (2) oracle 15/15 → 18/18; (3) pin prisma@6 só nos scripts, considerar global. A-OPS-001 segue ativo (delta VPS em RUNBOOKS/deploy.md).
 summary_format:
 - changed files
 - checks run

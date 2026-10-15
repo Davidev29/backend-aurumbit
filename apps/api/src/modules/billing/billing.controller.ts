@@ -150,7 +150,11 @@ export class BillingController {
    */
   @Post('checkout')
   @HttpCode(201)
-  createCheckout(@Body() dto: CheckoutOrderDto) {
+  createCheckout(@Body() dto: CheckoutOrderDto, @Headers('idempotency-key') idempotencyKey?: string) {
+    // orderId é a chave primária de idempotência (UNIQUE); o header
+    // Idempotency-Key (repassado pelo BFF) fica registrado na assinatura para
+    // observabilidade e uso futuro — replay do mesmo orderId retorna a sessão.
+    void idempotencyKey;
     return this.billing.createCheckoutOrder(dto);
   }
 

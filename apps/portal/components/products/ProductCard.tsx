@@ -81,7 +81,7 @@ export function ProductCard({ product, onClick, variant = "default" }: ProductCa
           <div className="mt-2 flex items-center gap-2">
             {primaryPlan && (
               <span className="font-mono font-semibold text-accent">
-                {formatCurrency(primaryPlan.priceCents / 100)}/{primaryPlan.billingInterval === "MONTH" ? "mês" : "ano"}
+                {formatCurrency(primaryPlan.priceCents / 100)}{primaryPlan.billingInterval === "MONTH" ? "/mês" : primaryPlan.billingInterval === "YEAR" ? "/ano" : " · único"}
               </span>
             )}
           </div>
