@@ -2,6 +2,12 @@ import { RetentionMetrics } from './retention.metrics';
 import type { RetentionJobName } from './retention.queues';
 
 // Políticas de retenção (Fase 6, PROJECT.md §4 + LGPD).
+// E6 (Fase 9) — AUDITORIA FORA DESTE MÓDULO: `audit.audit_events` e
+// `audit.security_events` NUNCA entram nos jobs/policies abaixo (nem em
+// purge real futuro). São append-only particionadas por mês; o lifecycle é
+// EXCLUSIVO por DETACH de partição após 5a + export WORM antes do DROP —
+// ver docs/RUNBOOKS/audit.md e docs/LGPD.md (§1, linha Audit). Qualquer
+// DELETE/UPDATE em trilha quebra a cadeia de custódia.
 // Puro quanto a SQL + orquestração injetável (sem PG direto): `db` é
 // `{ query }` (Pool do domínio) e `metrics` é `RetentionMetrics`.
 // - dry-run (default): conta elegíveis SEM deletar/anonimizar + métrica

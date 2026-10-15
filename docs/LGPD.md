@@ -31,6 +31,7 @@ Este documento operacionaliza finalidade, base legal e retenção. Sem código d
 3. Geo-IP: chamada em memória no avaliador de risco; retorno nunca atribuído a entidade persistente.
 4. `device_hash`: computado no backend com segredo rotativo (KMS/env); app envia só `app_instance_id` aleatório.
 5. E-mails: link opaco TTL curto; sem PII sensível no corpo (PROJECT §6).
+6. Auditoria (`audit_events`, `security_events`): NUNCA nos jobs de retenção/purge — retenção de 5 anos cumprida por lifecycle de partição mensal (DETACH após 5a + export WORM antes do DROP; proibido DELETE/UPDATE). Ver `docs/RUNBOOKS/audit.md`.
 
 ## 4. Responsabilidades
 
