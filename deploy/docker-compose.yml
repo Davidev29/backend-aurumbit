@@ -9,14 +9,30 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-aurum}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aurum}
-      POSTGRES_DB: ${POSTGRES_DB:-aurum}
+      POSTGRES_DB: ${POSTGRES_DB:-aurumbit}
+      # Senhas por role p/ o init-dbs.sh (E2/E3). DEV: defaults fracos do script;
+      # PROD: .env.prod gerado por gen-prod-env.sh.
+      MIGRATOR_PASSWORD: ${MIGRATOR_PASSWORD:-dev_migrator_pw}
+      APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:-dev_auth_pw}
+      APP_CUSTOMERS_PASSWORD: ${APP_CUSTOMERS_PASSWORD:-dev_customers_pw}
+      APP_PRODUCTS_PASSWORD: ${APP_PRODUCTS_PASSWORD:-dev_products_pw}
+      APP_ACCESS_PASSWORD: ${APP_ACCESS_PASSWORD:-dev_access_pw}
+      APP_LICENSING_PASSWORD: ${APP_LICENSING_PASSWORD:-dev_licensing_pw}
+      APP_BILLING_PASSWORD: ${APP_BILLING_PASSWORD:-dev_billing_pw}
+      APP_COMMUNICATIONS_PASSWORD: ${APP_COMMUNICATIONS_PASSWORD:-dev_comms_pw}
+      APP_FINANCE_PASSWORD: ${APP_FINANCE_PASSWORD:-dev_finance_pw}
+      APP_FINANCE_REPORTS_PASSWORD: ${APP_FINANCE_REPORTS_PASSWORD:-dev_finrep_pw}
+      APP_AUDIT_APPEND_PASSWORD: ${APP_AUDIT_APPEND_PASSWORD:-dev_audit_append_pw}
+      APP_AUDIT_READ_PASSWORD: ${APP_AUDIT_READ_PASSWORD:-dev_audit_read_pw}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-dbs.sh:/docker-entrypoint-initdb.d/01-init-dbs.sh:ro
+      # Fora de initdb.d de propósito: o SQL exige -v senhas (só o .sh o invoca).
+      - ./init-consolidated.sql:/opt/init-consolidated.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aurum} -d ${POSTGRES_DB:-aurum}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aurum} -d ${POSTGRES_DB:-aurumbit}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -39,6 +55,22 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
+    networks:
+      - aurum-net
+
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22-stable
+    container_name: aurum-pgbouncer
+    restart: unless-stopped
+    ports:
+      - "${PGBOUNCER_PORT:-6432}:6432"
+    volumes:
+      # Diretório (não o arquivo): userlist.txt real é gerado fora do repo
+      # (ver userlist.txt.example); ausente = pgbouncer recusa auth no boot.
+      - ./pgbouncer:/etc/pgbouncer:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - aurum-net
 
@@ -71,35 +103,45 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
-      # URLs internas do container (host `postgres`/`redis`). O .env da raiz
-      # usa `localhost` p/ ferramentas do HOST (migrate/seed); aqui vao fixos
-      # de container para o env_file nao quebrar a resolucao de nomes.
-      DATABASE_URL: postgresql://aurum:aurum@postgres:5432/auth?schema=public
-      DATABASE_URL_AUTH: postgresql://aurum:aurum@postgres:5432/auth?schema=public
-      DATABASE_URL_CUSTOMERS: postgresql://aurum:aurum@postgres:5432/customers?schema=public
-      DATABASE_URL_PRODUCTS: postgresql://aurum:aurum@postgres:5432/products?schema=public
-      DATABASE_URL_ACCESS: postgresql://aurum:aurum@postgres:5432/access?schema=public
-      DATABASE_URL_LICENSING: postgresql://aurum:aurum@postgres:5432/licensing?schema=public
-      DATABASE_URL_BILLING: postgresql://aurum:aurum@postgres:5432/billing?schema=public
-      DATABASE_URL_FINANCE: postgresql://aurum:aurum@postgres:5432/finance?schema=public
-      DATABASE_URL_AUDIT: postgresql://aurum:aurum@postgres:5432/audit?schema=public
-      DATABASE_URL_COMMUNICATIONS: postgresql://aurum:aurum@postgres:5432/communications?schema=public
+      # Banco consolidado `aurumbit` (E2/E3): 1 role por domínio via PgBouncer
+      # (host `pgbouncer:6432`). Exceção: LICENSING vai DIRETO no postgres:5432
+      # (bypass risco h1 — pool transaction não serve ao hot path de licenças).
+      # O .env da raiz usa `localhost` p/ ferramentas do HOST (migrate/seed);
+      # aqui vão fixos de container. Senhas: defaults dev fracos; prod via .env.prod.
+      DATABASE_URL: postgresql://app_auth:${APP_AUTH_PASSWORD:-dev_auth_pw}@pgbouncer:6432/aurumbit?schema=auth&pgbouncer=true&connection_limit=20
+      DATABASE_URL_AUTH: postgresql://app_auth:${APP_AUTH_PASSWORD:-dev_auth_pw}@pgbouncer:6432/aurumbit?schema=auth&pgbouncer=true&connection_limit=20
+      DATABASE_URL_CUSTOMERS: postgresql://app_customers:${APP_CUSTOMERS_PASSWORD:-dev_customers_pw}@pgbouncer:6432/aurumbit?schema=customers&pgbouncer=true&connection_limit=15
+      DATABASE_URL_PRODUCTS: postgresql://app_products:${APP_PRODUCTS_PASSWORD:-dev_products_pw}@pgbouncer:6432/aurumbit?schema=products&pgbouncer=true&connection_limit=15
+      DATABASE_URL_ACCESS: postgresql://app_access:${APP_ACCESS_PASSWORD:-dev_access_pw}@pgbouncer:6432/aurumbit?schema=access&pgbouncer=true&connection_limit=20
+      DATABASE_URL_LICENSING: postgresql://app_licensing:${APP_LICENSING_PASSWORD:-dev_licensing_pw}@postgres:5432/aurumbit?schema=licensing&connection_limit=20
+      DATABASE_URL_BILLING: postgresql://app_billing:${APP_BILLING_PASSWORD:-dev_billing_pw}@pgbouncer:6432/aurumbit?schema=billing&pgbouncer=true&connection_limit=15
+      DATABASE_URL_FINANCE: postgresql://app_finance:${APP_FINANCE_PASSWORD:-dev_finance_pw}@pgbouncer:6432/aurumbit?schema=finance&pgbouncer=true&connection_limit=10
+      DATABASE_URL_AUDIT: postgresql://app_audit_append:${APP_AUDIT_APPEND_PASSWORD:-dev_audit_append_pw}@pgbouncer:6432/aurumbit?schema=audit&pgbouncer=true&connection_limit=10
+      DATABASE_URL_COMMUNICATIONS: postgresql://app_communications:${APP_COMMUNICATIONS_PASSWORD:-dev_comms_pw}@pgbouncer:6432/aurumbit?schema=communications&pgbouncer=true&connection_limit=15
+      DATABASE_URL_FINANCE_REPORTS: postgresql://app_finance_reports:${APP_FINANCE_REPORTS_PASSWORD:-dev_finrep_pw}@pgbouncer:6432/aurumbit?schema=finance&pgbouncer=true&connection_limit=5
+      DATABASE_URL_AUDIT_READ: postgresql://app_audit_read:${APP_AUDIT_READ_PASSWORD:-dev_audit_read_pw}@pgbouncer:6432/aurumbit?schema=audit&pgbouncer=true&connection_limit=5
       REDIS_URL: redis://redis:6379
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
       # Galeria da VPS: fora do FS efêmero do container (volume dedicado).
-      # Sem LICENSE_KEY_ENC_KEY, o reveal responde 409 honesto (by design) —
-      # configure via .env (nunca commitar; ver .env.example).
       PRODUCT_IMAGES_DIR: /var/lib/aurum/product-images
-      LICENSE_KEY_ENC_KEY: ${LICENSE_KEY_ENC_KEY:-}
+      # Master key de licenças (E2/E3; E8 migra o uso): só o caminho — o valor
+      # vive no arquivo montado abaixo. Sem o arquivo, reveal = 409 honesto.
+      # REMOVIDO (E8): LICENSE_KEY_ENC_KEY — não recriar.
+      LICENSE_MASTER_KEY_PATH: /run/secrets/license-master-key
     ports:
       - "${API_PORT:-3000}:3000"
     volumes:
       - product-images:/var/lib/aurum/product-images
+      # Gerado por gen-prod-env.sh (0600, gitignored). Ausente no dev = o
+      # daemon cria um diretório vazio aqui; E8 trata como "sem chave" (409).
+      - ./secrets/license-master-key:/run/secrets/license-master-key:ro
     depends_on:
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
       mailhog:
@@ -125,23 +167,31 @@ services:
         required: false
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      # URLs internas do container (ver nota no servico api).
-      DATABASE_URL: postgresql://aurum:aurum@postgres:5432/auth?schema=public
-      DATABASE_URL_AUTH: postgresql://aurum:aurum@postgres:5432/auth?schema=public
-      DATABASE_URL_CUSTOMERS: postgresql://aurum:aurum@postgres:5432/customers?schema=public
-      DATABASE_URL_PRODUCTS: postgresql://aurum:aurum@postgres:5432/products?schema=public
-      DATABASE_URL_ACCESS: postgresql://aurum:aurum@postgres:5432/access?schema=public
-      DATABASE_URL_LICENSING: postgresql://aurum:aurum@postgres:5432/licensing?schema=public
-      DATABASE_URL_BILLING: postgresql://aurum:aurum@postgres:5432/billing?schema=public
-      DATABASE_URL_FINANCE: postgresql://aurum:aurum@postgres:5432/finance?schema=public
-      DATABASE_URL_AUDIT: postgresql://aurum:aurum@postgres:5432/audit?schema=public
-      DATABASE_URL_COMMUNICATIONS: postgresql://aurum:aurum@postgres:5432/communications?schema=public
+      # Banco consolidado (ver nota no servico api): roles via pgbouncer,
+      # licensing direto (bypass h1), migrator fora daqui.
+      DATABASE_URL: postgresql://app_auth:${APP_AUTH_PASSWORD:-dev_auth_pw}@pgbouncer:6432/aurumbit?schema=auth&pgbouncer=true&connection_limit=20
+      DATABASE_URL_AUTH: postgresql://app_auth:${APP_AUTH_PASSWORD:-dev_auth_pw}@pgbouncer:6432/aurumbit?schema=auth&pgbouncer=true&connection_limit=20
+      DATABASE_URL_CUSTOMERS: postgresql://app_customers:${APP_CUSTOMERS_PASSWORD:-dev_customers_pw}@pgbouncer:6432/aurumbit?schema=customers&pgbouncer=true&connection_limit=15
+      DATABASE_URL_PRODUCTS: postgresql://app_products:${APP_PRODUCTS_PASSWORD:-dev_products_pw}@pgbouncer:6432/aurumbit?schema=products&pgbouncer=true&connection_limit=15
+      DATABASE_URL_ACCESS: postgresql://app_access:${APP_ACCESS_PASSWORD:-dev_access_pw}@pgbouncer:6432/aurumbit?schema=access&pgbouncer=true&connection_limit=20
+      DATABASE_URL_LICENSING: postgresql://app_licensing:${APP_LICENSING_PASSWORD:-dev_licensing_pw}@postgres:5432/aurumbit?schema=licensing&connection_limit=20
+      DATABASE_URL_BILLING: postgresql://app_billing:${APP_BILLING_PASSWORD:-dev_billing_pw}@pgbouncer:6432/aurumbit?schema=billing&pgbouncer=true&connection_limit=15
+      DATABASE_URL_FINANCE: postgresql://app_finance:${APP_FINANCE_PASSWORD:-dev_finance_pw}@pgbouncer:6432/aurumbit?schema=finance&pgbouncer=true&connection_limit=10
+      DATABASE_URL_AUDIT: postgresql://app_audit_append:${APP_AUDIT_APPEND_PASSWORD:-dev_audit_append_pw}@pgbouncer:6432/aurumbit?schema=audit&pgbouncer=true&connection_limit=10
+      DATABASE_URL_COMMUNICATIONS: postgresql://app_communications:${APP_COMMUNICATIONS_PASSWORD:-dev_comms_pw}@pgbouncer:6432/aurumbit?schema=communications&pgbouncer=true&connection_limit=15
+      DATABASE_URL_FINANCE_REPORTS: postgresql://app_finance_reports:${APP_FINANCE_REPORTS_PASSWORD:-dev_finrep_pw}@pgbouncer:6432/aurumbit?schema=finance&pgbouncer=true&connection_limit=5
+      DATABASE_URL_AUDIT_READ: postgresql://app_audit_read:${APP_AUDIT_READ_PASSWORD:-dev_audit_read_pw}@pgbouncer:6432/aurumbit?schema=audit&pgbouncer=true&connection_limit=5
       REDIS_URL: redis://redis:6379
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
+      LICENSE_MASTER_KEY_PATH: /run/secrets/license-master-key
+    volumes:
+      - ./secrets/license-master-key:/run/secrets/license-master-key:ro
     depends_on:
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
     # Fase 1: workers sem endpoint HTTP. Healthcheck mínimo = processo node vivo.

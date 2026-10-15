@@ -52,6 +52,18 @@ services:
     networks:
       - aurum-net
 
+  pgbouncer:
+    # PgBouncer nunca na WAN: só loopback (o edge Caddy não o expõe).
+    ports: !override ["127.0.0.1:${PGBOUNCER_PORT:-6432}:6432"] # só loopback.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_limit: 128m # pool leve; estado por conexão é pequeno.
+    networks:
+      - aurum-net
+
   mailhog:
     # Fora da prod: só sobe com `--profile dev`. SMTP de prod vem do T2 (Resend).
     profiles: [dev]
@@ -82,19 +94,20 @@ services:
         required: false
     environment:
       PRISMA_VERSION: ${PRISMA_VERSION:-6}
-      # URLs internas de container (host `postgres`). O script só lê o .env
-      # da raiz se ele existir no mount — aqui montamos só prisma + script,
-      # então estas vars vencem (sem `localhost` vazando p/ dentro do container).
-      DATABASE_URL: postgresql://aurum:aurum@postgres:5432/auth?schema=public
-      DATABASE_URL_AUTH: postgresql://aurum:aurum@postgres:5432/auth?schema=public
-      DATABASE_URL_CUSTOMERS: postgresql://aurum:aurum@postgres:5432/customers?schema=public
-      DATABASE_URL_PRODUCTS: postgresql://aurum:aurum@postgres:5432/products?schema=public
-      DATABASE_URL_ACCESS: postgresql://aurum:aurum@postgres:5432/access?schema=public
-      DATABASE_URL_LICENSING: postgresql://aurum:aurum@postgres:5432/licensing?schema=public
-      DATABASE_URL_BILLING: postgresql://aurum:aurum@postgres:5432/billing?schema=public
-      DATABASE_URL_FINANCE: postgresql://aurum:aurum@postgres:5432/finance?schema=public
-      DATABASE_URL_AUDIT: postgresql://aurum:aurum@postgres:5432/audit?schema=public
-      DATABASE_URL_COMMUNICATIONS: postgresql://aurum:aurum@postgres:5432/communications?schema=public
+      # Banco consolidado `aurumbit` (E2/E3): migrate one-shot com o role
+      # `migrator`, DIRETO no postgres:5432 (sem PgBouncer). URLs por domínio
+      # com ?schema=<dom> = ponte até E4 reescrever o migrate-all.sh.
+      MIGRATOR_DATABASE_URL: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit
+      DATABASE_URL: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=auth
+      DATABASE_URL_AUTH: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=auth
+      DATABASE_URL_CUSTOMERS: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=customers
+      DATABASE_URL_PRODUCTS: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=products
+      DATABASE_URL_ACCESS: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=access
+      DATABASE_URL_LICENSING: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=licensing
+      DATABASE_URL_BILLING: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=billing
+      DATABASE_URL_FINANCE: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=finance
+      DATABASE_URL_AUDIT: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=audit
+      DATABASE_URL_COMMUNICATIONS: postgresql://migrator:${MIGRATOR_PASSWORD:-dev_migrator_pw}@postgres:5432/aurumbit?schema=communications
     volumes: # montes mínimos p/ o script achar ROOT/prisma (sem montar o .env).
       - ../prisma:/repo/prisma:ro
       - ./scripts/migrate-all.sh:/repo/deploy/scripts/migrate-all.sh:ro

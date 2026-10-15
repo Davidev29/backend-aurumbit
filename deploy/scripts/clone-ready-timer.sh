@@ -134,6 +134,7 @@ cleanup() {
 trap cleanup EXIT
 
 [ -f .env ] || { cp .env.example .env && echo "[timer] .env criado de .env.example (segredos: defaults locais)"; }
+  bash deploy/scripts/pgbouncer-userlist.sh || fail "pgbouncer-userlist" "userlist do PgBouncer falhou"
 
 S="$(date +%s)"
 docker compose -f deploy/docker-compose.yml up -d --build || fail "build" "compose up falhou"
@@ -156,6 +157,11 @@ while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   if curl -fsS "$BASE/health/live" >/dev/null 2>&1 \
     && curl -fsS "$BASE/health/ready" 2>/dev/null | grep -q '"status":"ok"'; then
     stamp "ready" "$S"
+    # Gate Fase 9 E3 (risco h1): concorrência FOR UPDATE via PgBouncer.
+    # SKIP honesto sem URL/node/banco; bypass direto também faz SKIP.
+    APP_LICENSING_URL="${DATABASE_URL_LICENSING:-}" bash deploy/scripts/pgbouncer-forupdate-check.sh \
+      || fail "forupdate" "pgbouncer-forupdate-check falhou (risco h1)"
+    stamp "forupdate" "$S"
     verdict
     exit $?
   fi

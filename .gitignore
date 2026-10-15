@@ -11,6 +11,9 @@ coverage/
 .env.prod.new
 .env*.new
 !.env.example
+# E2/E3: segredos materializados no deploy (nunca commitar).
+deploy/secrets/*
+deploy/pgbouncer/userlist.txt
 pgdata/
 .DS_Store
 Thumbs.db

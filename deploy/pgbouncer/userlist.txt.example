@@ -1,0 +1,23 @@
+;; deploy/pgbouncer/userlist.txt.example — MODELO sem segredos (E2/E3).
+;; Formato: "role" "senha" (uma por linha; mesma senha do init-consolidated.sql).
+;; Com auth_type scram-sha-256, a senha em claro aqui é suficiente.
+;;
+;; NUNCA commitar o arquivo real `userlist.txt` (ver .gitignore):
+;;   DEV:  copie este arquivo p/ userlist.txt e preencha com os defaults do
+;;         deploy/init-dbs.sh (dev_auth_pw, dev_customers_pw, dev_products_pw,
+;;         dev_access_pw, dev_licensing_pw, dev_billing_pw, dev_comms_pw,
+;;         dev_finance_pw, dev_finrep_pw, dev_audit_append_pw, dev_audit_read_pw,
+;;         dev_migrator_pw).
+;;   PROD: gere a partir do .env.prod (E4 automatiza via gen-prod-env.sh).
+"app_auth" "__APP_AUTH_PASSWORD__"
+"app_customers" "__APP_CUSTOMERS_PASSWORD__"
+"app_products" "__APP_PRODUCTS_PASSWORD__"
+"app_access" "__APP_ACCESS_PASSWORD__"
+"app_licensing" "__APP_LICENSING_PASSWORD__"
+"app_billing" "__APP_BILLING_PASSWORD__"
+"app_communications" "__APP_COMMUNICATIONS_PASSWORD__"
+"app_finance" "__APP_FINANCE_PASSWORD__"
+"app_finance_reports" "__APP_FINANCE_REPORTS_PASSWORD__"
+"app_audit_append" "__APP_AUDIT_APPEND_PASSWORD__"
+"app_audit_read" "__APP_AUDIT_READ_PASSWORD__"
+"migrator" "__MIGRATOR_PASSWORD__"
