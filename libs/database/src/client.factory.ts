@@ -8,7 +8,7 @@ import { PrismaClient as FinancePrismaClient } from '../../../node_modules/.pris
 import { PrismaClient as AuditPrismaClient } from '../../../node_modules/.prisma/audit';
 import { PrismaClient as CommunicationsPrismaClient } from '../../../node_modules/.prisma/communications';
 
-// Tokens NestJS para injeção (1 por DB, sem compartilhamento cross-DB).
+// Tokens NestJS para injeção (1 por schema no banco `aurumbit`, sem compartilhamento cross-schema).
 export const AUTH_DB = 'AUTH_DB';
 export const CUSTOMERS_DB = 'CUSTOMERS_DB';
 export const PRODUCTS_DB = 'PRODUCTS_DB';
@@ -33,7 +33,7 @@ export type DatabaseClients = {
 
 let cached: DatabaseClients | null = null;
 
-// 9 PrismaClients, 1 por domínio. Sem FK cross-DB; junções cross só na aplicação via IDs opacos.
+// 9 PrismaClients, 1 por domínio (schemas no banco `aurumbit`). FKs intra-schema RESTRICT + exceção única (ADR-006); junções cross só na aplicação via IDs opacos.
 export function createDatabaseClients(): DatabaseClients {
   if (cached) return cached;
   cached = {

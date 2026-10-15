@@ -79,7 +79,7 @@ services:
       - aurum-net
 
   migrate:
-    # One-shot: aplica `migrate-all.sh` nos 9 DBs e termina (exit 0).
+    # One-shot: aplica `migrate-all.sh` nos 9 domínios e termina (exit 0).
     # Exceção proposital ao `unless-stopped`: serviço concluído não deve
     # reiniciar (loop pós-reboot). A api só sobe com `completed_successfully`.
     build:

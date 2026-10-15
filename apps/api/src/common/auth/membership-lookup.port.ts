@@ -5,7 +5,7 @@ import { Injectable } from '@nestjs/common';
  *
  * Produção (Fase 3): adaptador Prisma sobre `customersDb`
  * (`findUnique({ where: { organizationId_identityId: { organizationId, identityId } } })`),
- * exigindo `status === 'ACTIVE'`. Sem FK cross-DB: `identityId` é
+ * exigindo `status === 'ACTIVE'`. Sem FK cross-schema: `identityId` é
  * referência opaca a `auth.UserIdentity.id` (= JWT `sub`).
  * Default-deny: `null` (sem vínculo) nunca autoriza.
  */

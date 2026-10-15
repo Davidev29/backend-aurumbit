@@ -15,8 +15,8 @@ mv .env.prod.new .env.prod && chmod 600 .env.prod
 ## Boot fail-fast
 
 A API valida o env no boot (`apps/api/src/config/env.schema.ts`): env inválida =
-boot aborta com `Env inválida (fail-fast): …`. Sem `LICENSE_KEY_ENC_KEY`, o boot
-**não** trava — o `reveal` de licenças responde **409 honesto** (by design).
+boot aborta com `Env inválida (fail-fast): …`. Sem o arquivo da mestra de licença
+(`LICENSE_MASTER_KEY_PATH`), o boot **não** trava — o `reveal` de licenças responde **409 honesto** (by design).
 `reveal` sem 409 = chave configurada. `INTERNAL_*` ausentes = sync/apply internos
 respondem 503 fail-closed.
 
@@ -34,8 +34,8 @@ Local: `gitleaks detect --no-git -v` (se instalado) ou
 
 ## Cópia cifrada da chave OFF-VPS (checkpoint §6 — ANTES da 1ª licença)
 
-Perder `LICENSE_KEY_ENC_KEY` = irreversível (licenças indecifráveis). No mesmo ato
-da geração:
+Perder o arquivo da mestra de licença = irreversível (licenças indecifráveis). No mesmo ato
+da geração (o arquivo sai de `gen-prod-env.sh`, 0600, fora do `.env`):
 
 ```bash
 gpg -c .env.prod            # gera .env.prod.gpg (senha forte do cofre)

@@ -110,7 +110,7 @@ export async function handleLicensingIssueJob(
   });
 
   const run = async (): Promise<LicensingIssueOutcome> => {
-    // 1. Contexto comercial do pagamento (refs opacas, sem cross-DB read).
+    // 1. Contexto comercial do pagamento (refs opacas, sem cross-schema read).
     const ctxRes = await get(`${deps.apiBaseUrl}${ISSUE_CONTEXT_ENDPOINT}/${env.payload.paymentId}`, { headers });
     if (ctxRes.status === 404) {
       await deps.moveToDlq(dlqId(env.eventId), { ...env }, 'issue-context 404 (poison)');

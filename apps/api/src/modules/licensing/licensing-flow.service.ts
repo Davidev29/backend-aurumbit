@@ -80,7 +80,7 @@ export interface LicenseView {
   keyMasked: string;
   keyPrefix: string;
   keyLast4: string;
-  // Titular/produto opacos (cross-DB) — expostos p/ orquestração admin
+  // Titular/produto opacos (cross-schema) — expostos p/ orquestração admin
   // (renovar-com-troca resolve owner/product/plan da licença anterior).
   ownerId: string;
   ownerLabel: string | null;

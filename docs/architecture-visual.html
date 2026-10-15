@@ -35,13 +35,13 @@
     <h2>1 · Visão de serviços</h2>
     <p class="sub">Tráfego real em produção. Redis nunca é fonte definitiva.</p>
     <div class="row"><div class="box"><b>📱 Produtos</b><small>Win / Mac / Web / App</small></div><span class="arrow">─HTTPS /v1─►</span><div class="box"><b>🧩 API NestJS :3000</b><small>JWT 15min · guards · /health · /metrics</small></div></div>
-    <div class="row"><div class="box"><b>🗄️ Postgres :5432</b><small>9 databases por domínio</small></div><span class="arrow">◄──►</span><div class="box"><b>⚙️ Workers</b><small>BullMQ + crons · via API interna</small></div><span class="arrow">◄──►</span><div class="box"><b>📮 Redis :6379</b><small>filas + cache 60s</small></div></div>
+    <div class="row"><div class="box"><b>🗄️ Postgres :5432</b><small>banco aurumbit · 9 schemas + PgBouncer :6432</small></div><span class="arrow">◄──►</span><div class="box"><b>⚙️ Workers</b><small>BullMQ + crons · via API interna</small></div><span class="arrow">◄──►</span><div class="box"><b>📮 Redis :6379</b><small>filas + cache 60s</small></div></div>
     <div class="row"><div class="box"><b>💳 Asaas</b><small>Sandbox-first · webhook + recon</small></div><span class="arrow">◄──►</span><div class="box"><b>✉️ Resend</b><small>14 templates · idempotente</small></div><span class="arrow">◄──</span><div class="box"><b>🖥️ Admin :3001</b><small>BFF httpOnly proxy-ou-mock</small></div></div>
     <div><span class="pill">139 endpoints Nest</span><span class="pill">25 BFF</span><span class="pill">11 queues + 4 tickers</span><span class="pill">377 unit · 42 e2e</span></div>
   </section>
   <section class="card">
-    <h2>2 · Bancos por domínio</h2>
-    <p class="sub">Sem FK cross-DB. Referência opaca + eventos versionados.</p>
+    <h2>2 · Schemas por domínio (banco único `aurumbit`)</h2>
+    <p class="sub">FKs intra-schema RESTRICT + exceção única documentada (ADR-006). Demais referências: opaca + eventos versionados.</p>
     <div class="grid9">
       <div class="db">🔐<br/><b>auth</b><br/><small>identidade · sessão · refresh</small></div>
       <div class="db">👥<br/><b>customers</b><br/><small>PF/PJ · members · consents</small></div>
@@ -69,7 +69,7 @@
   <section class="card">
     <h2>5 · Filas e crons</h2>
     <p class="sub">Retry 5x exp · poison → DLQ direta · workers aplicam via API interna.</p>
-    <div class="flow">licensing.evaluate ⏱5min · licensing.sync → DLQ · billing.webhook.apply → DLQ · billing.recon ⏱1h · billing.fanout → DLQ · finance.sync → DLQ · projection.compute → DLQ · comm.send · relay ⏱30s ×9 DBs</div>
+    <div class="flow">licensing.evaluate ⏱5min · licensing.sync → DLQ · billing.webhook.apply → DLQ · billing.recon ⏱1h · billing.fanout → DLQ · finance.sync → DLQ · projection.compute → DLQ · comm.send · relay ⏱30s ×9 schemas</div>
   </section>
   <section class="card">
     <h2>6 · Papéis</h2>

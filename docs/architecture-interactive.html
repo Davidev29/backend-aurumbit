@@ -75,7 +75,7 @@ pre{background:#070b22;border:1px solid var(--line);border-radius:12px;padding:1
         <path class="edge" data-e="admin" d="M150,250 C220,250 220,190 300,190"/>
         <g class="node" data-n="app"><rect x="30" y="60" width="130" height="60" rx="10"/><text x="42" y="84">📱 Produtos</text><text class="s" x="42" y="102">Win · Mac · Web · App</text></g>
         <g class="node" data-n="api"><rect x="300" y="150" width="150" height="64" rx="10"/><text x="312" y="175">🧩 API NestJS :3000</text><text class="s" x="312" y="193">/v1 · guards · /metrics</text></g>
-        <g class="node" data-n="pg"><rect x="585" y="90" width="115" height="60" rx="10"/><text x="595" y="114">🗄️ Postgres</text><text class="s" x="595" y="132">9 DBs · :5432</text></g>
+        <g class="node" data-n="pg"><rect x="585" y="90" width="115" height="60" rx="10"/><text x="595" y="114">🗄️ Postgres</text><text class="s" x="595" y="132">aurumbit · 9 schemas</text></g>
         <g class="node" data-n="redis"><rect x="585" y="225" width="115" height="60" rx="10"/><text x="595" y="249">📮 Redis</text><text class="s" x="595" y="267">BullMQ + cache</text></g>
         <g class="node" data-n="wk"><rect x="180" y="280" width="150" height="60" rx="10"/><text x="192" y="304">⚙️ Workers</text><text class="s" x="192" y="322">crons + DLQ</text></g>
         <g class="node" data-n="asaas"><rect x="585" y="310" width="115" height="56" rx="10"/><text x="595" y="332">💳 Asaas</text><text class="s" x="595" y="349">Sandbox-first</text></g>
@@ -96,10 +96,10 @@ pre{background:#070b22;border:1px solid var(--line);border-radius:12px;padding:1
 </section>
 <!-- DADOS -->
 <section id="dados">
-  <div class="card"><h2>9 bancos · sem FK cross-DB</h2>
-    <p class="mut small">Clique num banco para ver entidades e regras. Referência entre domínios = String opaco + evento.</p>
+  <div class="card"><h2>9 schemas (banco único `aurumbit`)</h2>
+    <p class="mut small">Clique num schema para ver entidades e regras. Referência entre domínios = String opaco + evento (exceção única na ADR-006).</p>
     <div class="chips" id="dbs"></div>
-    <div class="detail" id="dbdetail"><h3>🗄️ Escolha um banco</h3></div>
+    <div class="detail" id="dbdetail"><h3>Escolha um schema</h3></div>
   </div>
 </section>
 <!-- FLUXOS -->
@@ -157,7 +157,7 @@ $$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.cla
 const INFO={
 app:{t:"📱 Produtos",d:"Windows/Mac/Web/App. Chamam <code>GET /v1/access/check</code>, heartbeat 60s, <code>GET offline-token</code>. Validação offline sem rede (assinatura + device + tv). Código: apps desktop (fora do repo)."},
 api:{t:"🧩 API NestJS :3000",d:"Monólito modular, prefixo <code>/v1</code>. Guards Jwt→Session→Mfa→Verified→Roles→CustomerScope. <code>x-correlation-id</code>, <code>Idempotency-Key</code>. Health <code>/health/live|ready</code>, <code>/metrics</code>. Código: <code>apps/api/src/modules/*</code>."},
-pg:{t:"🗄️ Postgres :5432 — 9 DBs",d:"auth, customers, products, access, licensing, billing, finance, audit, communications. 1 PrismaClient por DB, <b>sem FK cross-DB</b> (String opaco + eventos). Migrate por domínio. <code>deploy/init-dbs.sh</code>."},
+pg:{t:"🗄️ Postgres :5432 — banco aurumbit (9 schemas)",d:"auth, customers, products, access, licensing, billing, finance, audit, communications. 1 PrismaClient por domínio, roles por schema via PgBouncer :6432. FKs intra-schema RESTRICT + exceção única (ADR-006). Migrate por domínio. <code>deploy/init-consolidated.sql</code>."},
 redis:{t:"📮 Redis :6379",d:"BullMQ (11 queues + 4 tickers, jobId=eventId, retry 5x, DLQ) + cache leitura 60s. <b>Nunca fonte definitiva.</b>"},
 wk:{t:"⚙️ Workers",d:"Consumers + crons: evaluate 5min, recon 1h, relay 30s. Aplicam via API interna <code>x-internal-key</code>, nunca PG direto. Código: <code>apps/workers/src/queues/*</code>."},
 asaas:{t:"💳 Asaas Sandbox-first",d:"Adapter <code>libs/asaas-adapter</code>. Webhook <code>POST /v1/billing/webhooks/asaas</code> (token timing-safe, duplicate 200, ack &lt;2s). Recon hourly+daily com evento <code>recon:id:data</code>."},
@@ -168,7 +168,7 @@ $$("#layers button").forEach(b=>b.onclick=()=>{b.classList.toggle("on");const on
 // dbs
 const DBS={auth:"UserIdentity · Credential(hash-only) · Session family · Refresh(UNIQUE hash, REUSED revoga)",customers:"CustomerProfile PF/PJ XOR · Organization · Membership(last OWNER protegido) · Consent versionado",products:"Product · Version · Feature · Plan imutável (nova linha p/ preço)",access:"Contract+Item(congela preço) · Entitlement(priority 5/10/20/30) · Bonus(motivo≥10)",licensing:"License(key_hash UNIQUE, tv++) · Device(HMAC UNIQUE) · offline JWT",billing:"Invoice/Payment/Refund + WebhookReceipt UNIQUE(provider,externalId)",finance:"Category/Account · Receivable/Payable · Transaction(único muta saldo) · Snapshot",audit:"AuditEvent append-only particionado 5a · SecurityEvent",comms:"EmailMessage(event_id UNIQUE) · templates v1"};
 $("#dbs").innerHTML=Object.keys(DBS).map(k=>`<button data-k="${k}">${k}</button>`).join("");
-$$("#dbs button").forEach(b=>b.onclick=()=>{$$("#dbs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#dbdetail").innerHTML=`<h3>🗄️ ${b.dataset.k}_db</h3><p>${DBS[b.dataset.k]}</p><p class=mut small>Schema: <code>prisma/${b.dataset.k}/schema.prisma</code></p>`});
+$$("#dbs button").forEach(b=>b.onclick=()=>{$$("#dbs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#dbdetail").innerHTML=`<h3>🗄️ ${b.dataset.k} (schema)</h3><p>${DBS[b.dataset.k]}</p><p class=mut small>Schema PG: <code>aurumbit.${b.dataset.k}</code> · Prisma: <code>prisma/${b.dataset.k}/schema.prisma</code></p>`});
 // fluxos
 const STXT=["Pedido criado com itens e preço congelado.","Fatura PENDING + cobrança Asaas (Sandbox).","Webhook RECEIVED→VALIDATED→APPLIED. Duplicate=200, ilegal=REJECTED.","Payment CONFIRMED (amount+paidAt casam). Outbox emitido.","Fanout: access + licensing + finance + email (jobId=eventId).","Direitos, licença, recebível e e-mail ativos. ✅"];
 let si=-1,tm=null;

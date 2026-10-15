@@ -377,7 +377,7 @@ export class BillingService {
    * Contexto p/ issue-from-payment (Fase 8, interno worker→API).
    * Junta payment + invoice (refs opacas do pedido) + userId do titular
    * (billing.Customer.userId = customers.Customer.id) — tudo do próprio
-   * domínio, sem leitura cross-DB. 404 opaco se qualquer peça ausente.
+   * domínio, sem leitura cross-schema. 404 opaco se qualquer peça ausente.
    */
   async getIssueContext(paymentId: string) {
     const payment = await this.getPayment(paymentId);

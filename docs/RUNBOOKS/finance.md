@@ -35,7 +35,7 @@ sem remexer saldo, sem reemitir outbox. Transição ilegal → 422 +
   (fora de ordem ignorado + warn `finance.sync.stale-ignored`).
 - `RefundCompleted` → Payable `PAGO` + Transaction `EXPENSE`
   (classificação parcial/total em `refundClassification`; o flip do Payment
-  no billing é TODO do billing core — escrita cross-DB é proibida).
+  no billing é TODO do billing core — escrita cross-schema é proibida).
 - Inspeção hermética (sem PG): `GET /v1/finance/balance|metrics|audit`
   do fluxo canônico (`finance.flow.e2e-spec.ts`).
 

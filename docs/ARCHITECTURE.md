@@ -17,7 +17,7 @@ API NestJS `apps/api` (:3000, prefixo /v1) ── JWT 15min + refresh rotativo +
   └─ Admin Next.js `apps/admin` (:3001) — BFF httpOnly proxy → Nest, fallback mocks
 ```
 
-**Como está:** Fases 1–6 entregues. Builds api/workers/admin PASS. Unit 377/377, e2e 42/42. Compose config OK. `compose up` requer docker ativo.
+**Como está:** Fases 1–9 entregues (Fase 9: banco único `aurumbit` + 9 schemas, ADR-006). Builds api/workers/admin PASS. Unit 475/475, e2e 42/42. Compose config OK. `compose up` requer docker ativo.
 
 ## 2. Como os serviços se comunicam
 
@@ -33,7 +33,7 @@ API NestJS `apps/api` (:3000, prefixo /v1) ── JWT 15min + refresh rotativo +
 - **Reconciliação:** hourly (<7d) + daily 30d pagina Asaas, evento sintético `recon:<id>:<data>` pelo mesmo pipeline, divergência → alerta + `billing.recon.*`.
 
 ### 2.3 Dados e segurança
-- Sem FK cross-DB. Chaves licença só `key_hash UNIQUE + prefix/last4 + key_enc KMS`, API só `keyMasked`, reveal auditado+MFA+10/h. `device_hash=HMAC(secret,license||instance)`, IP só `ip_hash` 90d + `/24`, sem GPS (geo-IP só memória p/ clone). Audit append-only particionado 5a. E-mail vars 90d, sessão exp+30d, logs 30d.
+- FKs intra-schema `RESTRICT` + exceção única `customers→auth` (ADR-006); demais referências cross-schema opacas + eventos. Chaves licença só `key_hash UNIQUE + prefix/last4 + envelope`, API só `keyMasked`, reveal auditado+MFA+10/h. `device_hash=HMAC(secret,license||instance)`, IP só `ip_hash` 90d + `/24`, sem GPS (geo-IP só memória p/ clone). Audit append-only particionado 5a. E-mail vars 90d, sessão exp+30d, logs 30d.
 
 ## 3. Como fazer (operacional)
 

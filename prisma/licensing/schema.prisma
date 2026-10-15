@@ -14,13 +14,13 @@ datasource db {
 // Fase 3 (aditivo): vigência + token_version + limite de devices (PROJECT.md §§1-2, §4). Sem reescrever o core.
 model License {
   id        String   @id @default(cuid())
-  // Referência opaca cross-DB — origem: customers.Customer.id (titular). Sem @relation cross-DB.
-  ownerType String // CUSTOMER | ORGANIZATION (titular opaco cross-DB)
+  // Referência opaca cross-schema — origem: customers.Customer.id (titular). Sem @relation cross-schema.
+  ownerType String // CUSTOMER | ORGANIZATION (titular opaco cross-schema)
   ownerId   String
-  // Referência opaca cross-DB — origem: products.Product.id / products.Plan.id. Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: products.Product.id / products.Plan.id. Sem @relation cross-schema.
   productId String
   planId    String?
-  contractItemId String? // opaco cross-DB: access.ContractItem.id (origem da contratacao)
+  contractItemId String? // opaco cross-schema: access.ContractItem.id (origem da contratacao)
   kind String @default("monthly") // monthly | annual
 
   key_hash   String  @unique // SHA256(key)
@@ -35,7 +35,7 @@ model License {
   expiresAt    DateTime?
   graceUntil   DateTime?
   // Rótulo de exibição do titular (mask-friendly, ex. nome fantasia) p/
-  // agregados admin sem lookup cross-DB (LGPD: só o necessário p/ suporte).
+  // agregados admin sem lookup cross-schema (LGPD: só o necessário p/ suporte).
   ownerLabel String?
   // Revogação: bump invalida JWTs e offline-tokens no próximo online (PROJECT.md §2).
   tokenVersion Int      @default(1)

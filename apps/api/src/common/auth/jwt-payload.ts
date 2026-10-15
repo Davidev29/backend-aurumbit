@@ -15,7 +15,7 @@
  * (ver `docs/ADR-002-guards.md`); a convergência ocorre na Fase 3.
  */
 export interface JwtPayload {
-  /** auth.UserIdentity.id (referência opaca cross-DB). */
+  /** auth.UserIdentity.id (referência opaca cross-schema). */
   sub: string;
   /** AuthSession id — checado pelo `session.guard` (ACTIVE). */
   sid: string;

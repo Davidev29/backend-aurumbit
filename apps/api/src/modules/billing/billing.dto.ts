@@ -105,7 +105,7 @@ export class CreateInvoiceDto {
   billingInterval?: string;
 
   // Fase 8: refs opacas do pedido (origem: products). Permitem ao worker
-  // montar issue-from-payment sem leitura cross-DB.
+  // montar issue-from-payment sem leitura cross-schema.
   @IsOptional()
   @IsString()
   @MaxLength(128)

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: { code: string
 
   if (API_INTERNAL_URL) {
     // Real: lista mascarada do core (`GET /v1/licenses?productId=`, PG) com
-    // `ownerLabel` p/ dispensar lookup cross-DB. BFF agrega por titular no
+    // `ownerLabel` p/ dispensar lookup cross-schema. BFF agrega por titular no
     // shape `ProductActiveClient` (ativas vs graça; demais estados ignorados).
     try {
       const upstream = await fetch(

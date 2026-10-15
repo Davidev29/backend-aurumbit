@@ -17,7 +17,7 @@ export interface DeviceLink {
 export interface LicenseRecord {
   id: string;
   ownerId: string;
-  // Rótulo de exibição do titular (UI sem lookup cross-DB). Coluna PG
+  // Rótulo de exibição do titular (UI sem lookup cross-schema). Coluna PG
   // futura: `owner_label` (adaptador Fase 4) — hoje só in-memory.
   ownerLabel: string | null;
   productId: string;

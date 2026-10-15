@@ -19,13 +19,13 @@ bash deploy/scripts/clone-ready-timer.sh --local
 bash deploy/scripts/clone-ready-timer.sh --repo <repo-url>
 ```
 
-O que ele faz, em ordem: `compose up -d --build` → `migrate-all.sh` (9 DBs) → `seed-all.sh` → poll `GET /health/live` + `/health/ready` até 200 com `"status":"ok"` (deadline = orçamento total, default 600s) → veredito. Sem `--keep`, o `trap` derruba o compose ao sair — **nenhum container órfão**.
+O que ele faz, em ordem: `compose up -d --build` → `migrate-all.sh` (9 domínios no `aurumbit`) → `seed-all.sh` → poll `GET /health/live` + `/health/ready` até 200 com `"status":"ok"` (deadline = orçamento total, default 600s) → gate `forupdate-check` → veredito. Sem `--keep`, o `trap` derruba o compose ao sair — **nenhum container órfão**.
 
 Flags úteis: `--branch <n>`, `--dir <path>`, `--timeout <s>`, `--keep` (debug; derrube depois com `docker compose -f deploy/docker-compose.yml down -v`).
 
 ## 3. CI
 
-- Job `prod-config` (todo PR/push, **sem daemon**): `compose config` (prod se `docker-compose.prod.yml` existir — T1 — senão base + WARN), `prisma validate` nos 9 schemas, `bash -n` nos scripts. Sem segredos, sem push, sem deploy.
+- Job `prod-config` (todo PR/push, **sem daemon**): `compose config` (prod se `docker-compose.prod.yml` existir — T1 — senão base + WARN), `prisma-validate.sh` (1 entrypoint, 9 schemas), `bash -n` nos scripts. Sem segredos, sem push, sem deploy.
 - Job `clone-ready` (**só nightly `0 4 * * *` / manual**): roda o timer com `--local` (o checkout já é clone fresco). Nunca em PR/push — exige Docker real e ~10min.
 
 ## 4. Resultado (registrar no report da fase)
@@ -41,7 +41,7 @@ Flags úteis: `--branch <n>`, `--dir <path>`, `--timeout <s>`, `--keep` (debug; 
 
 | Sintoma | Ação |
 |---|---|
-| `FAIL em 'ready'` + logs do api | `docker compose logs api --tail=200`; checar `.env` (foi criado de `.env.example`?) e `migrate-all.sh` nas 9 DBs |
+| `FAIL em 'ready'` + logs do api | `docker compose logs api --tail=200`; checar `.env` (foi criado de `.env.example`?) e `migrate-all.sh` nos 9 domínios |
 | `FAIL em 'clone'` sem `--repo` | fora de git repo: passe `--repo <url>` ou use `--local` dentro do repo |
 | Portas ocupadas | `lsof -i :3000` / pare a stack anterior (`down -v`) antes de medir |
 | `>=10min FAIL` legítimo | hardware fraco ou primeiro build sem cache; registrar número real no report — o gate é <10min |

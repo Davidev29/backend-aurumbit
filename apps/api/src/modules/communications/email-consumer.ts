@@ -7,7 +7,7 @@ import type { TemplateName } from './email-templates';
 // paralelo): a emissão aqui é STUB — constrói o envelope `email.requested`
 // (função pura, sem I/O) a partir de eventos stub em teste; o enqueue real
 // na fila `comm.email.send` é feito pelo boot dos workers (outro workstream)
-// via `toSendJob`. Sem billing core, sem escrita cross-DB.
+// via `toSendJob`. Sem billing core, sem escrita cross-schema.
 
 export interface DomainEventLike {
   eventId: string;

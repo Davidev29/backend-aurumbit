@@ -24,7 +24,7 @@ datasource db {
 // fonte; aqui só id + asaasCustomerId p/ cobrança.
 model Customer {
   id              String   @id @default(cuid())
-  userId          String   @unique // opaco cross-DB: customers.Customer.id
+  userId          String   @unique // opaco cross-schema: customers.Customer.id
   asaasCustomerId String?  @unique
   name            String?
   email           String?
@@ -49,9 +49,9 @@ model Subscription {
   invoices           Invoice[]
   asaasSubscriptionId String?  @unique
   status             String    @default("DRAFT") // DRAFT | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED | EXPIRED
-  planRef            String? // opaco cross-DB: products.Plan.id
+  planRef            String? // opaco cross-schema: products.Plan.id
   // Fase 8: intervalo comercial validado (MONTH | YEAR | ONE_TIME).
-  // Espelha products.ProductPlan.billingInterval (fonte); sem FK cross-DB.
+  // Espelha products.ProductPlan.billingInterval (fonte); sem FK cross-schema.
   billingInterval    String? // MONTH | YEAR | ONE_TIME
   idempotencyKey     String    @unique
   currentPeriodStart DateTime?
@@ -75,15 +75,15 @@ model Invoice {
   customer       Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
   subscriptionId String? // FK intra-schema -> Subscription.id (Fase 9, RESTRICT)
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
-  orderId        String?   @unique // opaco cross-DB (origem do pedido)
+  orderId        String?   @unique // opaco cross-schema (origem do pedido)
   asaasInvoiceId String?   @unique
   status         String    @default("DRAFT") // DRAFT | PENDING | PAID | OVERDUE | CANCELLED | REFUNDED
   // Fase 8: intervalo comercial validado (MONTH | YEAR | ONE_TIME).
   billingInterval String? // MONTH | YEAR | ONE_TIME
   // Fase 8: refs comerciais opacas do pedido (origem: products).
   // Permitem ao worker montar issue-from-payment sem ler outro domínio.
-  productId String? // opaco cross-DB: products.Product.id
-  planRef   String? // opaco cross-DB: products.ProductPlan.id
+  productId String? // opaco cross-schema: products.Product.id
+  planRef   String? // opaco cross-schema: products.ProductPlan.id
   amountCents    Int
   discountCents  Int       @default(0)
   fineCents      Int       @default(0)
@@ -111,7 +111,7 @@ model Payment {
   id             String   @id @default(cuid())
   provider       String // ex.: ASAAS
   externalId     String
-  // Referência opaca cross-DB — origem: customers.Customer.id. Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: customers.Customer.id. Sem @relation cross-schema.
   customerId     String
   invoice        Invoice? @relation(fields: [invoiceId], references: [id])
   invoiceId      String?

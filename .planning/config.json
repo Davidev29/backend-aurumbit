@@ -1,1 +1,1 @@
-{"admin": "Next.js App Router + TypeScript", "backend": "NestJS monólito modular", "broker": "BullMQ + Redis + Outbox PG", "db": "PostgreSQL por domínio (9 DBs)", "language": "pt-BR", "payments": "Asaas Sandbox-first", "emails": "Resend"}
+{"admin":"Next.js App Router + TypeScript","backend":"NestJS monólito modular","broker":"BullMQ + Redis + Outbox PG","db":"PostgreSQL unico aurumbit (9 schemas por dominio)","language":"pt-BR","payments":"Asaas Sandbox-first","emails":"Resend"}

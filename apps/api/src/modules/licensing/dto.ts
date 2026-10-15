@@ -43,7 +43,7 @@ export class IssueLicenseDto {
   @MaxLength(128)
   ownerId!: string;
 
-  // Rótulo de exibição do titular (dispensa lookup cross-DB na UI).
+  // Rótulo de exibição do titular (dispensa lookup cross-schema na UI).
   // Persiste no record in-memory (+ coluna futura `owner_label` no PG).
   @IsOptional()
   @IsString()

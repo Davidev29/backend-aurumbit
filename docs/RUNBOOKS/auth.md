@@ -63,7 +63,7 @@ curl -s localhost:3000/v1/customers/me \
 
 ## 6. GDPR — portabilidade e eliminação (Fase 6)
 
-Ordem canônica (sem FK cross-DB; a vigência vive em `customers`):
+Ordem canônica (sem FK cross-schema fora a exceção ADR-006; a vigência vive em `customers`):
 
 1. `POST /v1/customers/gdpr/anonymize` — pode negar **409** `ACTIVE com
    vigência em curso` (cancele/não-renove antes de anonimizar).

@@ -13,7 +13,7 @@
   4. IP só hash 90d, device_hash licença+12m, sem GPS; geo-IP só memória p/ clone suspect.
   5. Idempotência `UNIQUE(provider,externalId)` + `jobId=eventId`; fora de ordem não regride; reconciliação hourly+daily.
   6. Templates `deposit/withdrawal/order-filled` marcados FORA; 14 templates reais listados.
-- Preservado: monólito modular, 9 DBs, titular ambos, vigência=pagamento, graça 3d, offline 7d, BullMQ+Outbox, Next.js admin.
+- Preservado: monólito modular, banco único `aurumbit` com 9 schemas, titular ambos, vigência=pagamento, graça 3d, offline 7d, BullMQ+Outbox, Next.js admin.
 - Concluído: Fases 1–6 + ARCHITECTURE.md + README.md. Builds PASS, unit 377, e2e 42.
 - Fase 7 executada em 2026-10-14 (report em `.planning/PHASE-7-REPORT.md`):
   código+scripts T0–T8 prontos e verificados localmente (bash -n 15/15, compose

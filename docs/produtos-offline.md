@@ -39,11 +39,11 @@
 
 - `POST /v1/licenses` (`IssueLicenseDto`: ownerType/ownerId/productId/planId?/
   kind monthly|annual) — PG, outbox `LicenseIssued`, `ownerLabel` opcional p/
-  agregados sem lookup cross-DB.
+  agregados sem lookup cross-schema.
 - Resposta: `{ license: MaskedLicense, key }`. O **plaintext `AURUM-XXXX-XXXX-XXXX`
   (CSPRNG 128-bit) trafega UMA única vez**; o banco guarda só `key_hash`
-  (SHA256 UNIQUE) + prefixo/últimos-4 + `key_enc` (AES-256-GCM via
-  `LICENSE_KEY_ENC_KEY`; sem o segredo, reveal responde 409 por desenho).
+  (SHA256 UNIQUE) + prefixo/últimos-4 + `key_enc` (envelope via
+  `LICENSE_MASTER_KEY_PATH`; sem a mestra, reveal responde 409 por desenho).
   UI/logs nunca têm a chave (PROJECT §2).
 - Vigência inicia na **confirmação do pagamento** (`starts_at`), `expires_at` =
   calendário UTC 1M/12M, `grace_until = expires_at + 3d`.

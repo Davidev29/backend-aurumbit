@@ -2,7 +2,7 @@
  * Porta do provider de cobrança (Fase 4, REQUIREMENTS.md §3).
  * O billing core depende DESTA interface (nunca do adapter concreto):
  * `AsaasProviderAdapter` a implementa; testes usam fakes.
- * IDs cross-DB são opacos (sem FK cross-DB, PROJECT.md).
+ * IDs cross-schema são opacos (sem FK cross-schema, ADR-006).
  */
 
 export type AsaasBillingType = 'PIX' | 'BOLETO' | 'CREDIT_CARD' | 'UNDEFINED';

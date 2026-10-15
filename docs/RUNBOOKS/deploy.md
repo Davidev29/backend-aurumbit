@@ -95,14 +95,14 @@ free -h | grep -i swap && swapon --show
 ```bash
 git clone <URL-DO-REPO> /srv/aurum && cd /srv/aurum
 test -f deploy/scripts/gen-prod-env.sh || { echo "FAIL: gen-prod-env.sh ausente (T2)"; exit 1; }
-bash deploy/scripts/gen-prod-env.sh   # gera senhas PG, INTERNAL_*, LICENSE_KEY_ENC_KEY, Asaas/Resend prod
+bash deploy/scripts/gen-prod-env.sh   # gera senhas PG/roles, INTERNAL_*, mestra de licença, Asaas/Resend prod
 chmod 600 .env
 ```
 
 Confira manualmente no `.env`: `ADMIN_DEV_OPEN` **ausente**,
 `CORS_ORIGIN` prod, `NEXT_PUBLIC_API_URL=https://api.aurumbit.com`,
 Asaas **prod** (nunca sandbox aqui). **Checkpoint one-way door
-(§6 do PLAN): copie `.env` + `LICENSE_KEY_ENC_KEY` cifrados para fora
+(§6 do PLAN): copie `.env` + o arquivo da mestra de licença cifrados para fora
 da VPS ANTES da primeira licença real** — perdê-la é irreversível
 (licenças emitidas ficam indecifráveis).
 
@@ -241,8 +241,8 @@ grep -rhoE "NEXT_PUBLIC_[A-Z_]+" apps/portal apps/admin --include="*.ts*" | sort
 - [ ] Cada comando acima é copiável (troque só `VPS_IP`, fingerprints, URL do repo).
 - [ ] Cada gate tem assert com saída esperada explícita.
 - [ ] One-way doors com checkpoint humano: corte DNS (§5), Asaas prod +
-      primeira cobrança mínima com estorno (§5), `LICENSE_KEY_ENC_KEY`
-      off-VPS (§4), purge só com T5 recorrente (não ligue purge nesta fase).
+      primeira cobrança mínima com estorno (§5), mestra de licença
+      (`LICENSE_MASTER_KEY_PATH`) off-VPS (§4), purge só com T5 recorrente (não ligue purge nesta fase).
 - [ ] Pós-verde: troque a senha do admin demo no primeiro login, confirme
       reboot (`reboot` em janela + Gates 5–7 verdes sozinhos), registre
       clone→ready <10min (T8).

@@ -18,9 +18,9 @@ datasource db {
 
 model AccessGrant {
   id        String   @id @default(cuid())
-  // Referência opaca cross-DB — origem: auth.UserIdentity.id. Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: auth.UserIdentity.id. Sem @relation cross-schema.
   subjectId String
-  // Referência opaca cross-DB — origem: customers.Customer.id (organização). Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: customers.Customer.id (organização). Sem @relation cross-schema.
   orgId     String
   role      String // ex.: ADMIN, FINANCE (finance.read), MEMBER
   reason    String?
@@ -36,7 +36,7 @@ model AccessGrant {
 model Contract {
   id        String    @id @default(cuid())
   ownerType String // CUSTOMER | ORGANIZATION
-  ownerId   String // titular opaco cross-DB (customers). Sem FK cross-DB.
+  ownerId   String // titular opaco cross-schema (customers). Sem FK cross-schema.
   status    String    @default("DRAFT") // DRAFT | ACTIVE | SUSPENDED | CANCELLED | EXPIRED
   startsAt  DateTime?
   endsAt    DateTime?
@@ -55,8 +55,8 @@ model ContractItem {
   id             String    @id @default(cuid())
   contract       Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
   contractId     String
-  planId         String // opaco cross-DB: products.ProductPlan.id
-  productId      String // opaco cross-DB: products.Product.id
+  planId         String // opaco cross-schema: products.ProductPlan.id
+  productId      String // opaco cross-schema: products.Product.id
   unitPriceCents Int // CONGELADO na contratação; imutável (sem endpoint de update)
   quantity       Int       @default(1)
   status         String    @default("PENDING_PAYMENT") // PENDING_PAYMENT | ACTIVE | SUSPENDED | CANCELLED | EXPIRED
@@ -76,9 +76,9 @@ model ContractItem {
 model Entitlement {
   id          String    @id @default(cuid())
   ownerType   String // CUSTOMER | ORGANIZATION
-  ownerId     String // titular opaco cross-DB
-  productId   String // opaco cross-DB: products.Product.id
-  featureCode String // opaco cross-DB: products.Feature.code
+  ownerId     String // titular opaco cross-schema
+  productId   String // opaco cross-schema: products.Product.id
+  featureCode String // opaco cross-schema: products.Feature.code
   // Fase 8: canal denormalizado da feature no momento da concessão
   // (WEB | DESKTOP | BOTH). check-access filtra por ele; UNIQUE 6-col
   // preservada (channel não identifica a concessão, só o gating).

@@ -22,7 +22,7 @@ Sempre enviar/preservar `x-correlation-id` (gerado se ausente); incluí-lo no ch
 
 | Sintoma | Causa provável | Ação |
 |---|---|---|
-| `/live` 200, `/ready` 503 `postgres:down` | PG fora do ar, migração pendente, `DATABASE_URL` errada | `docker compose ps`; `docker compose logs postgres`; `bash deploy/scripts/migrate-all.sh`; checar `deploy/init-dbs.sh` criou as 9 DBs |
+| `/live` 200, `/ready` 503 `postgres:down` | PG fora do ar, migração pendente, `DATABASE_URL` errada | `docker compose ps`; `docker compose logs postgres`; `bash deploy/scripts/migrate-all.sh`; checar `deploy/init-dbs.sh` criou o banco `aurumbit` + 9 schemas |
 | `/live` 200, `/ready` 503 `redis:down` | Redis fora do ar / `REDIS_URL` errada | `docker compose ps`; `redis-cli -u $REDIS_URL ping`; `docker compose restart redis` |
 | `/live` sem resposta | api crashou / porta ocupada | `docker compose logs api --tail=200` (procurar `FATAL`); `lsof -i :3000`; `docker compose up --build -d api` |
 | `/metrics` sem `http_requests_total` | Interceptor de métricas não registrado (T2) | Verificar registro do middleware `http_requests_total` em `apps/api`; `turbo run build` + redeploy |

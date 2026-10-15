@@ -14,11 +14,11 @@ datasource db {
 // Retenção e purge documentados em LGPD.md. Trilha p/ license.reveal, finance.read, etc.
 model AuditEvent {
   id        String   @id @default(cuid())
-  // Referência opaca cross-DB — origem: auth.UserIdentity.id (ator). Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: auth.UserIdentity.id (ator). Sem @relation cross-schema.
   actorId   String?
   action    String   // ex.: license.reveal, finance.grant
   entity    String
-  // Referência opaca cross-DB — origem: DB do domínio da entidade. Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: DB do domínio da entidade. Sem @relation cross-schema.
   entityId  String?
   metadata  Json?
   createdAt DateTime @default(now())
@@ -43,7 +43,7 @@ model SecurityEvent {
   // Vocabulário fechado CHECK-side: LOGIN_FAILED | MFA_FAILED | TOKEN_ROTATED
   // | DEVICE_BLOCKED | CLONE_SUSPECT | KEY_REVEALED.
   type      String
-  // Referências opacas cross-DB (ator/entidade). Sem @relation cross-DB.
+  // Referências opacas cross-schema (ator/entidade). Sem @relation cross-schema.
   actorId   String?
   entity    String?
   entityId  String?

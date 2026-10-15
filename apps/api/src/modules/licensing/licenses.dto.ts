@@ -15,8 +15,8 @@ import {
 // DTOs do Licensing core — ciclo de vida da licença (Fase 3).
 // Arquivo separado de `./dto` (devices/offline-token, outro workstream)
 // para evitar edição concorrente no mesmo módulo.
-// IDs cross-DB são opacos (customers, products, access) — sem validação
-// de existência aqui (sem FK cross-DB).
+// IDs cross-schema são opacos (customers, products, access) — sem validação
+// de existência aqui (sem FK cross-schema).
 
 // Fase 8: snapshot {code, channel} congelado na emissão (offline-JWT `ch` +
 // entitlements por feature no consumidor access). Omitido = legado (curinga).
@@ -60,7 +60,7 @@ export class IssueLicenseDto {
   @IsIn(['monthly', 'annual', 'lifetime'])
   kind!: string;
 
-  // Rótulo de exibição do titular (dispensado lookup cross-DB no BFF).
+  // Rótulo de exibição do titular (dispensado lookup cross-schema no BFF).
   @IsOptional()
   @IsString()
   @MinLength(1)

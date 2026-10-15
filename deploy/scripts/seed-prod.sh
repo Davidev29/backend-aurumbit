@@ -19,7 +19,7 @@
 # backup-check.sh), SEED_ADMIN_EMAIL (default admin@aurumbit.local),
 # SEED_ADMIN_PASSWORD (OBRIGATÓRIA — fail-closed sem ela; nunca logada).
 # Saída: 0 = ok; 1 = falha (qualquer passo aborta, set -euo pipefail).
-# NUNCA: logar senha/hash; FK cross-DB; commitar .env.
+# NUNCA: logar senha/hash; FK cross-schema; commitar .env.
 set -euo pipefail
 
 PGHOST="${PGHOST:-localhost}"

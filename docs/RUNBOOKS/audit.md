@@ -46,11 +46,12 @@ SELECT tablename FROM pg_tables
  ORDER BY 1;
 ```
 
-Conexão (`psql`): `psql "$DATABASE_URL_AUDIT"` — se a URL usa `?schema=public`,
+Conexão (`psql`): `psql "$DATABASE_URL_AUDIT"` (role `app_audit_append`, schema
+`audit` via `?schema=audit` + `search_path`). Se a URL não fixar o schema,
 qualifique com `audit.` (como nos exemplos) ou ajuste o search_path da role:
 
 ```sql
-ALTER ROLE app_audit_append IN DATABASE audit SET search_path = audit, public;
+ALTER ROLE app_audit_append IN DATABASE aurumbit SET search_path = audit;
 ```
 
 ## 2. Criar a partição do mês seguinte

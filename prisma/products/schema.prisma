@@ -17,7 +17,7 @@ datasource db {
 // Nota Fase 1: model Plan (stub) foi substituído por ProductPlan; sem migrations
 // geradas até aqui, a primeira migration já nasce com o desenho final.
 
-// Produto vendável. code é o identificador estável cross-DB
+// Produto vendável. code é o identificador estável cross-schema
 // (access.ContractItem.productId referencia este code/id como String opaca).
 model Product {
   id          String   @id @default(cuid())

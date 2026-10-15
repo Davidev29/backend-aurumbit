@@ -11,7 +11,7 @@ const API_INTERNAL_URL = process.env.API_INTERNAL_URL;
  * só `keyMasked` (entrega/auditoria via reveal, PROJECT §2); o `key` do
  * upstream real é descartado aqui.
  * Mapeamento real: `{ ownerType: "CUSTOMER", ownerId: customerId,
- * productId: <code do produto, id opaco cross-DB>, planId, kind }`.
+ * productId: <code do produto, id opaco cross-schema>, planId, kind }`.
  * TODO(backend pronto): remover stub — proxy abaixo assume.
  */
 export async function POST(req: NextRequest, { params }: { params: { code: string } }) {

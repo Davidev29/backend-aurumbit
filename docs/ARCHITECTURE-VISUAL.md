@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
   P["Produtos<br/>Win / Mac / Web / App"] -->|HTTPS /v1| API["API NestJS :3000<br/>monólito modular"]
-  API --> PG[("Postgres :5432<br/>9 databases")]
+  API --> PG[("Postgres :5432<br/>banco aurumbit · 9 schemas<br/>+ PgBouncer :6432")]
   API --> RD[("Redis :6379<br/>BullMQ + cache 60s")]
   W["Workers<br/>consumers + crons"] -->|HTTP interno<br/>x-internal-key| API
   W --> RD
@@ -103,4 +103,4 @@ flowchart TB
 | finance.sync | outbox billing | finance.dlq |
 | finance.projection.compute | 202/recompute | finance.dlq |
 | comm.email.send | fanout | comm.email.dlq |
-| outbox relay | 30s × 9 DBs | — |
+| outbox relay | 30s × 9 schemas | — |

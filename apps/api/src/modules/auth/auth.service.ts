@@ -431,7 +431,7 @@ export class AuthService {
 
   // ------------------------------------------------------------------- gdpr
   // Fase 6 (LGPD, stub→real mínimo). Escopo do domínio auth: identidade,
-  // sessões e consents. Sem cross-DB: a vigência de licença vive no domínio
+  // sessões e consents. Sem cross-schema: a vigência de licença vive no domínio
   // customers — o bloqueio 409 `ACTIVE com vigência` é aplicado lá
   // (CustomersService.anonymize). Ordem canônica no runbook: customers
   // primeiro (pode negar 409), depois auth (este método).

@@ -9,7 +9,7 @@
 // - InvoiceOverdue → Receivable INADIMPLENTE + evento.
 // - RefundCompleted → Payable PAGO + Transaction EXPENSE (parcial vs total
 //   classificado; o flip billing Payment→PARTIALLY_REFUNDED/REFUNDED é
-//   TODO do billing core — escrita cross-DB é proibida).
+//   TODO do billing core — escrita cross-schema é proibida).
 // - SubscriptionActivated/Cancelled → invalida ProjectionSnapshot.
 //
 // Idempotência: `INSERT processed ... ON CONFLICT(eventId) DO NOTHING`;
@@ -417,7 +417,7 @@ export class FinanceSyncService {
   // -- RefundCompleted → Payable PAGO + Transaction EXPENSE ------------------
   //
   // TODO(billing-hook): o pagamento billing deveria flipar para
-  // PARTIALLY_REFUNDED (parcial) ou REFUNDED (total). Escrita cross-DB é
+  // PARTIALLY_REFUNDED (parcial) ou REFUNDED (total). Escrita cross-schema é
   // proibida (1 banco por domínio, PROJECT.md): o billing core observa
   // `RefundCompleted` pelo próprio pipeline e aplica a transição lá. Aqui
   // só classificamos e carregamos `refundClassification` no outbox.

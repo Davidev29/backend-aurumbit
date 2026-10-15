@@ -309,7 +309,7 @@ Write-Host 'Servicos:' -ForegroundColor Cyan
 Write-Host '  API     http://localhost:3000/v1  (/health/live, /health/ready, /metrics)'
 Write-Host '  Admin   http://localhost:3001'
 Write-Host '  Mailhog http://localhost:8025'
-Write-Host '  Postgres localhost:5432 (9 DBs) | Redis localhost:6379'
+Write-Host '  Postgres localhost:5432 (aurumbit, 9 schemas) + PgBouncer :6432 | Redis localhost:6379'
 
 # 7) Tunel opcional p/ webhook Asaas
 if ($Tunnel) {

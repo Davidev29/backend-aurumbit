@@ -58,7 +58,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Segredos via environment secrets (nunca hardcoded). DB único aurumbit:
       # 9 DATABASE_URL_* (mesma base, ?schema= por domínio) + MIGRATOR_DATABASE_URL (papel DDL).
-      - name: migrate deploy (9 DBs, ordem fixa)
+      - name: migrate deploy (9 domínios, ordem fixa)
         run: |
           set -e
           if [ -f deploy/scripts/migrate-all.sh ]; then

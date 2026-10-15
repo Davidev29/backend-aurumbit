@@ -50,7 +50,7 @@ export class CheckBatchDto {
 }
 
 export class ContractItemInput {
-  // IDs opacos cross-DB (products.ProductPlan.id / products.Product.id).
+  // IDs opacos cross-schema (products.ProductPlan.id / products.Product.id).
   @IsString()
   @MinLength(1)
   planId!: string;

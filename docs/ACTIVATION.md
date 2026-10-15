@@ -65,7 +65,7 @@ revogada, expirada ou aguardando pagamento), `409 DEVICE_LIMIT`/`DEVICE_CONFLICT
 
 - Licenças de cliente usam `ownerType='CUSTOMER'` e **`ownerId` = identityId do JWT**
   — é assim que `GET /v1/licenses?mine=1` resolve e-mail→licenças sem guardar
-  e-mail na tabela `licenses` (LGPD, sem cross-DB).
+  e-mail na tabela `licenses` (LGPD, sem cross-schema).
 - Chave: formato `AURUM-XXXX-XXXX-XXXX`; no banco só `key_hash` (SHA256) + trechos
   mascarados; plaintext só em `issue` (1x) e `reveal` auditado (10/h).
 - Renovação cria **nova linha** (`starts_at = max(now, expires)`); `tokenVersion`

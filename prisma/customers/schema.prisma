@@ -116,7 +116,7 @@ model OrganizationMembership {
   id             String           @id @default(cuid())
   organization   Organization     @relation(fields: [organizationId], references: [id])
   organizationId String           @map("organization_id")
-  // Referência opaca cross-DB — origem: auth.UserIdentity.id. Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: auth.UserIdentity.id. Sem @relation cross-schema.
   identityId     String           @map("identity_id")
   role           MembershipRole   @default(MEMBER)
   status         MembershipStatus @default(INVITED)
@@ -131,7 +131,7 @@ model OrganizationMembership {
 
 model ConsentRecord {
   id         String         @id @default(cuid())
-  // Referência opaca cross-DB — origem: auth.UserIdentity.id.
+  // Referência opaca cross-schema — origem: auth.UserIdentity.id.
   identityId String         @map("identity_id")
   purpose    ConsentPurpose
   version    String

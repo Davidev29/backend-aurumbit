@@ -5,7 +5,7 @@ export const AUTH_REPOSITORY = 'AUTH_REPOSITORY';
 
 // ---------------------------------------------------------------------------
 // Camada de persistência do domínio auth (DB `auth` apenas).
-// Colunas espelham prisma/auth/schema.prisma 1:1. Sem FK cross-DB.
+// Colunas espelham prisma/auth/schema.prisma 1:1. Sem FK cross-schema.
 // Dois backends: InMemoryAuthRepository (testes unitários, sem infra) e
 // PgAuthRepository (pg Pool lazy; tabelas criadas pelas migrações Prisma).
 // ---------------------------------------------------------------------------

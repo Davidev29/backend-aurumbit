@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 // Token de injeção do pool PG do domínio products (DATABASE_URL_PRODUCTS).
-// Um pool por DB, sem compartilhamento cross-DB. `new Pool()` não conecta
+// Um pool por schema, sem compartilhamento cross-schema. `new Pool()` não conecta
 // de forma ansiosa: seguro no boot/build sem banco (falha só no 1º query).
 export const PRODUCTS_POOL = 'PRODUCTS_POOL';
 

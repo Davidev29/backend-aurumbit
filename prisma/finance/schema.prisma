@@ -44,7 +44,7 @@ datasource db {
 // Stub Fase 1 — sem acesso implícito (finance.read é concessão explícita, ver PROJECT.md §3).
 model LedgerEntry {
   id          String   @id @default(cuid())
-  // Referência opaca cross-DB — origem: customers.Customer.id (organização). Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: customers.Customer.id (organização). Sem @relation cross-schema.
   orgId       String
   amountCents Int
   currency    String   @default("BRL")
@@ -57,7 +57,7 @@ model LedgerEntry {
 
 model PayoutRequest {
   id          String   @id @default(cuid())
-  // Referência opaca cross-DB — origem: customers.Customer.id (organização). Sem @relation cross-DB.
+  // Referência opaca cross-schema — origem: customers.Customer.id (organização). Sem @relation cross-schema.
   orgId       String
   amountCents Int
   status      String   @default("PENDING")
@@ -72,7 +72,7 @@ model PayoutRequest {
 model Receivable {
   id          String    @id @default(cuid())
   orgId       String? // core: customers.Customer.id opaco (sync legado escreve sem org)
-  // Sync — referências opacas cross-DB (billing.*). Sem @relation cross-DB.
+  // Sync — referências opacas cross-schema (billing.*). Sem @relation cross-schema.
   customerId  String?
   invoiceId   String?
   provider    String    @default("ASAAS")
@@ -113,7 +113,7 @@ model Receivable {
 model Payable {
   id                String    @id @default(cuid())
   orgId             String? // core: customers.Customer.id opaco (sync legado escreve sem org)
-  // Sync — referências opacas cross-DB (billing.*). Sem @relation cross-DB.
+  // Sync — referências opacas cross-schema (billing.*). Sem @relation cross-schema.
   refundId          String?
   paymentExternalId String?
   provider          String    @default("ASAAS")
@@ -244,7 +244,7 @@ model ProjectionSnapshot {
 // Plano de contas por organização (core). `code` único por org.
 model FinancialCategory {
   id           String                 @id @default(cuid())
-  orgId        String // opaco cross-DB: customers.Customer.id (organização)
+  orgId        String // opaco cross-schema: customers.Customer.id (organização)
   code         String
   name         String?
   type         String // INCOME | EXPENSE
@@ -265,7 +265,7 @@ model FinancialCategory {
 // FinancialTransaction (baixa core). Sem escrita direta; sync não toca aqui.
 model FinancialAccount {
   id           String                 @id @default(cuid())
-  orgId        String // opaco cross-DB: customers.Customer.id (organização)
+  orgId        String // opaco cross-schema: customers.Customer.id (organização)
   code         String
   name         String?
   type         String // CASH | BANK | ASAAS_WALLET
@@ -310,7 +310,7 @@ model FinanceOutbox {
 model FinanceAutomationJob {
   id             String    @id @default(cuid())
   idempotencyKey String    @unique
-  orgId          String // opaco cross-DB: customers.Customer.id (organização)
+  orgId          String // opaco cross-schema: customers.Customer.id (organização)
   kind           String // BILL_PAY | AUTO_CHARGE
   payableId      String? // FK intra-schema -> Payable.id (Fase 9, RESTRICT)
   payable        Payable? @relation(fields: [payableId], references: [id], onDelete: Restrict)
@@ -337,7 +337,7 @@ model FinanceAutomationJob {
 // Corpo sem código de barras integral (só máscara) — LGPD.
 model FinanceNotification {
   id        String   @id @default(cuid())
-  orgId     String // opaco cross-DB: customers.Customer.id (organização)
+  orgId     String // opaco cross-schema: customers.Customer.id (organização)
   eventId   String   @unique
   kind      String // EXPENSE_CREATED | BILL_SCHEDULED | BILL_PAID | BILL_PAY_FAILED | CHARGE_ISSUED | CHARGE_FAILED | ...
   title     String

@@ -1,5 +1,5 @@
 // Stub Fase 1 — cria admin demo (log apenas, sem regra de negócio).
-// Seed real (9 DBs) entra no T4/Fase 2.
+// Seed real (banco único `aurumbit`, 9 schemas) entra no T4/Fase 2.
 
 async function main() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@aurumbit.local';
