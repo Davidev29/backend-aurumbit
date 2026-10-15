@@ -10,6 +10,16 @@ set -e
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 OUT="$ROOT/deploy/pgbouncer/userlist.txt"
 
+# Mesma fonte de verdade do compose (interpolação ${VAR:-default} com .env):
+# sem isso, userlist (defaults dev) diverge das senhas aplicadas no banco.
+# Só lê .env quando nada foi exportado (prod exporta .env.prod antes — export vence).
+if [ -z "${APP_AUTH_PASSWORD:-}" ] && [ -f "$ROOT/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$ROOT/.env"
+  set +a
+fi
+
 u() { # u ROLE envvar default
   eval "v=\${$2:-$3}"
   printf '"%s" "%s"\n' "$1" "$v"
