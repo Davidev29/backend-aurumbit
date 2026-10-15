@@ -67,7 +67,9 @@ export class HealthController {
   }
 
   // Readiness: 200 só com PG+Redis up; senão 503 com envelope de diagnóstico.
-  // TODO(T3): checar os 9 bancos (1 por domínio) em vez de DATABASE_URL única.
+  // Fase 9: checa DATABASE_URL (role app_auth no schema auth via PgBouncer) —
+  // cobre 1 banco aurumbit + pooler no caminho; 9 schemas cobertos por
+  // backup-check.sh + verify-dbs.sh (não cabe 9 probes no hot path do ready).
   // Fase 6 (aditivo): inclui profundidade DLQ (`dlq.warn` quando há pendentes;
   // warn, nunca 503 sozinha — o replay manual precisa do pod no LB).
   // TODO(Fase 6-hardening): depth real do Redis BullMQ (`Queue.getJobCounts`)

@@ -3,6 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: aurum-postgres
     restart: unless-stopped
+    # Teto de conexões: pico estimado das roles (~140 com pools cheios + bypass
+    # licensing + migrator) + headroom. Default PG (100) estouraria sob carga.
+    command: ["postgres", "-c", "max_connections=200"]
     env_file:
       - path: ../.env
         required: false

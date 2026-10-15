@@ -58,7 +58,7 @@ BEGIN
     CREATE ROLE migrator WITH LOGIN CONNECTION LIMIT 5;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_auth') THEN
-    CREATE ROLE app_auth WITH LOGIN CONNECTION LIMIT 20;
+    CREATE ROLE app_auth WITH LOGIN CONNECTION LIMIT 30;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_customers') THEN
     CREATE ROLE app_customers WITH LOGIN CONNECTION LIMIT 15;
@@ -79,13 +79,13 @@ BEGIN
     CREATE ROLE app_communications WITH LOGIN CONNECTION LIMIT 15;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_finance') THEN
-    CREATE ROLE app_finance WITH LOGIN CONNECTION LIMIT 10;
+    CREATE ROLE app_finance WITH LOGIN CONNECTION LIMIT 20;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_finance_reports') THEN
     CREATE ROLE app_finance_reports WITH LOGIN CONNECTION LIMIT 5;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_audit_append') THEN
-    CREATE ROLE app_audit_append WITH LOGIN CONNECTION LIMIT 10;
+    CREATE ROLE app_audit_append WITH LOGIN CONNECTION LIMIT 20;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_audit_read') THEN
     CREATE ROLE app_audit_read WITH LOGIN CONNECTION LIMIT 5;
@@ -97,16 +97,16 @@ $$;
 -- 4. Senhas (via -v psql; `:'var'` = literal escapado) + reconvergência de limite
 -- ---------------------------------------------------------------------------
 ALTER ROLE migrator WITH LOGIN CONNECTION LIMIT 5 PASSWORD :'migrator_password';
-ALTER ROLE app_auth WITH LOGIN CONNECTION LIMIT 20 PASSWORD :'app_auth_password';
+ALTER ROLE app_auth WITH LOGIN CONNECTION LIMIT 30 PASSWORD :'app_auth_password';
 ALTER ROLE app_customers WITH LOGIN CONNECTION LIMIT 15 PASSWORD :'app_customers_password';
 ALTER ROLE app_products WITH LOGIN CONNECTION LIMIT 15 PASSWORD :'app_products_password';
 ALTER ROLE app_access WITH LOGIN CONNECTION LIMIT 20 PASSWORD :'app_access_password';
 ALTER ROLE app_licensing WITH LOGIN CONNECTION LIMIT 20 PASSWORD :'app_licensing_password';
 ALTER ROLE app_billing WITH LOGIN CONNECTION LIMIT 15 PASSWORD :'app_billing_password';
 ALTER ROLE app_communications WITH LOGIN CONNECTION LIMIT 15 PASSWORD :'app_communications_password';
-ALTER ROLE app_finance WITH LOGIN CONNECTION LIMIT 10 PASSWORD :'app_finance_password';
+ALTER ROLE app_finance WITH LOGIN CONNECTION LIMIT 20 PASSWORD :'app_finance_password';
 ALTER ROLE app_finance_reports WITH LOGIN CONNECTION LIMIT 5 PASSWORD :'app_finance_reports_password';
-ALTER ROLE app_audit_append WITH LOGIN CONNECTION LIMIT 10 PASSWORD :'app_audit_append_password';
+ALTER ROLE app_audit_append WITH LOGIN CONNECTION LIMIT 20 PASSWORD :'app_audit_append_password';
 ALTER ROLE app_audit_read WITH LOGIN CONNECTION LIMIT 5 PASSWORD :'app_audit_read_password';
 
 -- ---------------------------------------------------------------------------
