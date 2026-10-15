@@ -6,6 +6,10 @@
   "scripts": {
     "build": "echo build resend-adapter ok",
     "lint": "echo lint resend-adapter ok",
-    "typecheck": "tsc --noEmit -p ../../tsconfig.json || echo typecheck-stub"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "typescript": "^5.4.0"
   }
 }

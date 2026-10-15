@@ -35,7 +35,7 @@ export function bucketKey(preset: RateLimitKey, ...parts: string[]): string {
 
 /** Opções prontas p/ `express-rate-limit` (T2 adapta ao Nest). */
 export function toExpressOptions(preset: RateLimitKey) {
-  const p = RATE_LIMITS[preset];
+  const p: RateLimitPreset = RATE_LIMITS[preset];
   return { windowMs: p.windowMs, max: p.limit, standardHeaders: true, legacyHeaders: false, message: p.message ?? "Too many requests." };
 }
 

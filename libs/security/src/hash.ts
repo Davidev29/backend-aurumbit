@@ -45,7 +45,7 @@ let argon2Cache: Argon2Like | null | undefined;
 async function loadArgon2(): Promise<Argon2Like | null> {
   if (argon2Cache !== undefined) return argon2Cache;
   try {
-    // @ts-expect-error optionalDependency — ausente no skeleton Fase 1
+    // @ts-ignore optionalDependency — pode estar ausente (skeleton Fase 1); erro ou não, segue sem argon2
     const mod = await import("argon2");
     argon2Cache = (mod.default ?? mod) as Argon2Like;
   } catch {
