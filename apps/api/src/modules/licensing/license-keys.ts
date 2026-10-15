@@ -4,6 +4,7 @@ import {
   createHash,
   randomBytes,
 } from 'node:crypto';
+import { readFileSync, statSync } from 'node:fs';
 
 // Helpers puros do Licensing core (PROJECT.md §§1-2, REQUIREMENTS.md §2).
 // Sem I/O, sem Nest — cobertos por unit test (`license-keys.spec.ts`).
@@ -146,35 +147,162 @@ function toTime(v: Date | string | null): number | null {
 }
 
 /**
- * Cifra a chave p/ `key_enc` (AES-256-GCM, formato `v1.<iv>.<ct>.<tag>` b64).
- * Chave via env `LICENSE_KEY_ENC_KEY` (64 hex chars, 256 bits, KMS na Fase 5).
- * Sem segredo configurado → null (reveal fica indisponível: 409).
+ * Cifra a chave p/ `key_enc` (envelope AES-256-GCM):
+ * `v2.<masterVer>.<encDEK b64>.<iv b64>.<ct b64>.<tag b64>`.
+ * DEK de 32B aleatória por chave; a DEK é cifrada pela mestra
+ * (`iv12‖ct32‖tag16` concatenados no campo encDEK).
+ * Mestra via arquivo `LICENSE_MASTER_KEY_PATH` (0600, 64 hex).
+ * Sem master file, cai p/ o legado v1 com `LICENSE_KEY_ENC_KEY`
+ * (compat dev). Sem segredo algum → null (reveal fica indisponível: 409).
  */
 export function encryptLicenseKey(plaintext: string): string | null {
-  const k = encKey();
-  if (!k) return null;
+  const masters = masterKeys();
+  if (masters.length > 0) return encryptEnvelope(plaintext, masters[0]);
+  const legacy = legacyEnvKey();
+  if (!legacy) return null;
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', k, iv);
+  const cipher = createCipheriv('aes-256-gcm', legacy, iv);
   const ct = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `v1.${iv.toString('base64')}.${ct.toString('base64')}.${tag.toString('base64')}`;
 }
 
-/** Decifra `key_enc`. Erro (formato/auth) → throw (reveal nega, sem vazar motivo). */
-export function decryptLicenseKey(payload: string): string {
-  const k = encKey();
-  if (!k) throw new Error('segredo de cifra ausente');
-  const parts = payload.split('.');
-  if (parts.length !== 4 || parts[0] !== 'v1') throw new Error('formato key_enc inválido');
-  const decipher = createDecipheriv('aes-256-gcm', k, Buffer.from(parts[1], 'base64'));
-  decipher.setAuthTag(Buffer.from(parts[3], 'base64'));
-  return Buffer.concat([
-    decipher.update(Buffer.from(parts[2], 'base64')),
-    decipher.final(),
-  ]).toString('utf8');
+function encryptEnvelope(plaintext: string, master: MasterKey): string {
+  const dek = randomBytes(32);
+  const ivDek = randomBytes(12);
+  const cDek = createCipheriv('aes-256-gcm', master.key, ivDek);
+  const encDek = Buffer.concat([
+    ivDek,
+    cDek.update(dek),
+    cDek.final(),
+    cDek.getAuthTag(),
+  ]); // 12 + 32 + 16
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', dek, iv);
+  const ct = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v2.${master.ver}.${encDek.toString('base64')}.${iv.toString('base64')}.${ct.toString('base64')}.${tag.toString('base64')}`;
 }
 
-function encKey(): Buffer | null {
+/**
+ * Decifra `key_enc`. `v2.*` → dual-decrypt (mestra atual, depois a
+ * anterior de rotação); legado `v1.*` → env legado, depois mestras.
+ * Erro (formato/auth) → throw (reveal nega, sem vazar motivo).
+ */
+export function decryptLicenseKey(payload: string): string {
+  if (payload.startsWith('v2.')) return decryptEnvelope(payload);
+  return decryptLegacy(payload);
+}
+
+function decryptEnvelope(payload: string): string {
+  const parts = payload.split('.');
+  if (parts.length !== 6 || parts[0] !== 'v2') throw new Error('formato key_enc inválido');
+  const masters = masterKeys();
+  if (masters.length === 0) throw new Error('segredo de cifra ausente');
+  const encDek = Buffer.from(parts[2], 'base64');
+  if (encDek.length !== 12 + 32 + 16) throw new Error('formato key_enc inválido');
+  const ivDek = encDek.subarray(0, 12);
+  const ctDek = encDek.subarray(12, 44);
+  const tagDek = encDek.subarray(44);
+  const iv = Buffer.from(parts[3], 'base64');
+  const ct = Buffer.from(parts[4], 'base64');
+  const tag = Buffer.from(parts[5], 'base64');
+  let lastErr: unknown = null;
+  for (const m of masters) {
+    try {
+      const dDek = createDecipheriv('aes-256-gcm', m.key, ivDek);
+      dDek.setAuthTag(tagDek);
+      const dek = Buffer.concat([dDek.update(ctDek), dDek.final()]);
+      if (dek.length !== 32) continue;
+      const decipher = createDecipheriv('aes-256-gcm', dek, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (lastErr instanceof Error) throw lastErr;
+  throw new Error('formato key_enc inválido');
+}
+
+function decryptLegacy(payload: string): string {
+  const parts = payload.split('.');
+  if (parts.length !== 4 || parts[0] !== 'v1') throw new Error('formato key_enc inválido');
+  const candidates: Buffer[] = [];
+  const env = legacyEnvKey();
+  if (env) candidates.push(env);
+  for (const m of masterKeys()) candidates.push(m.key);
+  if (candidates.length === 0) throw new Error('segredo de cifra ausente');
+  let lastErr: unknown = null;
+  for (const k of candidates) {
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', k, Buffer.from(parts[1], 'base64'));
+      decipher.setAuthTag(Buffer.from(parts[3], 'base64'));
+      return Buffer.concat([
+        decipher.update(Buffer.from(parts[2], 'base64')),
+        decipher.final(),
+      ]).toString('utf8');
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (lastErr instanceof Error) throw lastErr;
+  throw new Error('formato key_enc inválido');
+}
+
+/** Caminho default da mestra (versão `v1`, ver `masterVersion`). */
+export const DEFAULT_MASTER_KEY_PATH = '/run/secrets/license-master-key';
+
+export interface MasterKey {
+  ver: string;
+  key: Buffer;
+}
+
+/**
+ * Versão da mestra p/ o envelope: `sha256(path)[:8]`; a mestra inicial
+ * (caminho default) carrega `v1` — é essa etiqueta que a rotação conta
+ * (`v2.v1.*` → re-cifrar; zerar a anterior quando o count chega a 0).
+ */
+export function masterVersion(path: string): string {
+  if (!path || path === DEFAULT_MASTER_KEY_PATH) return 'v1';
+  return createHash('sha256').update(path, 'utf8').digest('hex').slice(0, 8);
+}
+
+/**
+ * Mestras válidas (atual + anterior de rotação). Arquivo precisa ser
+ * regular, 0600 (sem bit p/ grupo/outros — checagem pulada no win32,
+ * onde o FS não expressa modo POSIX) e conter 64 hex. Entrada
+ * inválida = ignorada (fail-closed: encrypt cai p/ null, decrypt p/ throw).
+ */
+export function masterKeys(): MasterKey[] {
+  const out: MasterKey[] = [];
+  const cur = process.env.LICENSE_MASTER_KEY_PATH ?? '';
+  if (cur) {
+    const k = readMasterFile(cur);
+    if (k) out.push({ ver: masterVersion(cur), key: k });
+  }
+  const prev = process.env.LICENSE_MASTER_KEY_PREVIOUS_PATH ?? '';
+  if (prev && prev !== cur) {
+    const k = readMasterFile(prev);
+    if (k) out.push({ ver: masterVersion(prev), key: k });
+  }
+  return out;
+}
+
+function readMasterFile(path: string): Buffer | null {
+  try {
+    const st = statSync(path);
+    if (!st.isFile()) return null;
+    if (process.platform !== 'win32' && (st.mode & 0o077) !== 0) return null;
+    const raw = readFileSync(path, 'utf8').trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(raw)) return null;
+    return Buffer.from(raw, 'hex');
+  } catch {
+    return null;
+  }
+}
+
+function legacyEnvKey(): Buffer | null {
   const raw = process.env.LICENSE_KEY_ENC_KEY ?? '';
   if (!/^[0-9a-fA-F]{64}$/.test(raw)) return null;
   return Buffer.from(raw, 'hex');

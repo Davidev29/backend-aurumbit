@@ -1,4 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   KEY_FORMAT,
   calcExpiry,
@@ -8,6 +11,7 @@ import {
   generateLicenseKey,
   maskFromParts,
   maskLicenseKey,
+  masterKeys,
   sha256Hex,
 } from './license-keys';
 
@@ -148,5 +152,84 @@ describe('key_enc (AES-256-GCM)', () => {
   it('sem segredo → null (reveal indisponível)', () => {
     delete process.env.LICENSE_KEY_ENC_KEY;
     expect(encryptLicenseKey('AURUM-AAAA-BBBB-CCCC')).toBeNull();
+  });
+});
+
+describe('key_enc envelope v2 (mestra em arquivo + dual-decrypt)', () => {
+  const HEX_A = 'ab'.repeat(32);
+  const HEX_B = 'cd'.repeat(32);
+  let dir = '';
+  let savedCur: string | undefined;
+  let savedPrev: string | undefined;
+  let savedEnv: string | undefined;
+
+  const masterFile = (hex: string): string => {
+    const p = join(dir, `master-${Math.random().toString(36).slice(2)}.key`);
+    writeFileSync(p, `${hex}\n`, { mode: 0o600 });
+    return p;
+  };
+
+  beforeEach(() => {
+    savedCur = process.env.LICENSE_MASTER_KEY_PATH;
+    savedPrev = process.env.LICENSE_MASTER_KEY_PREVIOUS_PATH;
+    savedEnv = process.env.LICENSE_KEY_ENC_KEY;
+    delete process.env.LICENSE_MASTER_KEY_PATH;
+    delete process.env.LICENSE_MASTER_KEY_PREVIOUS_PATH;
+    delete process.env.LICENSE_KEY_ENC_KEY;
+    dir = mkdtempSync(join(tmpdir(), 'lic-master-'));
+  });
+
+  afterEach(() => {
+    if (savedCur === undefined) delete process.env.LICENSE_MASTER_KEY_PATH;
+    else process.env.LICENSE_MASTER_KEY_PATH = savedCur;
+    if (savedPrev === undefined) delete process.env.LICENSE_MASTER_KEY_PREVIOUS_PATH;
+    else process.env.LICENSE_MASTER_KEY_PREVIOUS_PATH = savedPrev;
+    if (savedEnv === undefined) delete process.env.LICENSE_KEY_ENC_KEY;
+    else process.env.LICENSE_KEY_ENC_KEY = savedEnv;
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = '';
+  });
+
+  it('round-trip v2 com mestra atual', () => {
+    process.env.LICENSE_MASTER_KEY_PATH = masterFile(HEX_A);
+    expect(masterKeys()).toHaveLength(1);
+    const k = generateLicenseKey(() => Buffer.alloc(16, 9));
+    const enc = encryptLicenseKey(k);
+    expect(enc).toMatch(/^v2\.[^.]+\.[^.]+\.[^.]+\.[^.]+\.[^.]+$/);
+    expect(enc).not.toContain(k.slice(6));
+    expect(decryptLicenseKey(enc as string)).toBe(k);
+  });
+
+  it('dual-decrypt: envelope da mestra anterior ainda abre após rotação', () => {
+    const pathA = masterFile(HEX_A);
+    const pathB = masterFile(HEX_B);
+    process.env.LICENSE_MASTER_KEY_PATH = pathA;
+    const k = generateLicenseKey(() => Buffer.alloc(16, 11));
+    const old = encryptLicenseKey(k) as string;
+    expect(old).toMatch(/^v2\./);
+    // Rotação: nova mestra atual + anterior em PREVIOUS_PATH.
+    process.env.LICENSE_MASTER_KEY_PATH = pathB;
+    process.env.LICENSE_MASTER_KEY_PREVIOUS_PATH = pathA;
+    expect(masterKeys()).toHaveLength(2);
+    expect(decryptLicenseKey(old)).toBe(k);
+    // Chave nova sai cifrada pela mestra atual (abre sem a anterior).
+    const fresh = encryptLicenseKey(k) as string;
+    delete process.env.LICENSE_MASTER_KEY_PREVIOUS_PATH;
+    expect(decryptLicenseKey(fresh)).toBe(k);
+  });
+
+  it('legado v1 ainda abre (env direto, sem master file)', () => {
+    process.env.LICENSE_KEY_ENC_KEY = HEX_A;
+    const k = generateLicenseKey(() => Buffer.alloc(16, 9));
+    const enc = encryptLicenseKey(k);
+    expect(enc).toMatch(/^v1\./);
+    expect(decryptLicenseKey(enc as string)).toBe(k);
+  });
+
+  it('sem segredo algum → encrypt null, decrypt throw', () => {
+    expect(masterKeys()).toHaveLength(0);
+    expect(encryptLicenseKey('AURUM-AAAA-BBBB-CCCC')).toBeNull();
+    expect(() => decryptLicenseKey('v2.x.y.z.w.q')).toThrow('segredo de cifra ausente');
+    expect(() => decryptLicenseKey('v1.a.b.c')).toThrow('segredo de cifra ausente');
   });
 });

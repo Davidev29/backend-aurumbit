@@ -19,12 +19,38 @@ Segredos vivem em ambiente; o inventário abaixo vira KMS/secret-manager:
 |---|---|---|---|
 | K1 | `AUTH_JWT_SECRET`/`JWT_SECRET` (HS256) | env | Migrar p/ RS256 com chave privada em KMS/HSM; rotação com `kid` + janela de aceitação (ver `crypto.ts` TODO(KMS)) |
 | K2 | `MFA_ENC_KEY` (segredo TOTP em repouso) | env (derivado c/ `deriveEncKey`) | Envelope encryption: DEK por identidade, KEK no KMS; rotação de KEK versionada |
-| K3 | `key_enc` de licença (AES-256-GCM) | chave em env (`licensing`) | Data key por lote em KMS (`GenerateDataKey`); re-emissão auditada mantém trilha |
+| K3 | `key_enc` de licença (AES-256-GCM, envelope) | mestra em arquivo (`LICENSE_MASTER_KEY_PATH`, 0600, 64 hex) + anterior opcional (`LICENSE_MASTER_KEY_PREVIOUS_PATH`); DEK de 32B por chave | Re-cifra sob demanda até `v2.v1.*` zerar; depois KMS (`GenerateDataKey`); re-emissão auditada mantém trilha |
 | K4 | Salt `ip_hash` (HMAC, rotação 90d — LGPD) | env | Salt versionado no KMS/secret-manager; rotação invalida hashes antigos (purge natural) |
 | K5 | Secret `device_hash` rotativo | env (`deviceSecret()`) | Mesmo padrão K4; app continua enviando só `app_instance_id` aleatório |
 | K6 | `ASAAS_API_KEY` / `ASAAS_WEBHOOK_SECRET` | env, sandbox-first | Secret-manager com rotação no dashboard Asaas; nunca em log (redact cobre `authorization`) |
 | K7 | `RESEND_API_KEY` | env | Idem K6; idempotência por `eventId` já evita reenvio em rotação |
 | K8 | `argon2` (hash de senha) | optionalDependency + fallback scrypt | Produção exige `argon2` instalado (`argon2id` 19MiB/t=2/p=1); CI deve falhar sem ele em imagem prod |
+
+### K3 — envelope `v2` + rotação da mestra
+
+Formato em `key_enc` (`apps/api/src/modules/licensing/license-keys.ts`):
+`v2.<masterVer>.<encDEK b64>.<iv b64>.<ct b64>.<tag b64>` — DEK de 32B
+aleatória por chave, cifrada (AES-256-GCM) pela mestra; `masterVer` =
+`sha256(path)[:8]` (`v1` p/ a mestra inicial no caminho default).
+`decrypt` de `v2.*` tenta a mestra **atual e depois a anterior**
+(dual-decrypt); legado `v1.<iv>.<ct>.<tag>` ainda abre via
+`LICENSE_KEY_ENC_KEY` (compat dev). Sem segredo: `encrypt` → `null`
+(reveal 409), `decrypt` → throw. Arquivo da mestra fora de 0600/64hex =
+ignorado (fail-closed).
+
+Rotação (sem downtime de reveal):
+
+1. Gere a mestra nova (64 hex, `chmod 600`) e aponte
+   `LICENSE_MASTER_KEY_PATH` p/ ela; ponha a antiga em
+   `LICENSE_MASTER_KEY_PREVIOUS_PATH` (a nova etiqueta `sha8`, a antiga
+   segue `v1`).
+2. Re-cifre sob demanda (cada `decrypt`+`encrypt` no fluxo normal migra
+   a linha p/ a mestra nova); conte o restante legado:
+   `SELECT count(*) FROM licensing.licenses WHERE key_enc LIKE 'v2.v1.%'`
+   (DB único `aurumbit`, schema `licensing`).
+3. Com count `v2.v1.*` = 0, remova `LICENSE_MASTER_KEY_PREVIOUS_PATH`
+   e zere o arquivo da mestra antiga (`shred -u`); confirme
+   `decrypt` de uma amostra + `reveal` sem 409.
 
 ## 2. Headers HTTP
 
