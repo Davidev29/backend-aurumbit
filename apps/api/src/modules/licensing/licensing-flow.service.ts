@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
+import { emitSecurityEvent, getSecurityEventPool } from '../audit/security-events';
 import { computeDeviceHash, deviceSecret } from './device-hash.util';
 import {
   BlockDeviceDto,
@@ -347,6 +348,14 @@ export class LicensingFlowService {
       entity: 'license',
       entityId: rec.id,
       metadata: { keyMasked: maskKey(key), reason: dto.reason },
+    });
+    // E7 (Fase 9): revelação — trilha best-effort com SÓ keyMasked (sem motivo/chave).
+    void emitSecurityEvent(getSecurityEventPool(), {
+      type: 'KEY_REVEALED',
+      actorId: dto.actor,
+      entity: 'license',
+      entityId: rec.id,
+      metadata: { keyMasked: maskKey(key) },
     });
     return { id: rec.id, key, keyMasked: maskKey(key) };
   }

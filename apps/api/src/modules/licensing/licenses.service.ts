@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { Pool, PoolClient } from 'pg';
 import { LICENSING_POOL } from './licensing-pool.provider';
+import { emitSecurityEvent, getSecurityEventPool } from '../audit/security-events';
 import {
   LicenseKind,
   calcExpiry,
@@ -401,7 +402,15 @@ export class LicensesService {
     } catch {
       throw new ConflictException('chave não recuperável (falha de decifração)');
     }
-    return { licenseId: row.id, key, keyMasked: maskFromParts(row.key_last4) };
+    const out = { licenseId: row.id, key, keyMasked: maskFromParts(row.key_last4) };
+    // E7 (Fase 9): revelação PG — trilha best-effort com SÓ keyMasked (decisão/guards inalterados).
+    void emitSecurityEvent(getSecurityEventPool(), {
+      type: 'KEY_REVEALED',
+      entity: 'license',
+      entityId: row.id,
+      metadata: { keyMasked: out.keyMasked },
+    });
+    return out;
   }
 
   /**

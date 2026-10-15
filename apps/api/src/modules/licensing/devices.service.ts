@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
+import { emitSecurityEvent, getSecurityEventPool } from '../audit/security-events';
 import { detectCloneSuspect } from './clone-policy';
 import { computeDeviceHash, decryptLabel, encryptLabel, hashIp, isValidDeviceHash, maskIp24 } from './device-hash';
 import { LICENSING_POOL } from './licensing-pool.provider';
@@ -417,7 +418,7 @@ export class DevicesService {
   }
 
   async blockDevice(licenseId: string, deviceHash: string, reason: string, now = new Date()): Promise<DeviceView> {
-    return this.withTx(async (tx) => {
+    const view = await this.withTx(async (tx) => {
       const licRes = await tx.query(`SELECT id FROM licenses WHERE id = $1 FOR UPDATE`, [licenseId]);
       if (licRes.rows.length === 0) throw new LicenseNotFoundError(licenseId);
       const upd = await tx.query(
@@ -435,6 +436,14 @@ export class DevicesService {
       });
       return toDeviceView(mapDevice(upd.rows[0] as Record<string, unknown>));
     });
+    // E7 (Fase 9): bloqueio efetivado — trilha best-effort (fora da tx; decisão inalterada).
+    void emitSecurityEvent(getSecurityEventPool(), {
+      type: 'DEVICE_BLOCKED',
+      entity: 'license',
+      entityId: licenseId,
+      metadata: { device_hash: deviceHash, reason },
+    });
+    return view;
   }
 
   /**
@@ -515,6 +524,13 @@ export class DevicesService {
             evidence: verdict.evidence,
             at: now.toISOString(),
           },
+        });
+        // E7 (Fase 9): clone suspeito — trilha best-effort (só sinais; decisão inalterada).
+        void emitSecurityEvent(getSecurityEventPool(), {
+          type: 'CLONE_SUSPECT',
+          entity: 'license',
+          entityId: licenseId,
+          metadata: { device_hash: sighting.deviceHash, reasons: verdict.reasons },
         });
         return { allow: false, degraded: false, reason: 'CLONE_SUSPECT' };
       }

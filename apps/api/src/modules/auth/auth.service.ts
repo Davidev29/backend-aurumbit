@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { IAuthRepository } from './auth.repository';
 import { AuthError, ConsentInput, IDENTITY_STATUS, LoginMfaChallenge, LoginResult, OUTBOX_TYPES } from './auth.types';
+import { emitSecurityEvent, getSecurityEventPool } from '../audit/security-events';
 import {
   decryptSecret,
   deriveEncKey,
@@ -191,6 +192,20 @@ export class AuthService {
     const ok = cred ? await verifyPassword(cred.passwordHash, input.password).catch(() => false) : false;
     if (!ok) {
       await this.failAttempt(identity.id, identity.failedAttempts);
+      // E7 (Fase 9): trilha de segurança best-effort (fire-and-forget —
+      // nunca muda a decisão/anti-enumeração do login).
+      void emitSecurityEvent(getSecurityEventPool(), {
+        type: 'LOGIN_FAILED',
+        actorId: identity.id,
+        entity: 'user_identity',
+        entityId: identity.id,
+        metadata: {
+          reason:
+            identity.failedAttempts + 1 >= MAX_FAILED_ATTEMPTS
+              ? 'ACCOUNT_LOCKED'
+              : 'INVALID_CREDENTIALS',
+        },
+      });
       throw new AuthError('INVALID_CREDENTIALS', 401, 'Credenciais inválidas.');
     }
     await this.repo.updateIdentity(identity.id, { failedAttempts: 0, lockedUntil: null });
@@ -222,6 +237,14 @@ export class AuthService {
     if (rec.status === 'ROTATED' || rec.status === 'REVOKED' || rec.status === 'REUSED') {
       await this.repo.updateRefreshToken(rec.id, { status: 'REUSED' }).catch(() => undefined);
       await this.revokeFamily(rec.familyId, 'REUSE_DETECTED', rec.familyId);
+      // E7 (Fase 9): reuso detectado — trilha best-effort (decisão inalterada).
+      void emitSecurityEvent(getSecurityEventPool(), {
+        type: 'TOKEN_ROTATED',
+        actorId: session?.identityId,
+        entity: 'auth_session_family',
+        entityId: rec.familyId,
+        metadata: { reason: 'REUSE_DETECTED', familyId: rec.familyId },
+      });
       throw new AuthError('REUSE_DETECTED', 401, 'Sessão inválida.');
     }
     if (!session || session.status !== 'ACTIVE') {
@@ -241,6 +264,14 @@ export class AuthService {
     }
     // Rotação: invalida o atual, emite o próximo na mesma família/sessão.
     await this.repo.updateRefreshToken(rec.id, { status: 'ROTATED', rotatedAt: this.now() });
+    // E7 (Fase 9): rotação legítima — trilha best-effort (decisão inalterada).
+    void emitSecurityEvent(getSecurityEventPool(), {
+      type: 'TOKEN_ROTATED',
+      actorId: session.identityId,
+      entity: 'auth_session_family',
+      entityId: rec.familyId,
+      metadata: { reason: 'ROTATED', familyId: rec.familyId },
+    });
     const nextRaw = randomTokenHex(32);
     await this.repo.createRefreshToken({ sessionId: session.id, familyId: rec.familyId, tokenHash: sha256Hex(nextRaw), parentHash: hash, expiresAt: new Date(+this.now() + REFRESH_TTL_MS) });
     await this.repo.updateSession(session.id, { lastSeenAt: this.now() });
@@ -353,7 +384,17 @@ export class AuthService {
     const cred = await this.repo.findCredentialByIdentityId(identityId);
     if (!cred?.mfaSecretEnc) throw new AuthError('MFA_NOT_ENROLLED', 400);
     const secret = decryptSecret(cred.mfaSecretEnc, this.encKey());
-    if (!verifyTotp(secret, code, atMs ?? +this.now())) throw new AuthError('MFA_INVALID_CODE', 401);
+    if (!verifyTotp(secret, code, atMs ?? +this.now())) {
+      // E7 (Fase 9): falha de verificação do enroll — trilha best-effort.
+      void emitSecurityEvent(getSecurityEventPool(), {
+        type: 'MFA_FAILED',
+        actorId: identityId,
+        entity: 'user_identity',
+        entityId: identityId,
+        metadata: { reason: 'MFA_INVALID_CODE' },
+      });
+      throw new AuthError('MFA_INVALID_CODE', 401);
+    }
     await this.repo.updateCredential(identityId, { mfaVerifiedAt: this.now() });
     await this.repo.updateIdentity(identityId, { mfaEnabled: true });
     return { ...GENERIC_OK };
@@ -374,6 +415,14 @@ export class AuthService {
     const secret = decryptSecret(cred.mfaSecretEnc, this.encKey());
     if (!verifyTotp(secret, code, atMs ?? +this.now())) {
       await this.failAttempt(sub, identity.failedAttempts);
+      // E7 (Fase 9): falha de MFA no login — trilha best-effort (decisão inalterada).
+      void emitSecurityEvent(getSecurityEventPool(), {
+        type: 'MFA_FAILED',
+        actorId: sub,
+        entity: 'user_identity',
+        entityId: sub,
+        metadata: { reason: 'MFA_INVALID_CODE' },
+      });
       throw new AuthError('MFA_INVALID_CODE', 401, 'Código MFA inválido.');
     }
     await this.repo.updateIdentity(sub, { failedAttempts: 0, lockedUntil: null });
