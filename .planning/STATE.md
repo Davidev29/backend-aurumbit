@@ -27,3 +27,11 @@
   (Asaas→licença, sem done sem cobrança), BFF 12/12 fail-closed,
   migrations 0001 (9 domínios) + 0002. Unit api 464/464, worker 5/5,
   builds PASS. Operacional VPS pendente (plano ativo + compra mínima).
+- Fase 9 executada em 2026-10-15 (plano `.planning/PHASE-9-PLAN.md`, report
+  `.planning/PHASE-9-REPORT.md`, norma `docs/ADR-006-consolidacao-single-db.md`):
+  consolidação `aurumbit` (1 banco + 9 schemas, 12 roles, timeouts 5/10/30/60s,
+  PgBouncer transaction + bypass licensing, FKs intra RESTRICT + exceção única
+  `customers→auth`, índices quentes, audit particionado desde a criação,
+  SecurityEvent 6 tipos, envelope `LICENSE_MASTER_KEY_PATH` dual v1/v2,
+  CI 1 entrypoint, backup único). Unit api 475/475, worker 5/5, builds PASS.
+  Gates vivos (compose/migrate/EXPLAIN/permissões/backup/rotação) no CI e2e/nightly.

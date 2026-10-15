@@ -1,15 +1,15 @@
 # Aurum Bit — Ecossistema de Produtos, Licenças e Cobranças
 
-> Monólito modular NestJS · 9 Postgres por domínio · Outbox + BullMQ/Redis · Asaas Sandbox-first · Resend transacional · Admin Next.js + Portal público
+> Monólito modular NestJS · Postgres único `aurumbit` com 9 schemas por domínio (Fase 9) · Outbox + BullMQ/Redis · Asaas Sandbox-first · Resend transacional · Admin Next.js + Portal público
 
-O Aurum Bit é a plataforma que vende, licencia, cobra e sustenta os produtos Aurum (Windows / Mac / Web / App). Este repositório contém **tudo que roda o negócio**: API, workers assíncronos, painel administrativo, portal público com área do cliente, 9 bancos por domínio, deploy single-VPS com TLS e backup com restore testado.
+O Aurum Bit é a plataforma que vende, licencia, cobra e sustenta os produtos Aurum (Windows / Mac / Web / App). Este repositório contém **tudo que roda o negócio**: API, workers assíncronos, painel administrativo, portal público com área do cliente, banco único `aurumbit` com 9 schemas por domínio (roles por domínio, PgBouncer), deploy single-VPS com TLS e backup com restore testado.
 
-**Estado (Fases 1–8):** Fases 1–7 entregues e verificadas por execução (builds PASS, e2e **42**). Fase 8 executada — modelo comercial licença × assinatura com gating por canal (unit API **464/464**, worker **5/5**, builds PASS, `prisma validate` 9/9; cerimônia operacional na VPS pendente).
+**Estado (Fases 1–9):** Fases 1–7 entregues e verificadas por execução (builds PASS, e2e **42**). Fase 8 executada — modelo comercial licença × assinatura com gating por canal (unit API **464/464**, worker **5/5**, builds PASS, `prisma validate` 9/9; cerimônia operacional na VPS pendente). Fase 9 executada — consolidação `aurumbit` (1 banco, 9 schemas, roles por domínio, FKs RESTRICT, audit particionado, SecurityEvent, envelope de chave, CI 1 entrypoint, backup único; unit API **475/475**; relatório em `.planning/PHASE-9-REPORT.md`).
 
 ```text
 Win / Mac / Web / App ──HTTPS──┐
 Portal :3002 (vitrine+conta) ──┤
-Admin  :3001 (operação) ──BFF───┼──► API NestJS :3000 (/v1) ──► Postgres ×9 + Redis BullMQ
+Admin  :3001 (operação) ──BFF───┼──► API NestJS :3000 (/v1) ──► Postgres `aurumbit` (9 schemas) + PgBouncer + Redis BullMQ
                                 │         ▲                             ▲
                                 │         │ x-internal-key              │ claim + publish
                                 └─────────┴── Workers (sem HTTP: crons + DLQ + replay)
@@ -23,7 +23,7 @@ Admin  :3001 (operação) ──BFF───┼──► API NestJS :3000 (/v1) 
 1. [Visão e comportamento esperado](#1-visão-e-comportamento-esperado)
 2. [Arquitetura — como tudo se relaciona](#2-arquitetura--como-tudo-se-relaciona)
 3. [Monorepo — onde fica cada coisa](#3-monorepo--onde-fica-cada-coisa)
-4. [Domínios e os 9 bancos](#4-domínios-e-os-9-bancos)
+4. [Domínios e o banco único `aurumbit`](#4-domínios-e-o-banco-único-aurumbit-fase-9)
 5. [Fluxos canônicos](#5-fluxos-canônicos-fim-a-fim)
 6. [Modelo comercial — Fase 8](#6-modelo-comercial--fase-8-licença--assinatura--web-limitada)
 7. [Segurança, LGPD e permissões](#7-segurança-lgpd-e-permissões)
@@ -32,7 +32,7 @@ Admin  :3001 (operação) ──BFF───┼──► API NestJS :3000 (/v1) 
 10. [Quickstart](#10-quickstart)
 11. [Produção single-VPS](#11-produção-single-vps--fase-7)
 12. [Testes e qualidade](#12-testes-e-qualidade)
-13. [Jornada Fases 1–8 e roadmap 9–10](#13-jornada-fases-18-e-roadmap-910)
+13. [Jornada Fases 1–9 e roadmap 10](#13-jornada-fases-19-e-roadmap-10)
 14. [Documentação](#14-documentação)
 
 ---
@@ -81,7 +81,7 @@ flowchart TB
     end
 
     subgraph data["Dados"]
-        pg[("Postgres :5432 — 9 DBs\nauth · customers · products\naccess · licensing · billing\nfinance · audit · communications")]
+        pg[("Postgres :5432 — banco aurumbit · 9 schemas\nauth · customers · products\naccess · licensing · billing\nfinance · audit · communications\n+ PgBouncer :6432 (transaction)")]
         redis[("Redis :6379\nBullMQ filas + cache 60 s\nnunca fonte definitiva")]
     end
 
@@ -143,8 +143,8 @@ apps/portal/     Next.js :3002 — vitrine pública + área do cliente (conta,
                  sistemas, faturas, comprar, perfil) via BFF fail-closed
 libs/            contracts · events · observability · security · database (9 clients)
                  asaas-adapter · resend-adapter · offline-token
-prisma/          1 schema por domínio (auth…communications) — sem FK cross-DB
-deploy/          compose base + override prod + Caddy + init 9 DBs
+prisma/          1 schema por domínio (auth…communications) no banco `aurumbit` — FKs intra-schema RESTRICT + exceção única documentada (ADR-006)
+deploy/          compose base + override prod + Caddy + PgBouncer + init `aurumbit` (schemas+roles)
                  scripts migrate/seed/backup/smoke + obs + load
 docs/            ARCHITECTURE.md (referência) · LGPD · SECURITY · SLOs
                  ADRs · RUNBOOKS · architecture-visual.html
@@ -163,9 +163,9 @@ docs/            ARCHITECTURE.md (referência) · LGPD · SECURITY · SLOs
 
 ---
 
-## 4. Domínios e os 9 bancos
+## 4. Domínios e o banco único `aurumbit` (Fase 9)
 
-Um Postgres, **9 databases isolados** (`auth customers products access licensing billing finance audit communications`). Sem foreign key entre bancos — referência cross-DB é `String` opaca + evento.
+Um Postgres, **1 banco `aurumbit` com 9 schemas isolados por role** (`auth customers products access licensing billing finance audit communications`, via PgBouncer `pool_mode=transaction`). Integridade: FKs intra-schema `ON DELETE RESTRICT` + **exceção única** `customers.identity_id → auth.user_identities`; demais referências cross-domínio são `String` opaca + evento (ADR-006).
 
 | DB | Guarda | Fonte da verdade para |
 |---|---|---|
@@ -173,10 +173,10 @@ Um Postgres, **9 databases isolados** (`auth customers products access licensing
 | `customers` | CustomerProfile PF/PJ, Organization, Membership (OWNER/ADMIN/FINANCE/MEMBER), Consents, GDPR | Quem compra e em nome de quem |
 | `products` | Product, Version, Feature (+`channel`), Plan (+`billingInterval`), PlanFeature, catálogo imutável | O que é vendido e por quanto (preço congela por linha) |
 | `access` | Contract (+itens com preço congelado), Entitlement (`priority` bonus 5 / contract 10 / subscription 20 / license 30), Bonus, Adjustment | **Se o uso é permitido** (`check-access`) |
-| `licensing` | License (`key_hash` UNIQUE, `prefix/last4`, `key_enc` KMS), Device (`device_hash` HMAC), offline-JWT (`ch`) | Chave, máquina e validade offline |
+| `licensing` | License (`key_hash` UNIQUE, `prefix/last4`, `key_enc` envelope via `LICENSE_MASTER_KEY_PATH`), Device (`device_hash` HMAC), offline-JWT (`ch`) | Chave, máquina e validade offline |
 | `billing` | Asaas Customer espelho, Subscription/Invoice/Payment/Refund, WebhookReceipt `UNIQUE(provider,externalId)`, Outbox | Cobrança e seu estado |
 | `finance` | Category, Account, Receivable, Payable, Transaction (**único que muta saldo**), ProjectionSnapshot (hash), Grant `finance.read` | Previsto / pendente / **realizado** |
-| `audit` | AuditEvent append-only (sem UPDATE/DELETE), 5 anos | Quem fez o quê, quando, com qual motivo |
+| `audit` | AuditEvent append-only particionado por mês (sem UPDATE/DELETE), SecurityEvent (6 tipos), retenção 5a por `DETACH` | Quem fez o quê, quando, com qual motivo |
 | `communications` | EmailMessage (`event_id` UNIQUE), sender, templates v1, receipts Resend | O que foi comunicado e se chegou |
 
 Titularidade: **ambos** — PF global + Organização PJ opcional via Membership. Último OWNER é protegido. Vigência da licença **inicia na confirmação do pagamento**.
@@ -331,7 +331,7 @@ curl -f http://localhost:3000/health/ready    # 200 {postgres:up,redis:up,dlq}
 | Admin | http://localhost:3001 | dashboard, clientes, cobranças, financeiro, auditoria, filas |
 | Portal | http://localhost:3002 | vitrine + área do cliente |
 | Mailhog | http://localhost:8025 | e-mails locais (SMTP :1025) |
-| Postgres | localhost:5432 (9 DBs) | `auth…communications` |
+| Postgres | localhost:5432 (banco `aurumbit`, 9 schemas) + PgBouncer :6432 | `auth…communications` |
 | Redis | localhost:6379 | filas + cache 60 s |
 
 ### 10.2 Comandos do dia a dia
@@ -342,7 +342,7 @@ npm --prefix apps/api run build && npm --prefix apps/api run test
 npm --prefix apps/api run test:e2e
 npm --prefix apps/workers run build && npm --prefix apps/admin run build
 node deploy/load/smoke.js --base http://localhost:3000
-bash deploy/scripts/backup-check.sh              # exige os 9 DBs
+bash deploy/scripts/backup-check.sh              # exige 1 DB aurumbit + 9 schemas
 bash deploy/scripts/clone-ready-timer.sh --dry-run
 ```
 
@@ -359,7 +359,7 @@ Internet ──443──► Caddy (TLS + HSTS + www→apex)
   ├── aurumbit.com       → 127.0.0.1:3002 (portal)
   ├── admin.aurumbit.com → 127.0.0.1:3001 (admin)
   └── api.aurumbit.com   → 127.0.0.1:3000 (api)
-postgres→migrate(one-shot 9 DBs)→api→portal · workers após migrate · mailhog só com --profile dev
+postgres→migrate(one-shot 9 domínios)→api→portal · workers após migrate · mailhog só com --profile dev
 ```
 
 ```bash
@@ -368,10 +368,10 @@ bash deploy/scripts/gen-prod-env.sh      # gera .env.prod (chmod 600, nunca comm
 bash deploy/scripts/seed-prod.sh         # admin + grant + catálogo (upserts idempotentes)
 bash deploy/scripts/smoke-prod.sh        # 8 checks TAP (webhook duplicado incluso)
 bash deploy/scripts/pg-backup.sh         # dump cifrado + rclone off-VPS + retenção 14 d
-bash deploy/scripts/pg-restore-probe.sh  # restaura em restore_probe_* e checa 9 DBs + contagens
+bash deploy/scripts/pg-restore-probe.sh  # restaura restore_probe_aurumbit e checa 9 schemas + contagens
 ```
 
-**Gates antes do corte de DNS:** TTL 300 com 24–48 h de antecedência, SPF/DKIM/DMARC da Resend, `curl --resolve` verde na VPS, primeira cobrança em valor mínimo com estorno, `LICENSE_KEY_ENC_KEY` com cópia cifrada off-VPS **antes** da primeira licença (perdê-la é irreversível), purge só com restore recorrente verde. Rollback: tag SHA anterior + reload Caddy + `up -d` + rollback DNS (minutos). Runbook executável por terceiro: [`docs/RUNBOOKS/deploy.md`](docs/RUNBOOKS/deploy.md).
+**Gates antes do corte de DNS:** TTL 300 com 24–48 h de antecedência, SPF/DKIM/DMARC da Resend, `curl --resolve` verde na VPS, primeira cobrança em valor mínimo com estorno, `LICENSE_MASTER_KEY_PATH` (arquivo 0600 via volume) com cópia cifrada off-VPS **antes** da primeira licença (perdê-la é irreversível), purge só com restore recorrente verde. Rollback: tag SHA anterior + reload Caddy + `up -d` + rollback DNS (minutos). Runbook executável por terceiro: [`docs/RUNBOOKS/deploy.md`](docs/RUNBOOKS/deploy.md).
 
 ---
 
@@ -391,7 +391,7 @@ Qualidade contínua: `lint → typecheck → test → build → prisma validate 
 
 ---
 
-## 13. Jornada Fases 1–8 e roadmap 9–10
+## 13. Jornada Fases 1–9 e roadmap 10
 
 | Fase | Entrega | Status |
 |---|---|---|
@@ -403,7 +403,7 @@ Qualidade contínua: `lint → typecheck → test → build → prisma validate 
 | 6 — Robustez | DLQ replay, retenção, backup-check, ready warn, helmet/CSP, GDPR real, `/metrics`, smoke | ✅ 377 unit + 42 e2e + ARCHITECTURE + README |
 | 7 — Produção VPS | Portal no compose, override prod loopback, Caddy TLS, `.env` prod, seed real, backup DR + probe + dead-man, smoke prod, runbook, clone→ready | ✅ código verificado localmente; up real + reboot + monitores na VPS pendentes |
 | 8 — Modelo comercial | `billingInterval` + `kind=lifetime` + channel WEB/DESKTOP + gating server-side + checkout real + catálogo `ONE_TIME` + BFF fail-closed total | ✅ executada (código verificado; cerimônia VPS pendente — plano ONE_TIME ativo + compra mínima) |
-| 9 — Bancos por produto | `APP-DATABASE-CONTRACT.md`, gerador `app_<slug>`, registro dinâmico, piloto 1 produto, backup `9+N` | ⏳ próxima |
+| 9 — Consolidação `aurumbit` | 1 banco + 9 schemas, roles por domínio, FKs RESTRICT + exceção única, audit particionado, SecurityEvent, envelope de chave, CI 1 entrypoint, backup único | ✅ executada (`.planning/PHASE-9-REPORT.md`; unit 475/475; gates vivos na VPS/CI pendentes) |
 | 10 — Sync offline-first | `SYNC-PROTOCOL.md` (pull cursorado + push idempotente, tombstones, LWW), `SyncCursor`, piloto 1 entidade, motor desktop, `sync_lag_*` | ⏳ por último (depende de 8–9) |
 
 ---

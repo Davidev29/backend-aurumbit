@@ -1,6 +1,6 @@
 # Aurum Bit — Arquitetura do Sistema
 
-> Monólito modular NestJS + workers BullMQ + admin Next.js. 9 bancos Postgres por domínio. Outbox + Redis. Asaas Sandbox-first. Resend transacional.
+> Monólito modular NestJS + workers BullMQ + admin Next.js. Postgres único `aurumbit` com 9 schemas por domínio (Fase 9). Outbox + Redis. Asaas Sandbox-first. Resend transacional.
 
 ## 1. Visão e estado atual
 
@@ -9,8 +9,8 @@ Produtos (Win/Mac/Web/App)
   │ HTTPS / check-access / heartbeat / offline-token
   ▼
 API NestJS `apps/api` (:3000, prefixo /v1) ── JWT 15min + refresh rotativo + guards
-  │ Prisma 1 client por DB (9 DATABASE_URL_*) · sem FK cross-DB (String opaco)
-  ├─ Postgres :5432 — 9 databases: auth, customers, products, access, licensing, billing, finance, audit, communications
+  │ Prisma 1 client por domínio (9 DATABASE_URL_* no banco `aurumbit`) · FKs intra-schema RESTRICT + exceção única documentada (ADR-006)
+  ├─ Postgres :5432 — banco `aurumbit`, 9 schemas: auth, customers, products, access, licensing, billing, finance, audit, communications (+ PgBouncer :6432 transaction)
   ├─ Redis :6379 — BullMQ filas + cache leitura 60s (nunca fonte definitiva)
   ├─ Workers `apps/workers` — consumers BullMQ + crons (sem HTTP, aplicam via API interna x-internal-key)
   ├─ Mailhog :1025/:8025 — SMTP fake local
@@ -53,7 +53,7 @@ npm --prefix apps/workers run build && npm --prefix apps/admin run build
 - **Reconciliação manual:** worker recon tick ou `POST /v1/billing/webhooks/recon-apply` interno.
 - **Projeções:** `GET /v1/finance/projections?scope=&ref=&tz=` (hit 200 / miss 202+jobId → `GET jobs/:jobId`), `POST recompute` (manage).
 - **Reveal chave:** `POST /v1/licenses/:id/reveal {reason}` (license.read+MFA+10/h+audit).
-- **Backup:** `bash deploy/scripts/backup-check.sh` (exige 9 DBs; restore probe TODO).
+- **Backup:** `bash deploy/scripts/backup-check.sh` (exige 1 DB `aurumbit` + 9 schemas; restore probe semanal).
 - **Carga:** `node deploy/load/smoke.js --base http://localhost:3000` (live/ready/metrics + p99 check-access TODO k6).
 
 ## 4. Endpoints — o que cada um faz
