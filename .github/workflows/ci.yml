@@ -251,6 +251,9 @@ jobs:
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
           exit-code: "1"
+          # Sem isto, com format sarif a action apaga o filtro de severidade e
+          # o gate falha em LOW/MEDIUM. Gate = HIGH,CRITICAL por desenho.
+          limit-severities-for-sarif: true
           # A action monta o ignore via TRIVY_IGNOREFILE; sem este input o
           # .trivyignore da raiz não é lido no CWD dela (ver PHASE-9-REPORT).
           trivyignores: .trivyignore
