@@ -18,6 +18,9 @@ import {
 } from './finance.dto';
 import { FinanceAggregate, IllegalTransitionError, assertTransition } from './finance-transitions';
 
+// Fase 9 (ADR-006 §6): categorias/contas sao append-only — só create/list/get
+// (sem endpoint de DELETE). Desativacao é soft via active=false; hard DELETE
+// é bloqueado pelas FKs RESTRICT (migration 0003_fase9_fks_indices).
 function isUniqueViolation(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
 }
