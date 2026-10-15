@@ -251,6 +251,9 @@ jobs:
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
           exit-code: "1"
+          # A action monta o ignore via TRIVY_IGNOREFILE; sem este input o
+          # .trivyignore da raiz não é lido no CWD dela (ver PHASE-9-REPORT).
+          trivyignores: .trivyignore
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
