@@ -43,8 +43,13 @@ const nextConfig = {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
   images: {
+    // Allowlist fechada (Fase 9, endurecimento do otimizador): galeria vem da
+    // API e assets locais — nunca otimize URL remota arbitrária (SSRF/RCE via
+    // otimizador; cf. .trivyignore). Novos hosts de imagem entram aqui.
     remotePatterns: [
-      { protocol: "https", hostname: "**" },
+      { protocol: "https", hostname: "aurumbit.com" },
+      { protocol: "https", hostname: "api.aurumbit.com" },
+      { protocol: "http", hostname: "localhost" },
     ],
   },
 };

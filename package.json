@@ -18,7 +18,7 @@
     "seed:all": "bash deploy/scripts/seed-all.sh"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "14.2.5",
+    "@next/eslint-plugin-next": "14.2.35",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^5",
     "prettier": "^3.3.0",
@@ -29,5 +29,11 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "8.5.30",
+      "deepmerge-ts": "8.0.0"
+    }
   }
 }

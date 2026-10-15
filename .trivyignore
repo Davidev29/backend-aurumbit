@@ -1,0 +1,29 @@
+# .trivyignore — aceite de risco documentado (Fase 9, CI trivy HIGH,CRITICAL).
+# Regra: corrigir por upgrade sempre que houver backport; ignorar SOMENTE com
+# justificativa verificável + expiração + plano de saída. Revisar tudo no
+# upgrade Next 14 → 15 (débito registrado; sem data — quando o app tolerar React 19).
+# Formato trivy: `VULN-ID exp: AAAA-MM-DD` (linhas `#` são a justificativa).
+
+# --- Next.js 14.2.35: só resta o que só tem patch em 15.x/16.x (sem backport 14.x) ---
+# CRIT RCE em host Windows — N/A: prod e CI rodam Linux (docs: build prod sempre
+# no Linux/VPS, nunca Windows); dev Windows não serve tráfego.
+CVE-2026-75604 exp:2027-01-15
+# CRIT RCE no otimizador de imagem via AVIF remoto — MITIGADO: remotePatterns
+# fechado (só aurumbit.com/api/localhost, ver apps/portal/next.config.js);
+# otimizador não alcança URL arbitrária. Sem AVIF configurado.
+GHSA-2xp9-vwfh-vxw4 exp:2027-01-15
+# HIGH info disclosure via middleware — middleware (admin/portal) só faz gate de
+# auth, sem segredo em resposta; reavaliar no upgrade Next 15.
+CVE-2026-44573 exp:2027-01-15
+# HIGH SSRF (Server Actions/rewrites) — N/A: sem "use server", sem rewrites/
+# redirects com entrada de usuário; BFF usa upstream fixo (API_INTERNAL_URL).
+CVE-2026-44578 exp:2027-01-15
+CVE-2026-64645 exp:2027-01-15
+CVE-2026-64649 exp:2027-01-15
+# HIGH DoS (Server Components / desserialização HTTP / Server Actions) —
+# disponibilidade em single-VPS com rate-limit no edge + monitoramento;
+# sem Server Actions no código. Reavaliar no upgrade Next 15.
+CVE-2026-64641 exp:2027-01-15
+GHSA-8h8q-6873-q5fj exp:2027-01-15
+GHSA-h25m-26qc-wcjf exp:2027-01-15
+GHSA-q4gf-8mx6-v5v3 exp:2027-01-15
