@@ -30,11 +30,18 @@ capabilities `WEB_*` vs `DESKTOP_*` (channel em Feature/Entitlement/offline-JWT)
 gating server-side + matriz replicada na web; checkout pós-pagamento real
 (Asaas→licença, sem tela `done` sem cobrança).
 
-## Fase 9 — Bancos por produto (`app_<slug>`)
-`APP-DATABASE-CONTRACT.md` (esqueleto, refs opacas, outbox obrigatória);
-gerador de schema + `DATABASE_URL_APP_<SLUG>`; listas hardcoded (`migrate-all`,
-`init-dbs`, `backup-check`, relay) viram registro dinâmico; piloto `app_<slug>`
-de 1 produto; correção dos bancos existentes pelo checklist; backup `9+N`.
+## Fase 9 — Consolidação single-DB (`aurumbit`, 9 schemas)
+Ver `docs/ADR-006-consolidacao-single-db.md` e `.planning/PHASE-9-PLAN.md`
+(E0 docs → E10 corte). Saída: 1 banco `aurumbit` com 9 schemas (um por
+domínio), roles por domínio + `migrator`, timeouts por domínio, Prisma
+`multiSchema` + `prismaSchemaFolder`, PgBouncer `transaction`, FKs
+intra-schema `RESTRICT` (exceção única `customers.identity_id` →
+`auth.user_identities`; default sem FK cross-schema), índices
+entitlements+audit, audit particionado (`DETACH` nunca `DELETE`),
+`SecurityEvent` 6 tipos, envelope `LICENSE_MASTER_KEY_PATH` (dual-decrypt
+v1-legado/v2), CI 1× + backup único. `app_<slug>` dedicado só com demanda
+de produtos novos isolados por dados; 2 instâncias só se check-access
+p99>SLO por saturação I/O ≥2 milestones.
 
 ## Fase 10 — Sync bidirecional offline-first
 `SYNC-PROTOCOL.md` (pull cursorado + push idempotente, tombstones, `rev`,

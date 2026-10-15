@@ -5,7 +5,7 @@ Ecossistema Aurum Bit: produtos Windows/Mac + terminal web + app, backend plataf
 
 ## Decisões vinculantes
 - **Monólito modular NestJS** (`apps/api` + `apps/workers`), extração só com gatilho concreto.
-- **Banco por domínio** (9 DBs: auth, customers, products, access, licensing, billing, finance, audit, communications). Sem FK cross-DB.
+- **Banco único `aurumbit`, 9 schemas** (auth, customers, products, access, licensing, billing, finance, audit, communications). Fronteira por schema + módulo + outbox. Default sem FK cross-schema; **exceção única:** `customers.identity_id → auth.user_identities` (`RESTRICT`); intra-schema `RESTRICT` (ver `docs/ADR-006-consolidacao-single-db.md`).
 - **Outbox PG + BullMQ/Redis**. Worker publica, consumidores idempotentes, retry + DLQ. Redis nunca é fonte definitiva.
 - **Titular: ambos** — PF global + Organização PJ opcional via Membership (OWNER/ADMIN/FINANCE/MEMBER).
 - **Vigência licença:** inicia na **confirmação do pagamento**.

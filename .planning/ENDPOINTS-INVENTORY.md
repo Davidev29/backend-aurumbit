@@ -302,6 +302,12 @@ Preço imutável: só create + archive (sem update de `priceCents`).
 
 Stub vazio, sem rotas (TODO Fase 2).
 
+> Nota Fase 9 (E0, docs — sem mudança de endpoints): `audit.security_events`
+> (particionada como `audit_events`, retenção por `DETACH`) com 6 tipos —
+> `LOGIN_FAILED`, `MFA_FAILED`, `TOKEN_ROTATED`, `DEVICE_BLOCKED`,
+> `CLONE_SUSPECT`, `KEY_REVEALED` (ver `docs/ADR-006-consolidacao-single-db.md`
+> itens 8–9). Payload sem PII (allowlist; `keyMasked` no máximo).
+
 ## 2. Rotas Next BFF (`apps/admin/app/api/**/route.ts` — 25)
 
 Todas: **proxy** se `API_INTERNAL_URL` (repasse `aurum_session`), **stub** `mock*` senão.
