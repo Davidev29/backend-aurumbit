@@ -62,7 +62,7 @@ services:
       - aurum-net
 
   pgbouncer:
-    image: edoburu/pgbouncer:1.22-stable
+    image: edoburu/pgbouncer:v1.24.0-p1
     container_name: aurum-pgbouncer
     restart: unless-stopped
     ports:
