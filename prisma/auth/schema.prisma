@@ -1,16 +1,18 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/auth"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_AUTH")
+  schemas = ["auth"]
 }
 
-// Fase 2 — Auth (sem negócio de licenças/pagamentos).
-// Sem FK cross-DB: todas as referências abaixo são intra-DB (auth).
-// Referências a outros domínios (ex. customers) seriam IDs opacos String, sem @relation.
+// Fase 2 — Auth (sem negócio de licenças/pagamentos). single-DB aurumbit, schema auth.
+// single-DB aurumbit, schema auth: todas as referências abaixo são intra-schema (auth).
+// Referências a outros domínios (ex. customers) são IDs opacos String, sem @relation cross-schema.
 
 model UserIdentity {
   id                String    @id @default(cuid())
@@ -30,6 +32,7 @@ model UserIdentity {
   verificationTokens   EmailVerificationToken[]
 
   @@map("user_identities")
+  @@schema("auth")
 }
 
 model Credential {
@@ -46,6 +49,7 @@ model Credential {
   updatedAt           DateTime  @updatedAt @default(now())
 
   @@map("credentials")
+  @@schema("auth")
 }
 
 model AuthSession {
@@ -65,6 +69,7 @@ model AuthSession {
   @@index([identity_id, status])
   @@index([family_id])
   @@map("auth_sessions")
+  @@schema("auth")
 }
 
 model RefreshToken {
@@ -81,6 +86,7 @@ model RefreshToken {
 
   @@index([family_id, status])
   @@map("refresh_tokens")
+  @@schema("auth")
 }
 
 // Token opaco de verificação de e-mail (24h, hash-only, single-use).
@@ -95,6 +101,7 @@ model EmailVerificationToken {
 
   @@index([identity_id])
   @@map("email_verification_tokens")
+  @@schema("auth")
 }
 
 // Consents versionados do registro (TERMS + PRIVACY obrigatórios).
@@ -108,6 +115,7 @@ model ConsentGrant {
 
   @@unique([identity_id, type, version])
   @@map("consent_grants")
+  @@schema("auth")
 }
 
 // Outbox para publicação assíncrona via BullMQ/Redis (worker publica, Redis nunca é fonte definitiva).
@@ -123,4 +131,6 @@ model OutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("auth")
 }
+

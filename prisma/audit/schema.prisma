@@ -1,11 +1,13 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/audit"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_AUDIT")
+  schemas = ["audit"]
 }
 
 // Append-only: a aplicação nunca faz update/delete neste modelo.
@@ -20,6 +22,36 @@ model AuditEvent {
   entityId  String?
   metadata  Json?
   createdAt DateTime @default(now())
+  // E6 (Fase 9): a PK REAL no banco é composta ("createdAt", id) — exigência
+  // do particionamento declarativo por RANGE ("createdAt"). O Prisma mantém
+  // `id` como @id lógico (cuid app-side); NUNCA mapear @@id composto aqui
+  // (mudaria a API do client). Retenção: NUNCA via DELETE — lifecycle por
+  // DETACH de partição (docs/RUNBOOKS/audit.md).
 
   @@map("audit_events")
+  @@schema("audit")
 }
+
+// E6 (Fase 9): trilha de segurança particionada (audit.security_events).
+// Tipos fechados (CHECK no DDL): LOGIN_FAILED, MFA_FAILED, TOKEN_ROTATED,
+// DEVICE_BLOCKED, CLONE_SUSPECT, KEY_REVEALED. Append-only: a app usa o
+// papel app_audit_append (só INSERT+SELECT); UPDATE/DELETE → 42501.
+// Escrita via helper apps/api/src/modules/audit/security-events.ts
+// (só INSERT, metadata por allowlist sem PII).
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  // Vocabulário fechado CHECK-side: LOGIN_FAILED | MFA_FAILED | TOKEN_ROTATED
+  // | DEVICE_BLOCKED | CLONE_SUSPECT | KEY_REVEALED.
+  type      String
+  // Referências opacas cross-DB (ator/entidade). Sem @relation cross-DB.
+  actorId   String?
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@map("security_events")
+  @@schema("audit")
+}
+

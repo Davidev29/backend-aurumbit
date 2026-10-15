@@ -1,11 +1,13 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/licensing"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_LICENSING")
+  schemas = ["licensing"]
 }
 
 // Stub Fase 1 — chaves conforme PROJECT.md §2: nunca plaintext, só hash/prefixo/sufixo + encriptado p/ reemissão.
@@ -53,6 +55,7 @@ model License {
   @@index([status])
   @@index([status, expiresAt])
   @@map("licenses")
+  @@schema("licensing")
 }
 
 model LicenseDevice {
@@ -84,6 +87,7 @@ model LicenseDevice {
 
   @@unique([licenseId, device_hash])
   @@map("license_devices")
+  @@schema("licensing")
 }
 
 model OutboxEvent {
@@ -98,4 +102,6 @@ model OutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("licensing")
 }
+

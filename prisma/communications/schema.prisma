@@ -1,11 +1,13 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/communications"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_COMMUNICATIONS")
+  schemas = ["communications"]
 }
 
 // Fase 4 — Resend + templates reais (PROJECT.md §§5-6, REQUIREMENTS.md §4).
@@ -24,6 +26,7 @@ enum EmailStatus {
   FAILED
   BOUNCED
   COMPLAINED
+  @@schema("communications")
 }
 
 model EmailMessage {
@@ -47,6 +50,7 @@ model EmailMessage {
   @@index([recipientHash])
   @@index([template, templateVersion])
   @@map("email_messages")
+  @@schema("communications")
 }
 
 model EmailTemplate {
@@ -61,6 +65,7 @@ model EmailTemplate {
 
   @@unique([name, version])
   @@map("email_templates")
+  @@schema("communications")
 }
 
 // Dedupe de webhooks Resend (PROJECT.md §5: UNIQUE por evento → 200 duplicate).
@@ -74,4 +79,6 @@ model WebhookReceipt {
   createdAt  DateTime @default(now())
 
   @@map("webhook_receipts")
+  @@schema("communications")
 }
+

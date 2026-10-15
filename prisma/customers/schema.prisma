@@ -1,20 +1,23 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/customers"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_CUSTOMERS")
+  schemas = ["customers"]
 }
 
 // Titular: PF global (identity) + Organização PJ opcional via OrganizationMembership
-// (OWNER/ADMIN/FINANCE/MEMBER). Sem FK cross-DB: identityId é referência opaca a
+// (OWNER/ADMIN/FINANCE/MEMBER). single-DB aurumbit, schema customers: identityId é referência opaca a
 // auth.UserIdentity.id; organizationId é FK local p/ Organization.
 
 enum CustomerKind {
   PF
   PJ
+  @@schema("customers")
 }
 
 enum CustomerStatus {
@@ -23,12 +26,14 @@ enum CustomerStatus {
   ACTIVE
   SUSPENDED
   CANCELLED
+  @@schema("customers")
 }
 
 enum OrganizationStatus {
   ACTIVE
   SUSPENDED
   CANCELLED
+  @@schema("customers")
 }
 
 enum MembershipRole {
@@ -36,6 +41,7 @@ enum MembershipRole {
   ADMIN
   FINANCE
   MEMBER
+  @@schema("customers")
 }
 
 enum MembershipStatus {
@@ -43,17 +49,20 @@ enum MembershipStatus {
   ACTIVE
   SUSPENDED
   REMOVED
+  @@schema("customers")
 }
 
 enum ConsentPurpose {
   TERMS
   PRIVACY
   MARKETING
+  @@schema("customers")
 }
 
 enum ConsentStatus {
   GRANTED
   WITHDRAWN
+  @@schema("customers")
 }
 
 model CustomerProfile {
@@ -65,6 +74,9 @@ model CustomerProfile {
   // CHECK não pode ser expresso em Prisma schema; a migração deve conter:
   //   CHECK ((kind='PF' AND identity_id IS NOT NULL AND organization_id IS NULL)
   //       OR (kind='PJ' AND identity_id IS NULL AND organization_id IS NOT NULL))
+  // Fase 9 (exceção única ADR-006 §6): FK SQL customer_profiles.identity_id
+  // → auth.user_identities(id), ON DELETE RESTRICT (migration 0002). Prisma
+  // permanece opaco aqui (sem @relation cross-schema) de propósito.
   identityId     String?        @unique @map("identity_id")
   organizationId String?        @unique @map("organization_id")
   organization   Organization?  @relation(fields: [organizationId], references: [id])
@@ -80,6 +92,7 @@ model CustomerProfile {
 
   @@index([status])
   @@map("customer_profiles")
+  @@schema("customers")
 }
 
 model Organization {
@@ -96,6 +109,7 @@ model Organization {
   memberships OrganizationMembership[]
 
   @@map("organizations")
+  @@schema("customers")
 }
 
 model OrganizationMembership {
@@ -112,6 +126,7 @@ model OrganizationMembership {
   @@unique([organizationId, identityId])
   @@index([identityId])
   @@map("organization_memberships")
+  @@schema("customers")
 }
 
 model ConsentRecord {
@@ -128,6 +143,7 @@ model ConsentRecord {
   @@unique([identityId, purpose, version])
   @@index([identityId])
   @@map("consent_records")
+  @@schema("customers")
 }
 
 // Outbox para publicação assíncrona via BullMQ/Redis (worker publica, Redis nunca é fonte definitiva).
@@ -143,4 +159,6 @@ model OutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("customers")
 }
+

@@ -1,18 +1,21 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/billing"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_BILLING")
+  schemas = ["billing"]
 }
 
 // Fase 4 — Billing core (PROJECT.md §5, REQUIREMENTS.md §3).
-// Banco por domínio: sem FK cross-DB. IDs de outros domínios
+// single-DB aurumbit, schema billing. IDs de outros domínios
 // (customers.Customer.id, products.Plan.id, access.ContractItem.id)
 // viajam como strings opacas. FKs intra-DB: Payment -> Invoice,
-// Refund -> Payment (mesmo database, mesmo schema Prisma).
+// Refund -> Payment, Subscription -> Customer, Invoice -> Customer,
+// Invoice -> Subscription (Fase 9, ADR-006 §6, todas RESTRICT).
 // Idempotência: UNIQUE(provider, externalId) em Payment/WebhookReceipt,
 // UNIQUE(idempotencyKey) em Subscription/Payment/Refund (+ Invoice
 // opcional), UNIQUE(number/orderId) em Invoice.
@@ -29,7 +32,11 @@ model Customer {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt @default(now())
 
+  subscriptions Subscription[]
+  invoices      Invoice[]
+
   @@map("customers")
+  @@schema("billing")
 }
 
 // DRAFT → ACTIVE → PAST_DUE ↔ ... → CANCELLED | EXPIRED.
@@ -37,7 +44,9 @@ model Customer {
 // ilegal → 422 + alerta, sem sobrescrever.
 model Subscription {
   id                 String    @id @default(cuid())
-  customerId         String // opaco: billing.Customer.id (mesmo DB, sem relation p/ escrita simples)
+  customerId         String // FK intra-schema -> Customer.id (Fase 9, RESTRICT)
+  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  invoices           Invoice[]
   asaasSubscriptionId String?  @unique
   status             String    @default("DRAFT") // DRAFT | ACTIVE | PAST_DUE | SUSPENDED | CANCELLED | EXPIRED
   planRef            String? // opaco cross-DB: products.Plan.id
@@ -54,6 +63,7 @@ model Subscription {
   @@index([customerId])
   @@index([status])
   @@map("subscriptions")
+  @@schema("billing")
 }
 
 // number INV-AAAA-NNNNNN UNIQUE. orderId UNIQUE NULL = idempotência
@@ -61,8 +71,10 @@ model Subscription {
 model Invoice {
   id             String    @id @default(cuid())
   number         String    @unique // INV-AAAA-NNNNNN
-  customerId     String // opaco: billing.Customer.id
-  subscriptionId String? // opaco: billing.Subscription.id
+  customerId     String // FK intra-schema -> Customer.id (Fase 9, RESTRICT)
+  customer       Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  subscriptionId String? // FK intra-schema -> Subscription.id (Fase 9, RESTRICT)
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
   orderId        String?   @unique // opaco cross-DB (origem do pedido)
   asaasInvoiceId String?   @unique
   status         String    @default("DRAFT") // DRAFT | PENDING | PAID | OVERDUE | CANCELLED | REFUNDED
@@ -87,6 +99,7 @@ model Invoice {
   @@index([customerId])
   @@index([status])
   @@map("invoices")
+  @@schema("billing")
 }
 
 // Stub Fase 1 preservado (provider/externalId/customerId/amountCents/
@@ -118,6 +131,7 @@ model Payment {
   @@index([invoiceId])
   @@index([status])
   @@map("payments")
+  @@schema("billing")
 }
 
 // REQUESTED → PROCESSING → COMPLETED | FAILED (FAILED retry → REQUESTED).
@@ -137,6 +151,7 @@ model Refund {
   @@unique([provider, externalId])
   @@index([paymentId])
   @@map("refunds")
+  @@schema("billing")
 }
 
 // Stub Fase 1 preservado (provider/externalId/status/payload/createdAt
@@ -158,6 +173,7 @@ model WebhookReceipt {
   @@unique([provider, externalId])
   @@index([status])
   @@map("webhook_receipts")
+  @@schema("billing")
 }
 
 model OutboxEvent {
@@ -172,4 +188,6 @@ model OutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("billing")
 }
+

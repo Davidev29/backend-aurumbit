@@ -1,15 +1,17 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/finance"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_FINANCE")
+  schemas = ["finance"]
 }
 
 // Fase 5 — Finance core + Sync billing→finance + Projections (merge).
-// Banco por domínio: sem FK cross-DB. Referências cross-DB
+// single-DB aurumbit, schema finance. Referências cross-schema
 // (customers.Customer.id, billing.*) viajam como strings opacas.
 // ATENÇÃO — tabelas compartilhadas por 3 superfícies (colunas = UNIÃO):
 // - `receivables`/`payables`: Sync (espelho billing: customerId/invoiceId/
@@ -50,6 +52,7 @@ model LedgerEntry {
   createdAt   DateTime @default(now())
 
   @@map("ledger_entries")
+  @@schema("finance")
 }
 
 model PayoutRequest {
@@ -62,6 +65,7 @@ model PayoutRequest {
   updatedAt   DateTime @updatedAt @default(now())
 
   @@map("payout_requests")
+  @@schema("finance")
 }
 
 // Recebível: espelho billing (sync) + conta a receber multi-org (core).
@@ -76,8 +80,11 @@ model Receivable {
   // Core — origem própria.
   sourceType  String? // INVOICE | MANUAL
   sourceId    String? // INVOICE → billing.Invoice.id; MANUAL → `manual:<uuid>`
-  category    FinancialCategory? @relation(fields: [categoryId], references: [id])
+  category    FinancialCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   categoryId  String?
+  account     FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transactions FinancialTransaction[]
+  automationJobs FinanceAutomationJob[]
   amountCents Int
   // Core: PREVISTO | PENDENTE | RECEBIDO | CANCELADO | INADIMPLENTE.
   // Sync: PENDENTE | RECEBIDO | INADIMPLENTE.
@@ -87,7 +94,7 @@ model Receivable {
   dueDate     DateTime?
   paidAt      DateTime? // sync: quitação no provider
   receivedAt  DateTime? // core: data da baixa
-  accountId   String? // core: conta da baixa (financial_accounts.id, opaco intra-DB)
+  accountId   String? // core: conta da baixa (FK intra-schema -> FinancialAccount.id, Fase 9, RESTRICT)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt @default(now())
 
@@ -99,6 +106,7 @@ model Receivable {
   @@index([orgId, status])
   @@index([orgId, dueDate])
   @@map("receivables")
+  @@schema("finance")
 }
 
 // Pagável: reembolso espelhado (sync) + conta a pagar multi-org (core).
@@ -113,8 +121,11 @@ model Payable {
   // Core — origem própria.
   sourceType        String? // REFUND | MANUAL | SUPPLIER
   sourceId          String?
-  category          FinancialCategory? @relation(fields: [categoryId], references: [id])
+  category          FinancialCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   categoryId        String?
+  account           FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transactions      FinancialTransaction[]
+  automationJobs    FinanceAutomationJob[]
   amountCents       Int
   // Core: PREVISTO | PENDENTE | PAGO | CANCELADO. Sync: PENDENTE | PAGO.
   status            String    @default("PREVISTO")
@@ -122,7 +133,7 @@ model Payable {
   occurredAt        DateTime?
   dueDate           DateTime?
   paidAt            DateTime?
-  accountId         String? // core: conta da baixa (financial_accounts.id, opaco intra-DB)
+  accountId         String? // core: conta da baixa (FK intra-schema -> FinancialAccount.id, Fase 9, RESTRICT)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt @default(now())
 
@@ -132,6 +143,7 @@ model Payable {
   @@index([status])
   @@index([orgId, dueDate])
   @@map("payables")
+  @@schema("finance")
 }
 
 // Movimento realizado (sync: 1 linha por efeito econômico; core: extrato +
@@ -139,9 +151,9 @@ model Payable {
 model FinancialTransaction {
   id             String    @id @default(cuid())
   orgId          String? // core: customers.Customer.id opaco (sync legado escreve sem org)
-  account        FinancialAccount?  @relation(fields: [accountId], references: [id])
+  account        FinancialAccount?  @relation(fields: [accountId], references: [id], onDelete: Restrict)
   accountId      String? // core: obrigatório na baixa; sync não informa
-  category       FinancialCategory? @relation(fields: [categoryId], references: [id])
+  category       FinancialCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   categoryId     String? // core: obrigatório na baixa; sync não informa
   kind           String // INCOME | EXPENSE
   amountCents    Int
@@ -149,8 +161,10 @@ model FinancialTransaction {
   externalId     String?
   eventId        String?   @unique // sync: replay por evento (PROJECT.md §5)
   idempotencyKey String?   @unique // core: replay por chave
-  // Referências opacas intra-DB (finance.Receivable.id / finance.Payable.id).
+  // FKs intra-schema (Fase 9, RESTRICT) — sync legado grava NULL aqui.
+  receivable     Receivable? @relation(fields: [receivableId], references: [id], onDelete: Restrict)
   receivableId   String?
+  payable        Payable? @relation(fields: [payableId], references: [id], onDelete: Restrict)
   payableId      String?
   occurredAt     DateTime?
   createdAt      DateTime  @default(now())
@@ -163,6 +177,7 @@ model FinancialTransaction {
   @@index([receivableId])
   @@index([payableId])
   @@map("finance_transactions")
+  @@schema("finance")
 }
 
 // Idempotência do consumidor sync (PROJECT.md §5). UNIQUE(eventId): o efeito
@@ -175,6 +190,7 @@ model FinanceProcessedEvent {
   createdAt  DateTime @default(now())
 
   @@map("finance_processed_events")
+  @@schema("finance")
 }
 
 // Outbox do sync (contrato do relay: `outbox_events`, claim SKIP LOCKED,
@@ -192,6 +208,7 @@ model FinanceOutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("finance")
 }
 
 // Snapshot de projeção (persistência compartilhada; o compute é dono do
@@ -221,6 +238,7 @@ model ProjectionSnapshot {
   @@unique([orgId, scope, refDate, premisesHash])
   @@index([orgId, scope])
   @@map("projection_snapshots")
+  @@schema("finance")
 }
 
 // Plano de contas por organização (core). `code` único por org.
@@ -240,6 +258,7 @@ model FinancialCategory {
   @@unique([orgId, code])
   @@index([orgId])
   @@map("financial_categories")
+  @@schema("finance")
 }
 
 // Contas financeiras por organização (core). balanceCents: SOMENTE via
@@ -255,10 +274,13 @@ model FinancialAccount {
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt @default(now())
   transactions FinancialTransaction[]
+  receivables  Receivable[]
+  payables     Payable[]
 
   @@unique([orgId, code])
   @@index([orgId])
   @@map("financial_accounts")
+  @@schema("finance")
 }
 
 // Outbox do core (baixas: finance.receivable.received.v1,
@@ -278,6 +300,7 @@ model FinanceOutbox {
 
   @@index([published])
   @@map("finance_outbox")
+  @@schema("finance")
 }
 
 // Jobs da automação financeira (despesas via Asaas Bill Payments +
@@ -289,8 +312,10 @@ model FinanceAutomationJob {
   idempotencyKey String    @unique
   orgId          String // opaco cross-DB: customers.Customer.id (organização)
   kind           String // BILL_PAY | AUTO_CHARGE
-  payableId      String?
-  receivableId   String?
+  payableId      String? // FK intra-schema -> Payable.id (Fase 9, RESTRICT)
+  payable        Payable? @relation(fields: [payableId], references: [id], onDelete: Restrict)
+  receivableId   String? // FK intra-schema -> Receivable.id (Fase 9, RESTRICT)
+  receivable     Receivable? @relation(fields: [receivableId], references: [id], onDelete: Restrict)
   barcodeMasked  String? // máscara p/ suporte (nunca o número integral)
   scheduleDate   DateTime?
   provider       String    @default("ASAAS")
@@ -304,6 +329,7 @@ model FinanceAutomationJob {
   @@index([orgId, payableId])
   @@index([orgId, receivableId])
   @@map("finance_automation_jobs")
+  @@schema("finance")
 }
 
 // Notificações in-system do financeiro (sino do terminal administrativo).
@@ -323,4 +349,6 @@ model FinanceNotification {
   @@index([orgId, createdAt])
   @@index([orgId, read])
   @@map("finance_notifications")
+  @@schema("finance")
 }
+

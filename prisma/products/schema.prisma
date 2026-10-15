@@ -1,11 +1,13 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/products"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_PRODUCTS")
+  schemas = ["products"]
 }
 
 // Fase 2 — Products base (sem Licensing devices/offline-token, sem Billing/Asaas).
@@ -36,6 +38,7 @@ model Product {
   images   ProductImage[]
 
   @@map("products")
+  @@schema("products")
 }
 
 model ProductVersion {
@@ -48,6 +51,7 @@ model ProductVersion {
 
   @@unique([productId, version])
   @@map("product_versions")
+  @@schema("products")
 }
 
 // Capacidade concedível. kind: BOOLEAN (liga/desliga) | QUOTA (renovável,
@@ -69,6 +73,7 @@ model Feature {
   plans PlanFeature[]
 
   @@map("features")
+  @@schema("products")
 }
 
 // Linha de catálogo. priceCents é IMUTÁVEL por contrato de aplicação
@@ -96,6 +101,7 @@ model ProductPlan {
   @@index([productId, status])
   @@index([status, validFrom])
   @@map("product_plans")
+  @@schema("products")
 }
 
 // PK composta plan+feature. value: QUOTA/LIMIT = quantidade ("5");
@@ -110,6 +116,7 @@ model PlanFeature {
 
   @@id([planId, featureId])
   @@map("plan_features")
+  @@schema("products")
 }
 
 // Galeria em disco (VPS): metadados no PG, bytes em PRODUCT_IMAGES_DIR
@@ -127,6 +134,7 @@ model ProductImage {
 
   @@index([productId])
   @@map("product_images")
+  @@schema("products")
 }
 
 model OutboxEvent {
@@ -141,4 +149,6 @@ model OutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("products")
 }
+

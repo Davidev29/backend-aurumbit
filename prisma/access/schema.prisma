@@ -1,15 +1,17 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
   output   = "../../node_modules/.prisma/access"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_ACCESS")
+  schemas = ["access"]
 }
 
 // Fase 2 — Access base (sem LicenseDevice/offline-token → Fase 3; sem Asaas/Billing).
-// Sem FK cross-DB: owner/product/plan/feature são Strings opacas resolvidas na
+// single-DB aurumbit, schema access: owner/product/plan/feature são Strings opacas resolvidas na
 // aplicação (products via catálogo, customers via identidade).
 // Entitlement é a fonte da verdade p/ check-access (REQUIREMENTS.md §2).
 // Prioridades: BONUS=5 < CONTRACT=10 < SUBSCRIPTION=20 < LICENSE=30 (maior vence).
@@ -26,6 +28,7 @@ model AccessGrant {
 
   @@unique([subjectId, orgId, role])
   @@map("access_grants")
+  @@schema("access")
 }
 
 // Contrato de acesso. Congela preço no ContractItem.unitPriceCents
@@ -45,6 +48,7 @@ model Contract {
   @@index([ownerType, ownerId])
   @@index([status])
   @@map("contracts")
+  @@schema("access")
 }
 
 model ContractItem {
@@ -64,6 +68,7 @@ model ContractItem {
   @@index([contractId])
   @@index([status])
   @@map("contract_items")
+  @@schema("access")
 }
 
 // Fonte da verdade do check-access. UNIQUE cobre owner+product+feature+origin+
@@ -92,7 +97,11 @@ model Entitlement {
   @@unique([ownerType, ownerId, productId, featureCode, origin, originId])
   @@index([ownerId, status])
   @@index([status, expiresAt])
+  // Fase 9 (ADR-006 §8): caminho quente check-access; map = nome do índice
+  // criado na migration 0003 (zero-drift no migrate diff).
+  @@index([ownerId, productId, featureCode], map: "idx_entitlements_lookup")
   @@map("entitlements")
+  @@schema("access")
 }
 
 // Cortesia. reason >= 10 chars (validado na API). ends_at null = vitalícia
@@ -112,6 +121,7 @@ model BonusGrant {
 
   @@index([ownerId, status])
   @@map("bonus_grants")
+  @@schema("access")
 }
 
 // Trilha de ajustes manuais (suspend/revoke/cancel...). reason >= 10 chars.
@@ -126,6 +136,7 @@ model AccessAdjustment {
 
   @@index([targetType, targetId])
   @@map("access_adjustments")
+  @@schema("access")
 }
 
 model OutboxEvent {
@@ -140,4 +151,6 @@ model OutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("access")
 }
+
