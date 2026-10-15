@@ -1,0 +1,9 @@
+# .gitleaks.toml — allowlist versionada (falsos-positivos auditados, nunca segredos reais).
+# gitleaks-action@v2 lê este arquivo automaticamente na raiz (detect --redact).
+# Semântica AND: ignora apenas TROCAR_* dentro destes dois arquivos.
+# TROCAR_* fora daqui = FAIL legítimo. Segredo real NUNCA entra aqui.
+
+[allowlist]
+description = "Placeholders TROCAR_* só em .env.example e seu espelho gerado chunks.json (prod usa gen-prod-env.sh + cofre)"
+paths = ['''^\.env\.example$''', '''^docs/knowledge/chunks\.json$''']
+regexes = ['''TROCAR_[A-Z0-9_]+''']

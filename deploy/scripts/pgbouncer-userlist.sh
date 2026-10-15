@@ -11,9 +11,11 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 OUT="$ROOT/deploy/pgbouncer/userlist.txt"
 
 # Fonte das senhas (DEVE ser a mesma da interpolação do compose):
-# - dev/CI: defaults fracos abaixo (o compose NÃO lê o .env da raiz p/ interpolar;
-#   usa os defaults quando nada é exportado — igual aqui);
-# - prod: exporte as senhas (ex. `set -a; . .env.prod; set +a`) ou passe
+# - dev/CI: defaults fracos abaixo. O compose NÃO lê o .env da raiz p/
+#   interpolar (project dir = deploy/); usa os defaults quando nada é
+#   exportado — igual aqui. NUNCA ler .env aqui (TROCAR_* divergiria).
+# - prod: exporte as MESMAS vars usadas no `compose --env-file` (ex.
+#   `set -a; . /srv/aurum/.env.prod; set +a`), ou passe
 #   ENV_FILE=/srv/aurum/.env.prod antes de rodar este script.
 if [ -n "${ENV_FILE:-}" ] && [ -f "$ENV_FILE" ]; then
   set -a
