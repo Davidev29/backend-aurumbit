@@ -10,13 +10,15 @@ set -e
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 OUT="$ROOT/deploy/pgbouncer/userlist.txt"
 
-# Mesma fonte de verdade do compose (interpolação ${VAR:-default} com .env):
-# sem isso, userlist (defaults dev) diverge das senhas aplicadas no banco.
-# Só lê .env quando nada foi exportado (prod exporta .env.prod antes — export vence).
-if [ -z "${APP_AUTH_PASSWORD:-}" ] && [ -f "$ROOT/.env" ]; then
+# Fonte das senhas (DEVE ser a mesma da interpolação do compose):
+# - dev/CI: defaults fracos abaixo (o compose NÃO lê o .env da raiz p/ interpolar;
+#   usa os defaults quando nada é exportado — igual aqui);
+# - prod: exporte as senhas (ex. `set -a; . .env.prod; set +a`) ou passe
+#   ENV_FILE=/srv/aurum/.env.prod antes de rodar este script.
+if [ -n "${ENV_FILE:-}" ] && [ -f "$ENV_FILE" ]; then
   set -a
   # shellcheck disable=SC1091
-  . "$ROOT/.env"
+  . "$ENV_FILE"
   set +a
 fi
 
@@ -39,6 +41,9 @@ u() { # u ROLE envvar default
   u app_audit_append APP_AUDIT_APPEND_PASSWORD dev_audit_append_pw
   u app_audit_read APP_AUDIT_READ_PASSWORD dev_audit_read_pw
 } > "$OUT.tmp"
-chmod 600 "$OUT.tmp"
+chmod 644 "$OUT.tmp"
+# 644 (não 600): o PgBouncer roda como uid `postgres` na imagem oficial e precisa
+# LER este arquivo — 600 o cega ("no such user" p/ todos). Segredo real nunca é
+# commitado (.gitignore) e o diretório na VPS deve ser 700.
 mv "$OUT.tmp" "$OUT"
-echo "pgbouncer userlist OK (12 roles, 0600, sem segredos no log)"
+echo "pgbouncer userlist OK (12 roles, 0644 p/ leitura pelo uid postgres, sem segredos no log)"
