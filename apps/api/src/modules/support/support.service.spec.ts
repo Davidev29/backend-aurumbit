@@ -40,4 +40,31 @@ describe('SupportService (canal de atendimento)', () => {
     const patched = svc.patchConversation(c1.conversation.id, { status: 'closed' });
     expect(patched?.status).toBe('closed');
   });
+
+  it('arquiva e restaura: sai da fila, fica na lixeira, mensagens preservadas', () => {
+    const svc = new SupportService();
+    const c1 = svc.createConversation({ visitorName: 'A', origin: 'landpage' });
+    const c2 = svc.createConversation({ visitorName: 'B', origin: 'portal' });
+    svc.postMessage(c1.conversation.id, { sender: 'visitor', body: 'spam sem sequência' });
+
+    const archived = svc.setArchived(c1.conversation.id, true);
+    expect(archived?.archivedAt).toEqual(expect.any(String));
+
+    // Sai da fila ativa…
+    expect(svc.listConversations().map((c) => c.id)).toEqual([c2.conversation.id]);
+    // …e aparece só na lixeira, com mensagens intactas (auditoria).
+    const trash = svc.listArchived();
+    expect(trash.map((c) => c.id)).toEqual([c1.conversation.id]);
+    expect(svc.listMessages(c1.conversation.id).length).toBeGreaterThan(0);
+
+    const restored = svc.setArchived(c1.conversation.id, false);
+    expect(restored?.archivedAt).toBeNull();
+    expect(svc.listArchived()).toHaveLength(0);
+    expect(svc.listConversations().map((c) => c.id)).toContain(c1.conversation.id);
+  });
+
+  it('arquivar conversa inexistente retorna null', () => {
+    const svc = new SupportService();
+    expect(svc.setArchived('chat-inexistente', true)).toBeNull();
+  });
 });

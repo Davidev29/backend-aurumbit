@@ -11,7 +11,7 @@ import { readFileSync, statSync } from 'node:fs';
 // Convenções copiadas 1:1 de libs/security (apps/api compila com rootDir
 // próprio e não importa o pacote — mesmo padrão de `auth/rate-limit.ts`).
 
-export type LicenseKind = 'monthly' | 'annual' | 'lifetime';
+export type LicenseKind = 'monthly' | 'annual' | 'lifetime' | 'trial';
 export type LicenseStatus =
   | 'pending_payment'
   | 'active'
@@ -84,14 +84,34 @@ export function maskFromParts(last4: string): string {
 export function calcExpiry(
   startsAt: Date,
   kind: LicenseKind,
+  opts?: { expiresInHours?: number; expiresAt?: Date },
 ): { expiresAt: Date | null; graceUntil: Date | null } {
   if (!(startsAt instanceof Date) || Number.isNaN(startsAt.getTime())) {
     throw new Error('calcExpiry: startsAt inválido.');
   }
-  if (kind !== 'monthly' && kind !== 'annual' && kind !== 'lifetime') {
+  if (kind !== 'monthly' && kind !== 'annual' && kind !== 'lifetime' && kind !== 'trial') {
     throw new Error(`calcExpiry: kind inválido (${String(kind)}).`);
   }
   if (kind === 'lifetime') return { expiresAt: null, graceUntil: null };
+  // Trial/demo/promo: expiração explícita em horas ou data absoluta.
+  // Sem graça extra (graceUntil = expiresAt) — demo curta não herda 3d.
+  if (kind === 'trial') {
+    let expiresAt: Date | null = null;
+    if (opts?.expiresAt instanceof Date && !Number.isNaN(opts.expiresAt.getTime())) {
+      expiresAt = opts.expiresAt;
+    } else if (typeof opts?.expiresInHours === 'number' && Number.isFinite(opts.expiresInHours)) {
+      if (opts.expiresInHours < 1 || opts.expiresInHours > 24 * 365) {
+        throw new Error('calcExpiry: expiresInHours deve estar entre 1h e 8760h (1 ano).');
+      }
+      expiresAt = new Date(startsAt.getTime() + Math.round(opts.expiresInHours * 3600_000));
+    } else {
+      throw new Error('calcExpiry: trial exige expiresInHours (1..8760) ou expiresAt.');
+    }
+    if (!expiresAt || expiresAt.getTime() <= startsAt.getTime()) {
+      throw new Error('calcExpiry: trial expiresAt deve ser futuro.');
+    }
+    return { expiresAt, graceUntil: expiresAt };
+  }
   const months = kind === 'annual' ? 12 : 1;
   const expiresAt = new Date(
     Date.UTC(

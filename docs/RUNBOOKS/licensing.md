@@ -17,15 +17,15 @@ Renovação define `starts_at` na confirmação do pagamento (Fase 4 pluga `Paym
 
 ## 2. Devices
 
-- `POST /v1/licenses/:id/devices/link` — deriva `device_hash = HMAC(secret, license_id || app_instance_id)` no backend; limite `maxDevices` (default 3/5 conforme serviço) com `COUNT ... FOR UPDATE` (409 `DEVICE_LIMIT`). Outbox `DeviceLinked.v1`. Audit `device.link` (só `device_hash`).
+- `POST /v1/licenses/:id/devices/link` — deriva `device_hash = HMAC(secret, license_id || app_instance_id)` no backend; limite `maxDevices` (default 3/5 conforme serviço) com `COUNT` dentro da tx sob `FOR UPDATE` na linha da licença (409 `DEVICE_LIMIT`; `COUNT ... FOR UPDATE` é rejeitado pelo PG — 0A000). **Promo/bonificação (PROMO/GUEST): o limite conta máquinas distintas por IP** — reativação do mesmo IP (mesmo com `app_instance_id` novo) reafirma o device sem consumir slot; licenças pagas seguem estritas por instalação. Aceita `ip` explícito (IP local do app) com fallback p/ o IP da conexão. Outbox `DeviceLinked.v1`. Audit `device.link` (só `device_hash`).
 - `POST /v1/licenses/:id/devices/unlink` — remove vínculo; hash permanece na trilha. Audit `device.unlink`.
 - `POST /v1/licenses/:id/devices/:hash/block` — bloqueia; check nega `DEVICE_BLOCKED`. Audit `device.block`.
-- `POST /v1/licenses/:id/validate` — decisão online (200 sempre; corpo diz allow/deny): vigência + vínculo + clone (`cloned_suspect` → `DeviceCloneSuspected.v1`).
+- `POST /v1/licenses/:id/validate` — decisão online (200 sempre; corpo diz allow/deny): vigência + vínculo + clone (`cloned_suspect` → `DeviceCloneSuspected.v1`). **Pública no modo chave** (app instalado sem JWT; credencial = `device_hash`) + rate-limit `devicePoll` (120/min por IP).
 - LGPD: nunca hardware cru; `ip_hash` (HMAC, salt 90d) + `/24` mascarado só p/ detecção; geo-IP só em memória; **sem GPS**.
 
 ## 3. Offline-token
 
-- Mint online: `GET /v1/licenses/:id/offline-token?device_hash=` (device `active`, licença dentro da graça).
+- Mint online: `GET /v1/licenses/:id/offline-token?device_hash=` (device `active`, licença dentro da graça). **Pública no modo chave** (mesmo fundamento do `validate`) + rate-limit `devicePoll`; no modo conta o BFF chama com o Bearer da sessão.
 - `off_exp = min(iat + 7d, expires_at + 7d)`. Ver `ADR-003`.
 - Validação no app: `ACTIVE` / `GRACE` (degraded) / `EXPIRED` (além da graça, mesmo com `off_exp` válido) / `OFFLINE_EXPIRED` (teto 7d, exige online) / `TOKEN_VERSION_MISMATCH` (revogado).
 

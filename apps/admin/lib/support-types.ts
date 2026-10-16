@@ -26,6 +26,8 @@ export interface ChatConversation {
   unreadVisitor: number;
   createdAt: string;
   updatedAt: string;
+  /** Lixeira auditável: `null` = na fila; com ISO = arquivada (ver tela de arquivados). */
+  archivedAt: string | null;
 }
 
 export interface ChatMessage {

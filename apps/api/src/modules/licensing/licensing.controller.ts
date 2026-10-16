@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, Logger, Param, Post, Query, Req, ServiceUnavailableException, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { AdminStubGuard, LicenseReadGuard } from './admin.guard';
-import { IssueFromPaymentDto, IssueLicenseDto, LicenseReasonDto, ListLicensesQueryDto, RenewLicenseDto, RevealLicenseDto } from './licenses.dto';
+import { IssueFromPaymentDto, IssueLicenseDto, IssueTrialDto, LicenseReasonDto, ListLicensesQueryDto, RenewLicenseDto, RevealLicenseDto } from './licenses.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { LicensesService } from './licenses.service';
 import { RevealRateLimitGuard } from './reveal.guard';
@@ -52,6 +52,17 @@ export class LicensingController {
   @UseGuards(AdminStubGuard)
   issue(@Body() dto: IssueLicenseDto, @Req() req: any) {
     return this.licenses.issueLicense(dto, actorOf(req));
+  }
+
+  /**
+   * Lote demo/promo sem conta (trial horas/dias ou lifetime parceria).
+   * Admin-only. Retorna plaintext 1x por chave (exibir uma vez, depois só máscara).
+   * Ativação pelo programa é só por chave: POST /v1/licenses/activate-by-key.
+   */
+  @Post('trial-issue')
+  @UseGuards(AdminStubGuard)
+  trialIssue(@Body() dto: IssueTrialDto, @Req() req: any) {
+    return this.licenses.issueTrial(dto, actorOf(req));
   }
 
   @Post(':id/renew')

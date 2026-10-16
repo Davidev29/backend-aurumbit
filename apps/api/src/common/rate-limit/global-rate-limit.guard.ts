@@ -6,6 +6,8 @@ import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable, L
 // `licensing/reveal.guard.ts`; qualquer divergência deve ser alinhada lá):
 // - login 5/min por IP+email | recovery 3/h por IP+email
 // - webhook 100/min por IP | reveal 10/h por ator.
+// - devicePoll 120/min por IP (polling do app instalado: validate + offline-token,
+//   públicos no modo chave — sem JWT de usuário; a credencial é o device_hash).
 // Este guard NÃO substitui os guards por rota (eles seguem existindo —
 // dupla checagem com o mesmo limite não muda o comportamento observável:
 // ambos 429 no mesmo teto). Ele fecha os gaps: webhooks sem guard dedicado
@@ -21,6 +23,7 @@ export const GLOBAL_RATE_LIMITS = {
   recovery: { windowMs: 3_600_000, limit: 3, policy: 'recovery;w=3600' },
   webhook: { windowMs: 60_000, limit: 100, policy: 'webhook;w=60' },
   licenseReveal: { windowMs: 3_600_000, limit: 10, policy: 'license-reveal;w=3600' },
+  devicePoll: { windowMs: 60_000, limit: 120, policy: 'device-poll;w=60' },
   mfa: { windowMs: 300_000, limit: 5, policy: 'mfa;w=300' },
 } as const;
 
@@ -94,6 +97,8 @@ export function matchRateLimitPreset(url: string): GlobalRateLimitKey | null {
   if (/\/v1\/billing\/webhooks\//.test(u) || /\/webhooks\//.test(u)) return 'webhook';
   if (/\/reveal([/$?]|$)/.test(u)) return 'licenseReveal';
   if (/\/v1\/licenses\/activate-by-key([/$?]|$)/.test(u)) return 'licenseReveal';
+  if (/\/v1\/licenses\/[^/]+\/validate([/$?]|$)/.test(u)) return 'devicePoll';
+  if (/\/v1\/licenses\/[^/]+\/offline-token([/$?]|$)/.test(u)) return 'devicePoll';
   return null;
 }
 
@@ -107,6 +112,7 @@ export function bucketKeyFor(preset: GlobalRateLimitKey, req: any): { key: strin
       return { key: `rl:${preset}:${ip}:${id}`, identified: ip !== 'unknown' || id.length > 0 };
     }
     case 'webhook':
+    case 'devicePoll':
       return { key: `rl:${preset}:${ip}`, identified: ip !== 'unknown' };
     case 'licenseReveal': {
       const actor = actorOf(req);

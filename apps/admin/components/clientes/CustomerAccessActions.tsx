@@ -10,16 +10,28 @@ import { AdjustMachinesDialog } from "@/components/licencas/dialogs/AdjustMachin
 import { BonusDialog } from "@/components/licencas/dialogs/BonusDialog";
 import { BlockCustomerDialog } from "./BlockCustomerDialog";
 import { CreateChargeDialog, type CreatedCharge } from "./CreateChargeDialog";
+import {
+  getCustomerData,
+  planAdjustTrails,
+  planBonusTrails,
+  planChargeTrails,
+  recordActionTrails,
+} from "./customer-data";
 
 type OpenDialog = "block" | "bonus" | "adjust" | "charge" | null;
 
 /**
- * Ajustes de acesso do cliente (DS §9: destrutivo em 2 passos, `title` em
+ * Ações de acesso do cliente (DS §9: destrutivo em 2 passos, `title` em
  * disabled, sucesso inline — sem toast-sistema).
- * - Bloquear/liberar acesso (local + auditId sintético; TODO backend).
- * - Bonificar dias (`bonus.grant` → BonusDialog, mensal/anual via `endsAt`).
- * - Liberar outra máquina (`license.adjust` → AdjustMachinesDialog, delta +1).
- * - Gerar cobrança (`billing.manage` → CreateChargeDialog).
+ * - Bloquear/liberar acesso (SUSPEND reversível + trilhas secundárias
+ *   entitlement/billing/finance sob o mesmo `correlationId`; TODO backend).
+ * - Bonificar dias/produto (`bonus.grant` → BonusDialog + trilha secundária
+ *   `finance.courtesy.hold` p/ não cobrar o período de cortesia).
+ * - Liberar outra máquina (`license.adjust` → AdjustMachinesDialog + trilha).
+ * - Gerar cobrança (`billing.manage` → CreateChargeDialog + trilhas
+ *   `billing.invoice.created` + `finance.receivable.forecast`).
+ * Trilhas em sessão aparecem em Acessos > Logs; backend real usa os mesmos
+ * `correlationId`s com `Idempotency-Key` por mutação.
  */
 export function CustomerAccessActions({
   customer,
@@ -143,7 +155,17 @@ export function CustomerAccessActions({
         <BonusDialog
           licenseId={activeLicense.id}
           onClose={() => setOpen(null)}
-          onDone={() => setNotice(`Bônus concedido em ${activeLicense.keyMasked}. Ver trilha em Auditoria.`)}
+          onDone={() => {
+            const corr = `corr-bonus-${activeLicense.id}-${Date.now()}`;
+            const trails = recordActionTrails(
+              customer.id,
+              corr,
+              planBonusTrails(getCustomerData(customer.id), activeLicense.id, corr),
+            );
+            setNotice(
+              `Bônus em ${activeLicense.keyMasked} registrado · correlation ${corr} · +${trails.length} trilhas (bônus + cortesia financeira p/ não cobrar). Ver Logs.`,
+            );
+          }}
         />
       )}
       {open === "adjust" && activeLicense && (
@@ -151,7 +173,18 @@ export function CustomerAccessActions({
           licenseId={activeLicense.id}
           machinesAllowed={activeLicense.machinesAllowed}
           onClose={() => setOpen(null)}
-          onDone={(limit) => setNotice(`Limite atualizado para ${limit} máquina(s) em ${activeLicense.keyMasked}.`)}
+          onDone={(limit) => {
+            const corr = `corr-adjust-${activeLicense.id}-${Date.now()}`;
+            const delta = limit - activeLicense.machinesAllowed;
+            const trails = recordActionTrails(
+              customer.id,
+              corr,
+              planAdjustTrails(getCustomerData(customer.id), activeLicense.id, delta, corr),
+            );
+            setNotice(
+              `Limite atualizado para ${limit} máquina(s) em ${activeLicense.keyMasked} · correlation ${corr} · +${trails.length} trilha(s).`,
+            );
+          }}
         />
       )}
       {open === "charge" && (
@@ -159,9 +192,16 @@ export function CustomerAccessActions({
           customerId={customer.id}
           customerName={customer.name}
           onClose={() => setOpen(null)}
-          onDone={(c: CreatedCharge) =>
-            setNotice(`Cobrança “${c.title}” registrada (rascunho ${c.id}, trilha ${c.auditId}).`)
-          }
+          onDone={(c: CreatedCharge) => {
+            const trails = recordActionTrails(
+              customer.id,
+              c.correlationId,
+              planChargeTrails(getCustomerData(customer.id), c.id, c.title, c.correlationId),
+            );
+            setNotice(
+              `Cobrança “${c.title}” registrada (rascunho ${c.id}, trilha ${c.auditId}) · +${trails.length} trilhas (fatura + previsto financeiro).`,
+            );
+          }}
         />
       )}
     </div>

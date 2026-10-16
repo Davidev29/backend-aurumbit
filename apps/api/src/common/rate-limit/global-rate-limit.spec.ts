@@ -23,6 +23,9 @@ describe('rate-limit global por prefixo (Fase 6)', () => {
     expect(matchRateLimitPreset('/v1/billing/webhooks/asaas')).toBe('webhook');
     expect(matchRateLimitPreset('/webhooks/resend')).toBe('webhook');
     expect(matchRateLimitPreset('/v1/licenses/abc/reveal')).toBe('licenseReveal');
+    expect(matchRateLimitPreset('/v1/licenses/abc/validate')).toBe('devicePoll');
+    expect(matchRateLimitPreset('/v1/licenses/abc/offline-token?device_hash=x')).toBe('devicePoll');
+    expect(matchRateLimitPreset('/v1/licenses/abc/devices/link')).toBeNull();
     expect(matchRateLimitPreset('/v1/licenses')).toBeNull();
     expect(matchRateLimitPreset('/health/ready')).toBeNull();
   });

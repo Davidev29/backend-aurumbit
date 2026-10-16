@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { DestructiveForm } from "@/components/ui/DestructiveForm";
 import { RequirePerm } from "@/lib/auth/permissions";
+import { useToast } from "@/lib/toast";
 import { archiveProduct } from "@/lib/products";
 
 /**
@@ -25,6 +26,7 @@ export function ArchiveDialog({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { notifyError } = useToast();
 
   async function handleSubmit(motivo: string) {
     setPending(true);
@@ -34,7 +36,7 @@ export function ArchiveDialog({
       onDone?.(typeof res?.auditId === "string" ? res.auditId : "");
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao arquivar produto.");
+      setError(notifyError(err, "Falha ao arquivar produto.").body);
     } finally {
       setPending(false);
     }
@@ -52,6 +54,7 @@ export function ArchiveDialog({
           submitVariant="destructive"
           pending={pending}
           error={error}
+          errorLive={false}
           onBack={onClose}
           onSubmit={handleSubmit}
         />

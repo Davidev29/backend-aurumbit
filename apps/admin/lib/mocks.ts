@@ -55,7 +55,7 @@ export const MOCK_ME_ADMIN: MeResponse = {
   mfaVerified: true,
   organizationId: "org-acme",
   // TODO(backend pronto): RBAC real — `product.manage` concedido só a admin/owner.
-  permissions: ["customer.read", "user.read", "license.read", "license.adjust", "bonus.grant", "finance.read", "finance.manage", "billing.read", "billing.manage", "product.manage"],
+  permissions: ["customer.read", "user.read", "license.read", "license.adjust", "bonus.grant", "finance.read", "finance.manage", "billing.read", "billing.manage", "product.manage", "support.manage"],
 };
 
 /** Usuário manager COM `billing.read` (cobrança é operacional, manager+) mas SEM `billing.manage` nem `finance.read` (default deny — PROJECT §3). */
@@ -66,7 +66,7 @@ export const MOCK_ME_MANAGER: MeResponse = {
   mfaRequired: false,
   mfaVerified: false,
   organizationId: "org-acme",
-  permissions: ["customer.read", "user.read", "license.read", "billing.read"],
+  permissions: ["customer.read", "user.read", "license.read", "billing.read", "support.manage"],
 };
 
 const CUSTOMERS: CustomerDetail[] = [
@@ -207,8 +207,8 @@ export const MOCK_USERS: AdminUser[] = [
 /** Acesso efetivo exibido na tabela stub (fonte real: backend Fase 2+). */
 export const MOCK_EFFECTIVE_ACCESS: Record<string, string[]> = {
   // TODO(backend pronto): RBAC real — manager/member NÃO recebem `product.manage`.
-  "u-admin-1": ["customer.read", "user.read", "license.read", "license.adjust", "bonus.grant", "finance.read", "finance.manage", "billing.read", "billing.manage", "product.manage"],
-  "u-manager-1": ["customer.read", "user.read", "license.read", "billing.read"],
+  "u-admin-1": ["customer.read", "user.read", "license.read", "license.adjust", "bonus.grant", "finance.read", "finance.manage", "billing.read", "billing.manage", "product.manage", "support.manage"],
+  "u-manager-1": ["customer.read", "user.read", "license.read", "billing.read", "support.manage"],
   "u-fin-1": ["finance.read", "billing.read"],
   "u-member-1": [],
 };
@@ -1396,6 +1396,10 @@ export function mockLicenseHistory(ref?: string): LicenseHistoryEntry[] {
       reason: null,
       endedAt: null,
       replacedBy: null,
+      kind: "annual",
+      expiresAt: "2027-03-10T12:00:00.000Z",
+      ownerType: "CUSTOMER",
+      ownerLabel: "Acme Ltda",
     },
     {
       licenseId: "lic-002",
@@ -1404,6 +1408,10 @@ export function mockLicenseHistory(ref?: string): LicenseHistoryEntry[] {
       reason: "Expirada sem renovação",
       endedAt: "2026-09-28T12:00:00.000Z",
       replacedBy: null,
+      kind: "trial",
+      expiresAt: "2026-09-28T12:00:00.000Z",
+      ownerType: "PROMO",
+      ownerLabel: "stand feira",
     },
   ];
   const extra = MOCK_LICENSE_HISTORY_EXTRA.filter(

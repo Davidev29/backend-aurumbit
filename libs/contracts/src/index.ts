@@ -82,3 +82,4 @@ export * from "./auth";
 export * from "./customers";
 export * from "./products";
 export * from "./access";
+export * from "./activation";

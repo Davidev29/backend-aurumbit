@@ -447,7 +447,12 @@ export interface ProductView {
   createdAt: string;
 }
 
-/** Entrada de histórico da licença (substituída preserva motivo + sucessora). */
+/**
+ * Entrada de histórico da licença (substituída preserva motivo + sucessora).
+ * Contexto (`kind`/`expiresAt`/`ownerType`/`ownerLabel`) é enriquecido pelo BFF
+ * (`GET /api/licenses/:id/history`) a partir da licença — ausente no stub
+ * antigo e em históricos legados (UI trata `null` como "—").
+ */
 export interface LicenseHistoryEntry {
   licenseId: string;
   keyMasked: string;
@@ -455,6 +460,13 @@ export interface LicenseHistoryEntry {
   reason: string | null;
   endedAt: string | null;
   replacedBy: string | null;
+  /** monthly | annual | lifetime | trial (Nest `LicenseKind`). */
+  kind?: string | null;
+  /** ISO ou null (lifetime / sem expiração). */
+  expiresAt?: string | null;
+  /** CUSTOMER | ORGANIZATION | PROMO. */
+  ownerType?: string | null;
+  ownerLabel?: string | null;
 }
 
 /** Emissão de licença de produto (BFF → Nest `POST /v1/licenses` issue). */

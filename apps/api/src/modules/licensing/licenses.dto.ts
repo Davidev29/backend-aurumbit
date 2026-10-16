@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -90,6 +91,71 @@ export class RenewLicenseDto {
   kind?: string;
 }
 
+// Demo/promo/trial: chave sem conta Aurumbit (ativação só por chave).
+// ownerType PROMO/GUEST com ownerId sentinela `promo:<batchId>` — sem
+// migration (colunas String existentes). kind trial = horas/dias;
+// infinite = lifetime (parceria). maxDevices default 1 p/ demo.
+export class IssueTrialDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  productId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  planId?: string;
+
+  // Quantidade de chaves do lote (1..100).
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  qty?: number;
+
+  // Máquinas por chave demo (default 1).
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  maxDevices?: number;
+
+  // Duração em horas (1h..8760h). Obrigatório salvo infinite=true.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(8760)
+  expiresInHours?: number;
+
+  // Parceria infinita: emite lifetime (expiresAt/graceUntil null).
+  @IsOptional()
+  infinite?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  ownerLabel?: string;
+
+  // Rótulo do lote p/ suporte (ex. "stand feira", "parceiro X").
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  note?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startsAt?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LicenseFeatureSnapshot)
+  features?: LicenseFeatureSnapshot[];
+}
+
 export class LicenseReasonDto {
   // Motivo obrigatório (>=10 chars, padrão access Bonus/Adjustment).
   @IsString()
@@ -119,8 +185,9 @@ export class ListLicensesQueryDto {
   // Filtro de titular (sem dump bulk). ownerType/ownerId opcionais p/
   // agregar por produto no BFF (`GET /v1/licenses?productId=`); sem
   // nenhum filtro a listagem é recusada no service (400).
+  // PROMO/GUEST = lotes demo sem conta (trial-issue).
   @IsOptional()
-  @IsIn(['CUSTOMER', 'ORGANIZATION'])
+  @IsIn(['CUSTOMER', 'ORGANIZATION', 'PROMO', 'GUEST'])
   ownerType?: string;
 
   @IsOptional()

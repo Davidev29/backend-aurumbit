@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, Input, Textarea } from "@/components/ui/Field";
 import { RequirePerm } from "@/lib/auth/permissions";
+import { useToast } from "@/lib/toast";
 import { formatBRL } from "@/lib/format";
 import { changePlanPrice } from "@/lib/products";
 import type { BillingInterval, PlanPriceChangeRequest, PlanView } from "@/lib/types";
@@ -76,6 +77,7 @@ export function ChangePriceDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ChangePlanPriceResult | null>(null);
+  const { notifyError } = useToast();
 
   const cents = parseBRLCents(priceRaw);
   const priceInvalid = touched && priceRaw.trim() !== "" && cents === null;
@@ -101,7 +103,7 @@ export function ChangePriceDialog({
       setResult(res);
       onDone?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao aplicar novo preço.");
+      setError(notifyError(err, "Falha ao aplicar novo preço.").body);
     } finally {
       setPending(false);
     }
@@ -198,7 +200,7 @@ export function ChangePriceDialog({
               />
             </Field>
             {error && (
-              <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]" role="alert">
+              <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]">
                 <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
                 {error}
               </p>

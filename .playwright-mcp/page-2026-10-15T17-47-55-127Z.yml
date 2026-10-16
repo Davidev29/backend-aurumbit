@@ -1,0 +1,660 @@
+- generic [active] [ref=e1]:
+  - link "Pular para o conteúdo principal" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - navigation "Navegação principal" [ref=e5]:
+        - link "AurumBit - Início" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - img "AurumBit" [ref=e7]
+        - generic [ref=e8]:
+          - navigation "Seções da página" [ref=e9]:
+            - link "Produtos" [ref=e10] [cursor=pointer]:
+              - /url: "#produtos"
+            - link "Soluções" [ref=e11] [cursor=pointer]:
+              - /url: "#solucoes"
+            - link "Como funciona" [ref=e12] [cursor=pointer]:
+              - /url: "#como-funciona"
+            - link "Serviços" [ref=e13] [cursor=pointer]:
+              - /url: "#servicos"
+            - link "IA Especialista" [ref=e14] [cursor=pointer]:
+              - /url: "#ia-especialistas"
+            - link "Custo-benefício" [ref=e15] [cursor=pointer]:
+              - /url: "#custo-beneficio"
+            - link "Dúvidas" [ref=e16] [cursor=pointer]:
+              - /url: "#faq"
+          - generic [ref=e17]:
+            - button "Alternar para modo claro" [ref=e18] [cursor=pointer]
+            - button [ref=e26] [cursor=pointer]
+    - main [ref=e31]:
+      - region "Apresentação AurumBit" [ref=e33]:
+        - generic [ref=e35]:
+          - paragraph [aria-hidden] [ref=e37]: passe o cursor pela logo
+          - generic [ref=e39]:
+            - paragraph [ref=e40]: Software sob medida + IA aplicada ao seu negócio
+            - generic [ref=e41]: Inovação
+            - heading "Sistemas que colocam sua empresa no padrão." [level=1] [ref=e46]
+            - paragraph [aria-hidden] [ref=e48]: Sistemas que colocam sua empresa no padrão.
+            - paragraph [ref=e49]: Desenvolvemos sistemas, painéis, integrações e automações com a tecnologia certa para cada caso — e treinamos agentes de IA especialistas no seu setor, conectados direto à base da sua empresa.
+            - generic [ref=e50]:
+              - link "Ver sistemas e serviços" [ref=e51] [cursor=pointer]:
+                - /url: "#produtos"
+              - link "Criar meu agente IA" [ref=e54] [cursor=pointer]:
+                - /url: "#ia-especialistas"
+      - region "Resumo" [ref=e57]:
+        - generic [aria-hidden]:
+          - generic:
+            - generic:
+              - generic [aria-hidden]: MA
+              - generic:
+                - generic: “Fechei o caixa em 10 minutos hoje.”
+                - generic: Mariana · loja
+          - generic:
+            - generic:
+              - generic [aria-hidden]: CA
+              - generic:
+                - generic: “Relatório pronto sem montar planilha.”
+                - generic: Carlos · distribuidora
+          - generic:
+            - generic:
+              - generic [aria-hidden]: PA
+              - generic:
+                - generic: “O sistema rodou mesmo sem internet.”
+                - generic: Paula · clínica
+          - generic:
+            - generic:
+              - generic [aria-hidden]: JO
+              - generic:
+                - generic: “Preço fechado, sem surpresa na conta.”
+                - generic: João · oficina
+          - generic:
+            - generic:
+              - generic [aria-hidden]: RA
+              - generic:
+                - generic: “A IA entendeu os termos do meu setor.”
+                - generic: Rafael · advocacia
+          - generic:
+            - generic:
+              - generic [aria-hidden]: CA
+              - generic:
+                - generic: “O painel mostra o dia em um olhar.”
+                - generic: Camila · pet shop
+          - generic:
+            - generic:
+              - generic [aria-hidden]: DI
+              - generic:
+                - generic: “Venda e estoque sem digitar duas vezes.”
+                - generic: Diego · autopeças
+          - generic:
+            - generic:
+              - generic [aria-hidden]: AL
+              - generic:
+                - generic: “Suporte respondeu em português, rápido.”
+                - generic: Aline · salão
+          - generic:
+            - generic:
+              - generic [aria-hidden]: MA
+              - generic:
+                - generic: “Troquei de PC sem perder a chave.”
+                - generic: Marcos · contabilidade
+          - generic:
+            - generic:
+              - generic [aria-hidden]: BE
+              - generic:
+                - generic: “O agente puxou meus dados na hora.”
+                - generic: Beatriz · escola
+          - generic:
+            - generic:
+              - generic [aria-hidden]: LA
+              - generic:
+                - generic: “Eu controlo quem vê cada tela.”
+                - generic: Larissa · farmácia
+          - generic:
+            - generic:
+              - generic [aria-hidden]: FE
+              - generic:
+                - generic: “Automatizei o pedido que fazia à mão.”
+                - generic: Fernanda · padaria
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - term [ref=e61]: O que fazemos
+            - definition [ref=e62]: Sistemas web sob medida, painéis, integrações e automações.
+          - generic [ref=e63]:
+            - term [ref=e64]: Custo-benefício
+            - definition [ref=e65]: Preço fechado antes de começar, sem taxa escondida — você paga pelo que usa.
+          - generic [ref=e66]:
+            - term [ref=e67]: IA especialista
+            - definition [ref=e68]: Agentes treinados no vocabulário do seu setor.
+          - generic [ref=e69]:
+            - term [ref=e70]: Integração
+            - definition [ref=e71]: Conectamos a base da sua empresa à IA — detalhes nas seções de IA especialista e serviços abaixo.
+      - region [ref=e72]:
+        - generic [ref=e73]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: Programas prontos
+            - heading "Programas para cada tamanho de empresa" [level=2] [ref=e78]
+            - paragraph [ref=e79]: Sistemas prontos para cada tamanho de empresa — e sob medida com agentes IA quando a operação pede mais.
+          - generic [ref=e82]:
+            - group "Filtrar por categoria" [ref=e83]:
+              - button "Todos 3" [pressed] [ref=e84] [cursor=pointer]:
+                - text: Todos
+                - generic [ref=e85]: "3"
+              - button "Enterprise 1" [ref=e86] [cursor=pointer]:
+                - text: Enterprise
+                - generic [ref=e87]: "1"
+              - button "Essencial 1" [ref=e88] [cursor=pointer]:
+                - text: Essencial
+                - generic [ref=e89]: "1"
+              - button "Profissional 1" [ref=e90] [cursor=pointer]:
+                - text: Profissional
+                - generic [ref=e91]: "1"
+            - list "Produtos" [ref=e92]:
+              - listitem [ref=e93]:
+                - button "Aurum Pro — ver planos" [ref=e94] [cursor=pointer]:
+                  - generic [ref=e95]:
+                    - generic [ref=e96]: Profissional
+                    - generic [aria-hidden] [ref=e97]: ·
+                    - generic [ref=e98]: 3 computadores
+                    - generic [aria-hidden] [ref=e99]: ·
+                    - generic [ref=e100]: 100% offline
+                  - heading "Aurum Pro" [level=3] [ref=e101]
+                  - paragraph [ref=e102]: O completo para até 3 computadores, com atendimento mais rápido
+                  - generic [ref=e103]:
+                    - paragraph [ref=e104]: A partir de
+                    - paragraph [ref=e105]: R$ 149,90/mês
+                    - paragraph [ref=e106]: ou R$ 1.199,00/ano — economize 33%
+                  - list [ref=e107]:
+                    - listitem [ref=e108]:
+                      - generic [ref=e111]: Funciona offline, sem depender da internet
+                    - listitem [ref=e112]:
+                      - generic [ref=e115]: 3 computadores por chave
+                    - listitem [ref=e116]:
+                      - generic [ref=e119]: Chave liberada após a confirmação do pagamento
+                  - button [ref=e121]
+              - listitem [ref=e125]:
+                - button "Aurum Base — ver planos" [ref=e126] [cursor=pointer]:
+                  - generic [ref=e127]:
+                    - generic [ref=e128]: Essencial
+                    - generic [aria-hidden] [ref=e129]: ·
+                    - generic [ref=e130]: 1 computador
+                    - generic [aria-hidden] [ref=e131]: ·
+                    - generic [ref=e132]: 100% offline
+                  - heading "Aurum Base" [level=3] [ref=e133]
+                  - paragraph [ref=e134]: O essencial para quem tem 1 computador
+                  - generic [ref=e135]:
+                    - paragraph [ref=e136]: A partir de
+                    - paragraph [ref=e137]: R$ 1.199,00/ano
+                  - list [ref=e138]:
+                    - listitem [ref=e139]:
+                      - generic [ref=e142]: Funciona offline, sem depender da internet
+                    - listitem [ref=e143]:
+                      - generic [ref=e146]: 1 computador por chave
+                    - listitem [ref=e147]:
+                      - generic [ref=e150]: Chave liberada após a confirmação do pagamento
+                  - button [ref=e152]
+              - listitem [ref=e156]:
+                - button "Aurum Enterprise — ver planos" [ref=e157] [cursor=pointer]:
+                  - generic [ref=e158]:
+                    - generic [ref=e159]: Enterprise
+                    - generic [aria-hidden] [ref=e160]: ·
+                    - generic [ref=e161]: 50+ computadores
+                    - generic [aria-hidden] [ref=e162]: ·
+                    - generic [ref=e163]: 100% offline
+                  - heading "Aurum Enterprise" [level=3] [ref=e164]
+                  - paragraph [ref=e165]: Para operações grandes, com controle e gerente dedicado
+                  - generic [ref=e166]:
+                    - paragraph [ref=e167]: A partir de
+                    - paragraph [ref=e168]: R$ 4.999,00/ano
+                  - list [ref=e169]:
+                    - listitem [ref=e170]:
+                      - generic [ref=e173]: Funciona offline, sem depender da internet
+                    - listitem [ref=e174]:
+                      - generic [ref=e177]: 50 computadores ou mais por chave
+                    - listitem [ref=e178]:
+                      - generic [ref=e181]: Instalado dentro da sua empresa
+                  - button [ref=e183]
+            - paragraph [ref=e187]: Exibindo 3 de 3 produtos
+          - generic [ref=e188]:
+            - article [ref=e191]:
+              - generic [ref=e192]:
+                - paragraph [ref=e193]: Essencial
+                - heading "Aurum Base" [level=3] [ref=e194]
+                - paragraph [ref=e195]: O essencial para quem tem 1 computador
+                - generic [ref=e196]:
+                  - generic [ref=e197]: 1 computador
+                  - generic [ref=e201]: 100% offline
+                  - generic [ref=e209]: Ajuda em português
+              - generic [ref=e217]:
+                - list [ref=e218]:
+                  - listitem [ref=e219]: Funciona offline, sem depender da internet
+                  - listitem [ref=e222]: 1 computador por chave
+                  - listitem [ref=e225]: Chave liberada após a confirmação do pagamento
+                  - listitem [ref=e228]: Compra única, sua para sempre
+                - generic [ref=e231]:
+                  - paragraph [ref=e232]: A partir de R$ 1.199,00 por ano · licença individual
+                  - button "Ver detalhes do Base" [ref=e234] [cursor=pointer]
+            - article [ref=e237]:
+              - generic [ref=e238]:
+                - paragraph [ref=e239]: Profissional
+                - heading "Aurum Pro" [level=3] [ref=e240]
+                - paragraph [ref=e241]: O completo para até 3 computadores, com atendimento mais rápido
+                - generic [ref=e242]:
+                  - generic [ref=e243]: 3 computadores
+                  - generic [ref=e247]: 100% offline
+                  - generic [ref=e255]: Suporte prioritário
+              - generic [ref=e263]:
+                - list [ref=e264]:
+                  - listitem [ref=e265]: Funciona offline, sem depender da internet
+                  - listitem [ref=e268]: 3 computadores por chave
+                  - listitem [ref=e271]: Chave liberada após a confirmação do pagamento
+                  - listitem [ref=e274]: Atendimento prioritário em português
+                - generic [ref=e277]:
+                  - paragraph [ref=e278]: A partir de R$ 149,90 por mês · licença individual
+                  - button "Ver detalhes do Pro" [ref=e280] [cursor=pointer]
+            - article [ref=e283]:
+              - generic [ref=e284]:
+                - paragraph [ref=e285]: Enterprise
+                - heading "Aurum Enterprise" [level=3] [ref=e286]
+                - paragraph [ref=e287]: Para operações grandes, com controle e gerente dedicado
+                - generic [ref=e288]:
+                  - generic [ref=e289]: 50+ computadores
+                  - generic [ref=e293]: 100% offline
+                  - generic [ref=e301]: Gerente dedicado
+              - generic [ref=e309]:
+                - list [ref=e310]:
+                  - listitem [ref=e311]: Funciona offline, sem depender da internet
+                  - listitem [ref=e314]: 50 computadores ou mais por chave
+                  - listitem [ref=e317]: Instalado dentro da sua empresa
+                  - listitem [ref=e320]: Entrada única para a equipe
+                - generic [ref=e323]:
+                  - paragraph [ref=e324]: Proposta sob medida
+                  - link "Falar com a AurumBit" [ref=e326] [cursor=pointer]:
+                    - /url: mailto:contato@aurumbit.com?subject=Quero%20conhecer%20o%20Aurum%20Enterprise
+            - paragraph [ref=e327]: Total e condições sempre escritos antes de confirmar. Chave liberada após a confirmação do pagamento.
+      - region [ref=e328]:
+        - generic [ref=e329]:
+          - generic [ref=e332]:
+            - heading "O que trava a sua empresa hoje — e como a AurumBit resolve" [level=2] [ref=e333]
+            - paragraph [ref=e334]: Sem trocar tudo de lugar, sem parar o atendimento, sem precisar de técnico.
+          - generic [ref=e336]:
+            - article [ref=e337]:
+              - paragraph [ref=e347]: A dor
+              - heading "“A internet caiu e o trabalho parou”" [level=3] [ref=e348]
+              - paragraph [ref=e349]: O programa funciona offline por natureza — a internet só valida a licença. Quando ela volta, atualiza tudo sozinho.
+              - generic [ref=e350]: Como a AurumBit resolve
+            - article [ref=e354]:
+              - paragraph [ref=e360]: A dor
+              - heading "“Cada computador paga separado e a conta confunde”" [level=3] [ref=e361]
+              - paragraph [ref=e362]: "Cada chave já inclui os computadores do plano: 1 no Base, 3 no Pro e 50 ou mais no Enterprise."
+              - generic [ref=e363]: Como a AurumBit resolve
+            - article [ref=e367]:
+              - paragraph [ref=e376]: A dor
+              - heading "“Instalar programa novo é complicado”" [level=3] [ref=e377]
+              - paragraph [ref=e378]: Você paga, recebe a chave após a confirmação do pagamento e instala com um passo a passo simples, sem precisar de técnico.
+              - generic [ref=e379]: Como a AurumBit resolve
+            - article [ref=e383]:
+              - paragraph [ref=e389]: A dor
+              - heading "“Ninguém responde quando você precisa”" [level=3] [ref=e390]
+              - paragraph [ref=e391]: Atendimento em português, com prioridade para quem é Pro e gerente dedicado para quem é Enterprise.
+              - generic [ref=e392]: Como a AurumBit resolve
+            - article [ref=e396]:
+              - paragraph [ref=e402]: A dor
+              - heading "“Medo de usar dado de cliente errado”" [level=3] [ref=e403]
+              - paragraph [ref=e404]: Acesso só para quem você autorizar, com cuidado alinhado à lei de proteção de dados (LGPD).
+              - generic [ref=e405]: Como a AurumBit resolve
+          - generic [ref=e411]:
+            - button "Ver programas e preços" [ref=e412] [cursor=pointer]
+            - button "Tirar dúvidas" [ref=e413] [cursor=pointer]
+      - region [ref=e414]:
+        - generic [ref=e415]:
+          - generic [ref=e418]:
+            - heading "Do pagamento ao trabalho em 3 passos" [level=2] [ref=e419]
+            - paragraph [ref=e420]: Sem proposta demorada, sem instalador complicado.
+          - list [ref=e423]:
+            - listitem [ref=e424]:
+              - generic [aria-hidden] [ref=e425]: "01"
+              - generic [ref=e426]:
+                - heading "Você escolhe o plano e paga" [level=3] [ref=e431]
+                - paragraph [ref=e432]: Pix, boleto ou cartão, com o total e as condições escritos antes de confirmar. Sem taxa escondida.
+                - list [ref=e433]:
+                  - listitem [ref=e434]: Pix, boleto ou cartão
+                  - listitem [ref=e437]: Total escrito antes de confirmar
+                  - listitem [ref=e440]: Pagamento seguro
+            - listitem [ref=e443]:
+              - generic [aria-hidden] [ref=e444]: "02"
+              - generic [ref=e445]:
+                - heading "Você recebe a chave" [level=3] [ref=e451]
+                - paragraph [ref=e452]: Liberada logo após a confirmação do pagamento, junto com o passo a passo de instalação.
+                - list [ref=e453]:
+                  - listitem [ref=e454]: Chave após a confirmação do pagamento
+                  - listitem [ref=e457]: Passo a passo junto
+                  - listitem [ref=e460]: Ajuda em português se travar
+            - listitem [ref=e463]:
+              - generic [aria-hidden] [ref=e464]: "03"
+              - generic [ref=e465]:
+                - heading "Você instala e usa" [level=3] [ref=e470]
+                - paragraph [ref=e471]: Nos computadores liberados pelo plano, sempre disponível — mesmo sem internet. Se travar em algo, tem gente de verdade para ajudar em português.
+                - list [ref=e472]:
+                  - listitem [ref=e473]: Funciona offline, sempre disponível
+                  - listitem [ref=e476]: Nos computadores do seu plano
+                  - listitem [ref=e479]: Ajuda em português
+          - generic [ref=e484]:
+            - paragraph [ref=e485]: Pague. Receba a chave. Instale.
+            - generic [ref=e486]:
+              - button [ref=e487] [cursor=pointer]
+              - button "Tirar dúvidas" [ref=e491] [cursor=pointer]
+      - region [ref=e492]:
+        - generic [ref=e493]:
+          - generic [ref=e496]:
+            - heading "Desenvolvimento sob medida para o seu CNPJ" [level=2] [ref=e497]
+            - paragraph [ref=e498]: Quando o programa pronto não basta, adaptamos ou criamos para a sua operação. Proposta com preço fechado e prazo antes de começar — você acompanha cada etapa.
+          - list "Exemplos de escopo sob medida" [ref=e499]:
+            - listitem [ref=e503]: Integrações
+            - listitem [ref=e504]: Relatórios
+            - listitem [ref=e505]: Multiusuário
+            - listitem [ref=e506]: Instalação local
+            - listitem [ref=e507]: Regras do seu segmento
+          - paragraph [ref=e508]: Orçamento depende do escopo — você aprova antes de começar.
+          - list [ref=e510]:
+            - listitem [ref=e511]:
+              - generic [ref=e516]:
+                - paragraph [ref=e517]: Passo 1 de 5
+                - heading "Conversa para entender a operação do seu CNPJ" [level=3] [ref=e518]
+                - paragraph [ref=e519]: A gente escuta como a sua empresa trabalha hoje e aponta o melhor caminho — adaptar um programa pronto ou criar um novo, sem compromisso.
+            - listitem [ref=e520]:
+              - generic [ref=e526]:
+                - paragraph [ref=e527]: Passo 2 de 5
+                - heading "Proposta com preço fechado e prazo" [level=3] [ref=e528]
+                - paragraph [ref=e529]: "Você aprova antes de começar: sabe quanto vai pagar e quando fica pronto. Sem taxa escondida, sem surpresa."
+            - listitem [ref=e530]:
+              - generic [ref=e534]:
+                - paragraph [ref=e535]: Passo 3 de 5
+                - heading "Desenvolvimento e instalação acompanhados" [level=3] [ref=e536]
+                - paragraph [ref=e537]: Nossa equipe desenvolve, instala nos seus computadores e ajusta tudo com você, até funcionar do seu jeito — offline por natureza.
+            - listitem [ref=e538]:
+              - generic [ref=e543]:
+                - paragraph [ref=e544]: Passo 4 de 5
+                - heading "Treino simples para a sua equipe" [level=3] [ref=e545]
+                - paragraph [ref=e546]: Sua equipe aprende a usar no dia a dia, sem depender de técnico.
+            - listitem [ref=e547]:
+              - generic [ref=e556]:
+                - paragraph [ref=e557]: Passo 5 de 5
+                - heading "Ajuda em português depois da entrega" [level=3] [ref=e558]
+                - paragraph [ref=e559]: Depois de pronto, você continua contando com gente de verdade para ajudar.
+          - generic [ref=e562]:
+            - link "Pedir proposta sob medida" [ref=e563] [cursor=pointer]:
+              - /url: mailto:contato@aurumbit.com?subject=Projeto%20sob%20medida%20para%20meu%20CNPJ
+            - button "Ver programas prontos" [ref=e564] [cursor=pointer]
+      - region [ref=e565]:
+        - generic [ref=e566]:
+          - generic [ref=e569]:
+            - generic [ref=e570]: IA especialista no seu setor
+            - heading "Treinamos modelos e criamos agentes que trabalham com a sua base" [level=2] [ref=e571]
+            - paragraph [ref=e572]: "Não é um chatbot genérico: conectamos os dados da sua empresa, treinamos no vocabulário do seu segmento e colocamos um especialista digital dentro de cada etapa da operação."
+          - list "Como o agente nasce" [ref=e573]:
+            - listitem [ref=e575]:
+              - paragraph [ref=e582]: 01 — Conectar
+              - heading "Sua base" [level=3] [ref=e583]
+              - paragraph [ref=e584]: Planilhas, arquivos e sistemas que você já usa.
+            - listitem [ref=e585]:
+              - paragraph [ref=e600]: 02 — Treinar
+              - heading "Modelo no seu setor" [level=3] [ref=e601]
+              - paragraph [ref=e602]: Vocabulário, regras e exemplos reais da sua operação.
+            - listitem [ref=e603]:
+              - paragraph [ref=e609]: 03 — Operar
+              - heading "Agente especialista" [level=3] [ref=e610]
+              - paragraph [ref=e611]: Responde, executa e aprende dentro do seu processo.
+          - generic [ref=e612]:
+            - article [ref=e613]:
+              - generic [ref=e614]: "01"
+              - paragraph [ref=e621]: integração · dados conectados
+              - heading "Integramos a base que você já tem" [level=3] [ref=e622]
+              - paragraph [ref=e623]: Nada de recomeçar do zero. Conectamos o agente direto aos dados que movem sua empresa — com permissão, trilha e sincronização contínua.
+              - list [ref=e624]:
+                - listitem [ref=e625]:
+                  - generic [ref=e628]: Planilhas, arquivos e sistemas que você já usa
+                - listitem [ref=e629]:
+                  - generic [ref=e632]: Mapeamento de dados e permissões
+                - listitem [ref=e633]:
+                  - generic [ref=e636]: Sincronização contínua da base
+                - listitem [ref=e637]:
+                  - generic [ref=e640]: Trilha de acesso alinhada à LGPD
+            - article [ref=e641]:
+              - generic [ref=e642]: "02"
+              - paragraph [ref=e657]: treino · vocabulário do setor
+              - heading "Treinamos no vocabulário do seu setor" [level=3] [ref=e658]
+              - paragraph [ref=e659]: O modelo aprende os termos, procedimentos e exceções do seu segmento — do balcão ao backoffice — com exemplos reais da sua operação.
+              - list [ref=e660]:
+                - listitem [ref=e661]:
+                  - generic [ref=e664]: Glossário e regras do seu segmento
+                - listitem [ref=e665]:
+                  - generic [ref=e668]: Exemplos reais do seu atendimento
+                - listitem [ref=e669]:
+                  - generic [ref=e672]: Avaliação de respostas por caso
+                - listitem [ref=e673]:
+                  - generic [ref=e676]: Re-treino a cada ciclo de uso
+            - article [ref=e677]:
+              - generic [ref=e678]: "03"
+              - paragraph [ref=e684]: atendimento · vendas · operação
+              - heading "Agentes especialistas por função" [level=3] [ref=e685]
+              - paragraph [ref=e686]: "Um agente para cada frente: quem atende, quem vende, quem opera e quem analisa. Cada um com missão, limites e ferramentas próprias."
+              - list [ref=e687]:
+                - listitem [ref=e688]:
+                  - generic [ref=e691]: Atendimento com contexto do cliente
+                - listitem [ref=e692]:
+                  - generic [ref=e695]: Vendas com catálogo e propostas
+                - listitem [ref=e696]:
+                  - generic [ref=e699]: Operação com checklists e prazos
+                - listitem [ref=e700]:
+                  - generic [ref=e703]: Análise com painéis e alertas
+              - list "Exemplos de agentes" [ref=e704]:
+                - listitem [ref=e705]: Atendimento
+                - listitem [ref=e709]: Operação
+                - listitem [ref=e716]: Análise
+                - listitem [ref=e720]: Vendas
+            - article [ref=e724]:
+              - generic [ref=e725]: "04"
+              - paragraph [ref=e731]: controle · aprovação humana
+              - heading "Você aprova o que é sensível" [level=3] [ref=e732]
+              - paragraph [ref=e733]: IA sem controle não entra em produção. Definimos o que o agente pode fazer sozinho, o que pede aprovação e como cada resposta é auditada.
+              - list [ref=e734]:
+                - listitem [ref=e735]:
+                  - generic [ref=e738]: Permissões por papel e ferramenta
+                - listitem [ref=e739]:
+                  - generic [ref=e742]: Logs de cada decisão do agente
+                - listitem [ref=e743]:
+                  - generic [ref=e746]: Humano aprova o sensível
+                - listitem [ref=e747]:
+                  - generic [ref=e750]: Métricas e melhoria contínua
+          - generic [ref=e753]:
+            - paragraph [ref=e754]: Você mostra a base → treinamos no seu setor → entra em uso com você
+            - paragraph [ref=e755]: Conte como sua empresa opera hoje — mapeamos a base, desenhamos o agente e colocamos a primeira versão no ar com você.
+            - generic [ref=e756]:
+              - link "Falar sobre meu agente IA" [ref=e757] [cursor=pointer]:
+                - /url: mailto:contato@aurumbit.com?subject=Agente%20IA%20especialista%20para%20minha%20empresa
+              - button "Ver serviços sob medida" [ref=e760] [cursor=pointer]
+      - region [ref=e761]:
+        - generic [ref=e762]:
+          - generic [ref=e765]:
+            - heading "Bom para o bolso e claro no combinado" [level=2] [ref=e766]
+            - paragraph [ref=e767]: Você sabe quanto vai pagar, o que está incluído e como pedir ajuda — antes de confirmar qualquer coisa.
+          - generic [ref=e768]:
+            - article [ref=e769]:
+              - heading "Preço fechado antes de começar" [level=3] [ref=e776]
+              - paragraph [ref=e777]: Você aprova a proposta com valor e prazo por escrito antes de qualquer compromisso. O que foi combinado é o que vale.
+            - article [ref=e778]:
+              - heading "Pague pelo que usa" [level=3] [ref=e787]
+              - paragraph [ref=e788]: "Planos por tamanho da sua operação: comece pelo que precisa hoje e ajuste conforme a empresa cresce."
+            - article [ref=e789]:
+              - heading "O que já vem incluído" [level=3] [ref=e797]
+              - paragraph [ref=e798]: Instalação acompanhada, treino simples para a sua equipe e ajuda em português no dia a dia.
+            - article [ref=e799]:
+              - heading "Sem fidelidade abusiva" [level=3] [ref=e805]
+              - paragraph [ref=e806]: As condições de permanência e cancelamento ficam escritas na proposta. Você decide com tudo às claras.
+          - generic [ref=e814]:
+            - heading "Sem surpresa na fatura" [level=3] [ref=e815]
+            - paragraph [ref=e816]: O total, as condições de pagamento e o que está incluído aparecem escritos antes de você confirmar. Se algo mudar no meio do caminho, você fica sabendo antes — e decide antes.
+          - generic [ref=e819]:
+            - link "Pedir proposta" [ref=e820] [cursor=pointer]:
+              - /url: mailto:contato@aurumbit.com?subject=Proposta%20para%20minha%20empresa
+            - button "Ver programas e planos" [ref=e823] [cursor=pointer]
+      - region [ref=e824]:
+        - generic [ref=e825]:
+          - generic [ref=e828]:
+            - generic [ref=e829]: Confiança
+            - heading "Se algo der errado, você não fica sozinho" [level=2] [ref=e830]
+            - paragraph [ref=e831]: Compromissos claros para os momentos em que você mais precisa de apoio — do primeiro uso ao dia a dia.
+          - list [ref=e833]:
+            - listitem [ref=e834]:
+              - generic [ref=e843]:
+                - paragraph [ref=e844]: Compromisso 1 de 4
+                - heading "Ajuda em português quando algo der errado" [level=3] [ref=e847]
+                - paragraph [ref=e848]: "Se travar no dia a dia, você fala com gente de verdade no nosso atendimento em português: contato@aurumbit.com."
+            - listitem [ref=e849]:
+              - generic [ref=e853]:
+                - paragraph [ref=e854]: Compromisso 2 de 4
+                - heading "Correção do que foi entregue com defeito" [level=3] [ref=e857]
+                - paragraph [ref=e858]: Se algo que entregamos não funcionar como o combinado, tratamos a correção com prioridade e mantemos você informado.
+            - listitem [ref=e859]:
+              - generic [ref=e865]:
+                - paragraph [ref=e866]: Compromisso 3 de 4
+                - heading "Acompanhamento depois da entrega" [level=3] [ref=e869]
+                - paragraph [ref=e870]: Após instalar ou colocar no ar, acompanhamos com você os primeiros usos e ajustamos o que for preciso dentro do combinado.
+            - listitem [ref=e871]:
+              - generic [ref=e876]:
+                - paragraph [ref=e877]: Compromisso 4 de 4
+                - heading "Seus dados tratados com cuidado" [level=3] [ref=e880]
+                - paragraph [ref=e881]: Acesso só para quem você autorizar, registros de uso e práticas alinhadas à lei de proteção de dados (LGPD). Explicamos como tratamos seus dados, se você pedir.
+          - generic [ref=e884]:
+            - paragraph [ref=e885]: Conte o que está acontecendo na sua operação — respondemos em português e buscamos o melhor caminho com você.
+            - link "Falar com atendimento" [ref=e887] [cursor=pointer]:
+              - /url: mailto:contato@aurumbit.com?subject=Preciso%20de%20ajuda%20com%20minha%20opera%C3%A7%C3%A3o
+      - region [ref=e890]:
+        - generic [ref=e891]:
+          - generic [ref=e894]:
+            - heading "Dúvidas comuns" [level=2] [ref=e895]
+            - paragraph [ref=e896]: Respostas diretas, sem jargão. Se faltar algo, fale com nosso atendimento.
+          - generic [ref=e897]:
+            - list [ref=e898]:
+              - listitem [ref=e899]:
+                - heading [level=3] [ref=e900]:
+                  - button "Funciona sem internet mesmo?" [expanded] [ref=e901] [cursor=pointer]
+                - region "Funciona sem internet mesmo?" [ref=e906]:
+                  - paragraph [ref=e907]: Sim. Os programas funcionam offline por natureza — a internet só é usada para validar a licença e trazer novidades. Se a conexão cair no meio do expediente, o trabalho continua.
+              - listitem [ref=e908]:
+                - heading [level=3] [ref=e909]:
+                  - button "Como instalo? Preciso de técnico?" [ref=e910] [cursor=pointer]
+              - listitem [ref=e915]:
+                - heading [level=3] [ref=e916]:
+                  - button "Em quantos computadores posso usar?" [ref=e917] [cursor=pointer]
+              - listitem [ref=e922]:
+                - heading [level=3] [ref=e923]:
+                  - button "Quais são as formas de pagamento?" [ref=e924] [cursor=pointer]
+              - listitem [ref=e929]:
+                - heading [level=3] [ref=e930]:
+                  - button "Posso cancelar quando quiser?" [ref=e931] [cursor=pointer]
+              - listitem [ref=e936]:
+                - heading [level=3] [ref=e937]:
+                  - button "Meus dados e os dos meus clientes estão protegidos?" [ref=e938] [cursor=pointer]
+              - listitem [ref=e943]:
+                - heading [level=3] [ref=e944]:
+                  - button "Roda no meu computador?" [ref=e945] [cursor=pointer]
+              - listitem [ref=e950]:
+                - heading [level=3] [ref=e951]:
+                  - button "Se eu trocar de computador, perco a chave?" [ref=e952] [cursor=pointer]
+            - generic [ref=e957]:
+              - generic [ref=e966]:
+                - paragraph [ref=e967]: Ainda com dúvida?
+                - paragraph [ref=e968]: Comece pelo plano ideal ou fale com gente de verdade, em português.
+              - generic [ref=e969]:
+                - button [ref=e970] [cursor=pointer]
+                - button "Falar com atendimento" [ref=e974] [cursor=pointer]
+      - region [ref=e975]:
+        - generic [ref=e980]:
+          - generic [ref=e983]:
+            - heading "Sua empresa funcionando sempre, começando hoje" [level=2] [ref=e984]
+            - paragraph [ref=e985]: Escolha o plano, pague do seu jeito e receba a chave com o passo a passo. E se precisar, tem gente de verdade para ajudar em português.
+          - list [ref=e986]:
+            - listitem [ref=e987]:
+              - generic [ref=e992]: Preço claro antes de pagar.
+            - listitem [ref=e993]:
+              - generic [ref=e998]: Chave liberada após a confirmação do pagamento.
+            - listitem [ref=e999]:
+              - generic [ref=e1008]: Ajuda em português quando precisar.
+          - generic [ref=e1009]:
+            - button [ref=e1010] [cursor=pointer]
+            - button "Falar com atendimento" [ref=e1014] [cursor=pointer]
+          - paragraph [ref=e1015]: "Pagamento seguro: Pix, boleto ou cartão • Ajuda em português"
+    - contentinfo [ref=e1016]:
+      - generic [ref=e1017]:
+        - generic [ref=e1018]:
+          - generic [ref=e1019]:
+            - link "AurumBit - Voltar ao início" [ref=e1020] [cursor=pointer]:
+              - /url: /
+              - img "AurumBit" [ref=e1021]
+            - paragraph [ref=e1022]: Programas prontos para a sua empresa, que continuam funcionando mesmo sem internet. Pagamento do jeito que você prefere e ajuda em português.
+            - generic [ref=e1023]:
+              - paragraph [ref=e1024]: "Pagamento seguro: Pix, boleto ou cartão."
+              - paragraph [ref=e1025]: Dados tratados com cuidado, seguindo a lei de proteção de dados (LGPD).
+            - generic [ref=e1026]:
+              - link "Site" [ref=e1027] [cursor=pointer]:
+                - /url: https://aurumbit.com
+              - link "Telegram" [ref=e1031] [cursor=pointer]:
+                - /url: https://t.me/aurumbit
+              - link "E-mail" [ref=e1035] [cursor=pointer]:
+                - /url: mailto:contato@aurumbit.com
+          - navigation "Links de produto" [ref=e1039]:
+            - heading "Produto" [level=3] [ref=e1040]
+            - list [ref=e1041]:
+              - listitem [ref=e1042]:
+                - link "Planos e preços" [ref=e1043] [cursor=pointer]:
+                  - /url: "#produtos"
+              - listitem [ref=e1044]:
+                - link "Como funciona" [ref=e1045] [cursor=pointer]:
+                  - /url: "#como-funciona"
+              - listitem [ref=e1046]:
+                - link "Serviços sob medida" [ref=e1047] [cursor=pointer]:
+                  - /url: "#servicos"
+          - navigation "Links de empresa" [ref=e1048]:
+            - heading "Empresa" [level=3] [ref=e1049]
+            - list [ref=e1050]:
+              - listitem [ref=e1051]:
+                - link "Para a sua empresa" [ref=e1052] [cursor=pointer]:
+                  - /url: "#solucoes"
+              - listitem [ref=e1053]:
+                - link "Dúvidas" [ref=e1054] [cursor=pointer]:
+                  - /url: "#faq"
+              - listitem [ref=e1055]:
+                - link "Falar com atendimento" [ref=e1056] [cursor=pointer]:
+                  - /url: mailto:contato@aurumbit.com
+          - navigation "Links de ajuda" [ref=e1057]:
+            - heading "Ajuda" [level=3] [ref=e1058]
+            - list [ref=e1059]:
+              - listitem [ref=e1060]:
+                - link "Ver programas e preços" [ref=e1061] [cursor=pointer]:
+                  - /url: "#produtos"
+              - listitem [ref=e1062]:
+                - link "Dúvidas" [ref=e1063] [cursor=pointer]:
+                  - /url: "#faq"
+              - listitem [ref=e1064]:
+                - link "Falar com atendimento" [ref=e1065] [cursor=pointer]:
+                  - /url: mailto:contato@aurumbit.com
+          - navigation "Links de legal" [ref=e1066]:
+            - heading "Legal" [level=3] [ref=e1067]
+            - list [ref=e1068]:
+              - listitem [ref=e1069]:
+                - link "Seus dados e a LGPD" [ref=e1070] [cursor=pointer]:
+                  - /url: "#faq"
+              - listitem [ref=e1071]:
+                - link "Preços e condições" [ref=e1072] [cursor=pointer]:
+                  - /url: "#produtos"
+              - listitem [ref=e1073]:
+                - link "Falar sobre privacidade" [ref=e1074] [cursor=pointer]:
+                  - /url: mailto:contato@aurumbit.com?subject=Privacidade%20e%20LGPD
+        - generic [ref=e1075]:
+          - paragraph [ref=e1076]: © 2026 AurumBit. Todos os direitos reservados.
+          - generic [ref=e1077]:
+            - generic [ref=e1078]: Feito no Brasil
+            - link "Voltar ao topo" [ref=e1079] [cursor=pointer]:
+              - /url: "#hero"
+              - text: Topo

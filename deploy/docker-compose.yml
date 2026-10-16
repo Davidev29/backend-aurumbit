@@ -235,6 +235,9 @@ services:
       PORT: 3000
       HOSTNAME: 0.0.0.0
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      # BFF -> Nest dentro da rede compose (sem isto o admin cai em stub
+      # em memória e produtos/chaves somem no restart).
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3000}
     ports:
       - "${ADMIN_PORT:-3001}:3000"
     depends_on:

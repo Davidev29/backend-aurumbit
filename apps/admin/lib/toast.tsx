@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { toUserError, type UserFacingError } from "./errors";
 
 export type ToastTone = "success" | "info" | "warn" | "error";
 
@@ -17,6 +18,13 @@ interface ToastContextValue {
   push: (t: Omit<ToastItem, "id">) => string;
   dismiss: (id: string) => void;
   notify: (tone: ToastTone, title: string, body?: string) => string;
+  /**
+   * Erro instrutivo via Toast (canal único de falhas de mutação).
+   * Traduz com `toUserError` (tom + cor por tipo) e devolve o `UserFacingError`
+   * p/ registro inline persistente no diálogo (sem `role=alert` duplicado —
+   * o anúncio acessível é o do toast).
+   */
+  notifyError: (err: unknown, fallback?: string) => UserFacingError;
 }
 
 const ToastContext = createContext<ToastContextValue>({
@@ -24,6 +32,7 @@ const ToastContext = createContext<ToastContextValue>({
   push: () => "",
   dismiss: () => {},
   notify: () => "",
+  notifyError: () => ({ tone: "error", title: "Algo deu errado", body: "" }),
 });
 
 let seq = 0;
@@ -65,7 +74,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [push],
   );
 
-  const value = useMemo(() => ({ toasts, push, dismiss, notify }), [toasts, push, dismiss, notify]);
+  const notifyError = useCallback(
+    (err: unknown, fallback?: string) => {
+      const u = toUserError(err, fallback);
+      push({ tone: u.tone, title: u.title, body: u.body });
+      return u;
+    },
+    [push],
+  );
+
+  const value = useMemo(
+    () => ({ toasts, push, dismiss, notify, notifyError }),
+    [toasts, push, dismiss, notify, notifyError],
+  );
 
   return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
 }

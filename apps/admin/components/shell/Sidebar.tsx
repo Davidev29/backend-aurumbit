@@ -17,6 +17,7 @@ import {
   Package,
   ReceiptText,
   ScrollText,
+  Ticket,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -70,6 +71,8 @@ const GROUPS: NavGroup[] = [
       { href: "/assinaturas", label: "Assinaturas", icon: Package, perm: "billing.read" },
       // Leitura aberta como o catálogo (sem `perm`); mutações exigem `product.manage`.
       { href: "/produtos", label: "Produtos", icon: Box },
+      // Chaves demo/promo sem conta (trial horas/dias ou lifetime); mutações exigem `product.manage`.
+      { href: "/promocionais", label: "Promocionais", icon: Ticket },
     ],
   },
   {

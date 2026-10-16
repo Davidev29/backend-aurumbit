@@ -5,21 +5,31 @@ import {
   Archive,
   Ban,
   Box,
+  Calendar,
+  Check,
   CircleCheck,
   CircleX,
+  Copy,
+  Cpu,
   Info,
   Pencil,
   Plus,
+  Ticket,
   TriangleAlert,
+  Users,
+  Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
-import { Table, Td, Th, EmptyState } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/table";
 import { TabPanel, Tabs } from "@/components/ui/Tabs";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { Field, Input } from "@/components/ui/Field";
 import { SkeletonTable } from "@/components/ui/skeleton";
 import { useCan } from "@/lib/auth/permissions";
+import { useToast } from "@/lib/toast";
+import { apiPost } from "@/lib/api/client";
 import { formatBRL, formatDateInTZ, formatDateTimeInTZ } from "@/lib/format";
 import { deleteProductImage, getProduct, getProductActiveClients, listLicenseHistory, uploadProductImage } from "@/lib/products";
 import type {
@@ -32,21 +42,14 @@ import type {
 import { ArchiveDialog } from "./ArchiveDialog";
 import { ChangePriceDialog } from "./ChangePriceDialog";
 
-type TabId = "overview" | "plans" | "history" | "gallery";
-
-const TABS: Array<{ id: TabId; label: string }> = [
-  { id: "overview", label: "Visão geral" },
-  { id: "plans", label: "Planos e preços" },
-  { id: "history", label: "Licenças e histórico" },
-  { id: "gallery", label: "Galeria" },
-];
+type TabId = "overview" | "plans" | "history" | "gallery" | "promo";
 
 /** Badge de estado do produto (ícone + texto, nunca só cor — DS §9). */
 export function ProductStatusBadge({ status }: { status: ProductView["status"] }) {
   if (status === "ACTIVE") {
     return (
       <Badge tone="ok" state="Ativo">
-        <CircleCheck size={14} strokeWidth={1.75} aria-hidden="true" />
+        <CircleCheck size={13} strokeWidth={1.75} aria-hidden="true" />
         Ativo
       </Badge>
     );
@@ -54,7 +57,7 @@ export function ProductStatusBadge({ status }: { status: ProductView["status"] }
   if (status === "DRAFT") {
     return (
       <Badge tone="warn" state="Rascunho">
-        <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+        <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
         Rascunho
       </Badge>
     );
@@ -71,7 +74,7 @@ function historyBadge(status: LicenseHistoryEntry["status"]) {
   if (s === "active" || s === "ativa") {
     return (
       <Badge tone="ok" state="Ativa">
-        <CircleCheck size={14} strokeWidth={1.75} aria-hidden="true" />
+        <CircleCheck size={13} strokeWidth={1.75} aria-hidden="true" />
         Ativa
       </Badge>
     );
@@ -79,7 +82,7 @@ function historyBadge(status: LicenseHistoryEntry["status"]) {
   if (s === "revoked" || s === "revogada") {
     return (
       <Badge tone="danger" state="Revogada">
-        <CircleX size={14} strokeWidth={1.75} aria-hidden="true" />
+        <CircleX size={13} strokeWidth={1.75} aria-hidden="true" />
         Revogada
       </Badge>
     );
@@ -87,7 +90,7 @@ function historyBadge(status: LicenseHistoryEntry["status"]) {
   if (s === "replaced" || s === "substituida" || s === "substituída") {
     return (
       <Badge tone="info" state="Substituída">
-        <Info size={14} strokeWidth={1.75} aria-hidden="true" />
+        <Info size={13} strokeWidth={1.75} aria-hidden="true" />
         Substituída
       </Badge>
     );
@@ -113,33 +116,138 @@ function isSubstituted(p: PlanRow): boolean {
   return p.status === "SUBSTITUIDO";
 }
 
-/** Badge de estado da linha de preço (ícone + texto, nunca só cor — DS §9). */
-function planPriceBadge(p: PlanRow) {
-  if (isSubstituted(p)) {
-    return (
-      <Badge tone="neutral" state="Substituído" icon={Archive}>
-        Substituído
-      </Badge>
-    );
-  }
-  return (
-    <Badge tone="ok" state="Ativo">
-      <CircleCheck size={14} strokeWidth={1.75} aria-hidden="true" />
-      Ativo
-    </Badge>
-  );
-}
-
 function formatValidity(p: PlanRow): string {
   const from = formatDateInTZ(p.validFrom);
   const to = p.validTo ? formatDateInTZ(p.validTo) : "vigente";
   return `${from} – ${to}`;
 }
 
+function minPrice(plans: PlanRow[]): number | null {
+  const vigentes = plans.filter((p) => !isSubstituted(p));
+  if (vigentes.length === 0) return null;
+  return Math.min(...vigentes.map((p) => p.priceCents));
+}
+
+/** Mini-estatística (rótulo 10px + valor callout) — grade densa 2×2. */
+function MiniStat({
+  icon,
+  label,
+  value,
+  title,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  title?: string;
+}) {
+  return (
+    <div className="rounded-base border border-line1 bg-bg2 px-2 py-1.5" title={title ?? value}>
+      <p className="m-0 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-text2">
+        <span aria-hidden="true" className="inline-flex">
+          {icon}
+        </span>
+        {label}
+      </p>
+      <p className="m-0 mt-0.5 truncate text-callout font-semibold text-text1">{value}</p>
+    </div>
+  );
+}
+
 type ActiveClientRow = ProductActiveClient;
 
-/** Card "Clientes com licenças ativas" da aba Visão geral. */
-function ActiveClientsCard({ productCode }: { productCode: string }) {
+/** Linha técnica (rótulo + valor mono + copiar) p/ conferência do operador. */
+function TechRow({
+  label,
+  value,
+  copied,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-2 py-1.5">
+      <span className="w-24 shrink-0 text-[11px] uppercase tracking-wide text-text2">{label}</span>
+      <code className="min-w-0 flex-1 truncate font-mono tnum text-[0.85em] text-text1" title={value}>
+        {value}
+      </code>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="shrink-0 px-2"
+        onClick={onCopy}
+        title={copied ? "Copiado!" : `Copiar ${label.toLowerCase()}`}
+        aria-label={copied ? `${label} copiado` : `Copiar ${label.toLowerCase()}`}
+      >
+        {copied ? (
+          <Check size={13} strokeWidth={1.75} aria-hidden="true" />
+        ) : (
+          <Copy size={13} strokeWidth={1.75} aria-hidden="true" />
+        )}
+      </Button>
+    </li>
+  );
+}
+
+/** Bloco de detalhes técnicos do produto (identidade + timestamps + versões). */
+function TechDetails({ product }: { product: ProductView }) {
+  const { notify } = useToast();
+  const [copied, setCopied] = useState<string | null>(null);
+  const extra = product as ProductView & {
+    updatedAt?: string;
+    versions?: Array<{ version: string }>;
+  };
+
+  async function handleCopy(key: string, value: string) {
+    const ok = await copyText(value);
+    if (ok) {
+      setCopied(key);
+      notify("success", "Copiado", value);
+      window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 2000);
+    } else {
+      notify("warn", "Não foi possível copiar", "Selecione o valor manualmente (Ctrl+C).");
+    }
+  }
+
+  const rows: Array<{ key: string; label: string; value: string }> = [
+    { key: "id", label: "ID", value: product.id },
+    { key: "code", label: "Código", value: product.code },
+    { key: "slug", label: "Slug", value: product.slug },
+    { key: "status", label: "Status", value: product.status },
+    { key: "created", label: "Criado em", value: formatDateTimeInTZ(product.createdAt) },
+  ];
+  if (extra.updatedAt) rows.push({ key: "updated", label: "Atualizado em", value: formatDateTimeInTZ(extra.updatedAt) });
+  rows.push({
+    key: "versions",
+    label: "Versões",
+    value: extra.versions && extra.versions.length > 0 ? extra.versions.map((v) => v.version).join(", ") : "—",
+  });
+
+  return (
+    <section aria-label="Detalhes técnicos do produto" className="rounded-base border border-line1 bg-bg1 px-2.5 py-2">
+      <p className="m-0 mb-1 text-[10px] font-bold uppercase tracking-wide text-text2">
+        Detalhes técnicos
+      </p>
+      <ul className="m-0 divide-y divide-line1 p-0 list-none">
+        {rows.map((r) => (
+          <TechRow
+            key={r.key}
+            label={r.label}
+            value={r.value}
+            copied={copied === r.key}
+            onCopy={() => handleCopy(r.key, r.value)}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Clientes ativos em lista inline (máx. 5) — sem card alto nem tabela. */
+function ActiveClientsInline({ productCode }: { productCode: string }) {
   const [rows, setRows] = useState<ActiveClientRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
@@ -164,23 +272,15 @@ function ActiveClientsCard({ productCode }: { productCode: string }) {
 
   if (rows === null && !error) {
     return (
-      <section
-        aria-label="Clientes com licenças ativas"
-        className="mt-4 rounded-card border border-line1 bg-bg1 shadow-1 p-5"
-      >
-        <h3 className="mt-0 text-headline text-text1">Clientes com licenças ativas</h3>
-        <SkeletonTable rows={3} label="Carregando clientes ativos" />
+      <section aria-label="Clientes com licenças ativas" className="rounded-base border border-line1 bg-bg1 px-2.5 py-2">
+        <SkeletonTable rows={2} label="Carregando clientes ativos" />
       </section>
     );
   }
 
   if (error) {
     return (
-      <section
-        aria-label="Clientes com licenças ativas"
-        className="mt-4 rounded-card border border-line1 bg-bg1 shadow-1 p-5"
-      >
-        <h3 className="mt-0 text-headline text-text1">Clientes com licenças ativas</h3>
+      <section aria-label="Clientes com licenças ativas" className="rounded-base border border-line1 bg-bg1 px-2.5 py-2">
         <ErrorState message={error} onRetry={() => setNonce((n) => n + 1)} />
       </section>
     );
@@ -189,57 +289,216 @@ function ActiveClientsCard({ productCode }: { productCode: string }) {
   const list = rows ?? [];
   if (list.length === 0) {
     return (
-      <section
-        aria-label="Clientes com licenças ativas"
-        className="mt-4 rounded-card border border-line1 bg-bg1 shadow-1 p-5"
-      >
-        <h3 className="mt-0 text-headline text-text1">Clientes com licenças ativas</h3>
-        <EmptyState title="Sem clientes ativos neste produto" message="Nenhum cliente com licenças ativas ou em graça neste produto." />
+      <section aria-label="Clientes com licenças ativas" className="rounded-base border border-line1 bg-bg1 px-2.5 py-2">
+        <p className="m-0 flex items-center gap-1.5 text-callout text-text2">
+          <Users size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+          Nenhum cliente com licença ativa ou em graça.
+        </p>
       </section>
     );
   }
 
   const totalActive = list.reduce((acc, r) => acc + r.active, 0);
   const totalGrace = list.reduce((acc, r) => acc + r.grace, 0);
-  const summary =
-    `${list.length} ${list.length === 1 ? "cliente" : "clientes"} · ` +
-    `${totalActive} ${totalActive === 1 ? "ativa" : "ativas"} · ` +
-    `${totalGrace} em graça`;
+  const visible = list.slice(0, 5);
+  const rest = list.length - visible.length;
+  const summary = `${list.length} ${list.length === 1 ? "cliente" : "clientes"} · ${totalActive} ${totalActive === 1 ? "ativa" : "ativas"}${totalGrace > 0 ? ` · ${totalGrace} em graça` : ""}`;
 
   return (
-    <section
-      aria-label="Clientes com licenças ativas"
-      className="mt-4 rounded-card border border-line1 bg-bg1 shadow-1 p-5"
-    >
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <h3 className="m-0 text-headline text-text1">Clientes com licenças ativas</h3>
+    <section aria-label="Clientes com licenças ativas" className="rounded-base border border-line1 bg-bg1 px-2.5 py-2">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <p className="m-0 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-text2">
+          <Users size={13} strokeWidth={1.75} aria-hidden="true" />
+          Clientes ativos
+        </p>
         <Badge tone="accent" state={summary}>
           {summary}
         </Badge>
       </div>
-      <Table
-        caption="Clientes com licenças ativas neste produto"
-        head={
-          <>
-            <Th>Cliente</Th>
-            <Th numeric>Ativas</Th>
-            <Th numeric>Em graça</Th>
-          </>
-        }
-      >
-        {list.map((r) => (
-          <tr key={r.customerId}>
-            <Td>{r.customerName}</Td>
-            <Td numeric>{r.active}</Td>
-            <Td numeric>{r.grace}</Td>
-          </tr>
+      <ul className="m-0 grid gap-1 p-0 list-none">
+        {visible.map((r) => (
+          <li
+            key={r.customerId}
+            className="flex items-center gap-2 rounded-base bg-bg2 px-2 py-1 text-callout"
+          >
+            <span className="min-w-0 flex-1 truncate text-text1">{r.customerName}</span>
+            <span className="shrink-0 font-mono tnum text-[0.85em] text-text2">
+              {r.active} ativa{r.active === 1 ? "" : "s"}
+              {r.grace > 0 ? ` · ${r.grace} graça` : ""}
+            </span>
+          </li>
         ))}
-      </Table>
+      </ul>
+      {rest > 0 && (
+        <p className="m-0 mt-1 text-callout text-text2">
+          +{rest} {rest === 1 ? "outro cliente" : "outros clientes"}.
+        </p>
+      )}
     </section>
   );
 }
 
-/** Galeria do produto: adicionar (upload p/ a VPS) e remover (linha + bytes). */
+/** Linha de plano vigente: nome + ciclo, preço à direita, ação compacta. */
+function PlanRows({
+  plans,
+  canManage,
+  archived,
+  onChangePrice,
+}: {
+  plans: PlanRow[];
+  canManage: boolean;
+  archived: boolean;
+  onChangePrice: (p: PlanView) => void;
+}) {
+  return (
+    <ul aria-label="Planos vigentes" className="m-0 divide-y divide-line1 p-0 list-none rounded-base border border-line1 bg-bg1 px-2.5">
+      {plans.map((p) => (
+        <li key={p.id} className="flex items-center gap-2 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="m-0 truncate text-callout font-semibold text-text1" title={p.name}>
+              {p.name}{" "}
+              <span className="ml-1 inline-flex align-middle">
+                {p.billingInterval === "MONTH" ? (
+                  <Badge tone="accent" state="Pacote mensal">Mensal</Badge>
+                ) : (
+                  <Badge tone="info" state="Pacote anual">Anual</Badge>
+                )}
+              </span>
+            </p>
+          </div>
+          <span className="shrink-0 font-mono tnum text-[0.85em] text-text1">
+            {formatBRL(p.priceCents / 100)}
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0 whitespace-nowrap"
+            onClick={() => onChangePrice(p)}
+            disabled={!canManage || archived}
+            title={
+              archived
+                ? "Produto arquivado"
+                : canManage
+                  ? `Alterar preço do plano ${p.name}`
+                  : "Requer permissão product.manage"
+            }
+            aria-label={`Alterar preço do plano ${p.name}`}
+          >
+            Alterar preço
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Histórico de preços em linhas compactas (dentro de `<details>`). */
+function PriceHistoryRows({ plans }: { plans: PlanRow[] }) {
+  return (
+    <ul aria-label="Histórico de preços" className="m-0 grid gap-1 p-0 list-none">
+      {plans.map((p) => (
+        <li key={p.id} className="flex items-center gap-2 rounded-base bg-bg2 px-2 py-1 text-callout">
+          <span className="shrink-0 font-mono tnum text-[0.85em] text-text1">{formatBRL(p.priceCents / 100)}</span>
+          <span className="min-w-0 flex-1 truncate text-text2">{formatValidity(p)}</span>
+          <Badge tone="neutral" state="Substituído" icon={Archive}>
+            Substituído
+          </Badge>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Chip de modalidade da licença (origem comercial visível na linha). */
+function modalityBadge(h: LicenseHistoryEntry) {
+  const kind = (h.kind ?? "").toLowerCase();
+  const owner = (h.ownerType ?? "").toUpperCase();
+  if (owner === "PROMO" || kind === "trial") {
+    return (
+      <Badge tone="info" state="Chave demonstrativa" className="px-1.5 py-px">
+        <Ticket size={11} strokeWidth={1.75} aria-hidden="true" />
+        Demo
+      </Badge>
+    );
+  }
+  if (kind === "lifetime") {
+    return (
+      <Badge tone="ok" state="Licença vitalícia" className="px-1.5 py-px">
+        <CircleCheck size={11} strokeWidth={1.75} aria-hidden="true" />
+        Vitalícia
+      </Badge>
+    );
+  }
+  if (kind === "monthly" || kind === "annual") {
+    return (
+      <Badge tone="accent" state={kind === "monthly" ? "Assinatura mensal" : "Assinatura anual"} className="px-1.5 py-px">
+        {kind === "monthly" ? "Assinatura · Mensal" : "Assinatura · Anual"}
+      </Badge>
+    );
+  }
+  return null;
+}
+
+/** Heurística documentada: bônus vive em entitlements (outro domínio) — aqui
+ * sinalizamos o que chegou rotulado como bônus no motivo/rótulo da licença. */
+function isBonusTagged(h: LicenseHistoryEntry): boolean {
+  return /bônus|bonus/i.test(`${h.reason ?? ""} ${h.ownerLabel ?? ""}`);
+}
+
+/** Texto de expiração da linha (sempre visível quando conhecido). */
+function expiryText(h: LicenseHistoryEntry): string | null {
+  if (h.expiresAt) return `expira ${formatDateInTZ(h.expiresAt)}`;
+  if ((h.kind ?? "").toLowerCase() === "lifetime") return "sem expiração";
+  return null;
+}
+
+/** Histórico de licenças em linhas compactas (chave + motivo / estado + data). */
+function LicenseRows({ history }: { history: LicenseHistoryEntry[] }) {
+  return (
+    <ul aria-label="Histórico de licenças" className="m-0 divide-y divide-line1 p-0 list-none rounded-base border border-line1 bg-bg1 px-2.5">
+      {history.map((h) => {
+        const modality = modalityBadge(h);
+        const expiry = expiryText(h);
+        const bonus = isBonusTagged(h);
+        const motive = h.reason || (h.replacedBy ? `→ ${h.replacedBy}` : null);
+        return (
+          <li key={h.licenseId} className="flex items-center gap-2 py-1.5">
+            <div className="min-w-0 flex-1">
+              <p className="m-0 truncate font-mono tnum text-[0.85em] leading-5 text-text1" title={h.replacedBy ? `Substituída por ${h.replacedBy}` : undefined}>
+                {h.keyMasked}
+              </p>
+              {motive && (
+                <p className="m-0 truncate text-[11px] leading-4 text-text2" title={motive}>
+                  {motive}
+                </p>
+              )}
+              {(modality || expiry || bonus) && (
+                <p className="m-0 mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 leading-4">
+                  {modality}
+                  {bonus && (
+                    <Badge tone="warn" state="Relacionada a bônus" className="px-1.5 py-px">
+                      Bônus
+                    </Badge>
+                  )}
+                  {expiry && (
+                    <span className="text-[11px] text-text2">{expiry}</span>
+                  )}
+                </p>
+              )}
+            </div>
+            <span className="shrink-0 self-center">{historyBadge(h.status)}</span>
+            <span className="w-20 shrink-0 self-center text-right text-[11px] text-text2">
+              {h.endedAt ? <time dateTime={h.endedAt}>{formatDateInTZ(h.endedAt)}</time> : "Vigente"}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Galeria compacta: grade densa, thumbs pequenos, upload em linha única. */
 function GalleryManager({
   product,
   canManage,
@@ -254,13 +513,16 @@ function GalleryManager({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { notify, notifyError } = useToast();
 
   async function handleFiles(files: FileList | null) {
     if (!files || busy) return;
     const picked = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (fileRef.current) fileRef.current.value = "";
     if (picked.length === 0) {
-      setError("Selecione ao menos uma imagem (image/*, até 5 MB cada).");
+      const msg = "Selecione ao menos uma imagem (image/*, até 5 MB cada).";
+      setError(msg);
+      notify("warn", "Nenhuma imagem válida", msg);
       return;
     }
     setBusy("upload");
@@ -269,14 +531,16 @@ function GalleryManager({
     let done = 0;
     for (const file of picked) {
       if (file.size > 5 * 1024 * 1024) {
-        setError(`"${file.name}" excede 5 MB e foi ignorada.`);
+        const msg = `"${file.name}" excede 5 MB e foi ignorada.`;
+        setError(msg);
+        notify("warn", "Imagem ignorada", msg);
         continue;
       }
       try {
         await uploadProductImage(product.code, file);
         done += 1;
       } catch (err) {
-        setError(err instanceof Error ? err.message : `Falha ao enviar "${file.name}".`);
+        setError(notifyError(err, `Falha ao enviar "${file.name}".`).body);
       }
     }
     setBusy(null);
@@ -295,7 +559,7 @@ function GalleryManager({
       setNotice(`Imagem "${img.name}" removida (linha + bytes).`);
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao remover a imagem.");
+      setError(notifyError(err, "Falha ao remover a imagem.").body);
     } finally {
       setBusy(null);
     }
@@ -303,64 +567,65 @@ function GalleryManager({
 
   return (
     <div>
-      <p className="mt-0 text-callout text-text2" role="status">
-        {product.gallery.length === 0
-          ? "Sem imagens"
-          : `${product.gallery.length} ${product.gallery.length === 1 ? "imagem" : "imagens"}`}
-        {" "}— alimenta carrosséis externos via API (sem carrossel no admin).
-      </p>
-      {canManage && (
-        <div className="mb-3">
-          <label
-            htmlFor={`galeria-${product.code}`}
-            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-base border border-line2 bg-bg2 px-4 text-body text-text1 hover:border-line3 focus-ring"
-          >
-            <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
-            Adicionar imagens
-          </label>
-          <input
-            ref={fileRef}
-            id={`galeria-${product.code}`}
-            type="file"
-            accept="image/*"
-            multiple
-            className="sr-only"
-            disabled={busy !== null}
-            onChange={(e) => handleFiles(e.target.files)}
-          />
-          <p className="mt-1 text-callout text-text2">image/* até 5 MB cada; bytes na VPS.</p>
-        </div>
-      )}
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <p className="m-0 text-callout text-text2" role="status">
+          {product.gallery.length === 0
+            ? "Sem imagens — alimenta carrosséis externos via API."
+            : `${product.gallery.length} ${product.gallery.length === 1 ? "imagem" : "imagens"} · via API.`}
+        </p>
+        {canManage && (
+          <span className="ml-auto inline-flex">
+            <label
+              htmlFor={`galeria-${product.code}`}
+              className="inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-base border border-line2 bg-bg2 px-3 text-callout font-semibold text-text1 hover:border-line3 focus-ring"
+            >
+              <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
+              Adicionar
+            </label>
+            <input
+              ref={fileRef}
+              id={`galeria-${product.code}`}
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              disabled={busy !== null}
+              onChange={(e) => handleFiles(e.target.files)}
+            />
+          </span>
+        )}
+      </div>
       {notice && (
-        <p className="text-body text-text1" role="status">
-          <CircleCheck size={16} strokeWidth={1.75} aria-hidden="true" className="mr-1 inline" />
+        <p className="mt-0 flex items-center gap-1.5 text-callout text-text1" role="status">
+          <CircleCheck size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           {notice}
         </p>
       )}
       {error && (
-        <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]" role="alert">
-          <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+        <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]">
+          <TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           {error}
         </p>
       )}
       {product.gallery.length > 0 && (
-        <ul className="m-0 grid grid-cols-2 gap-2 p-0 list-none sm:grid-cols-3">
+        <ul className="m-0 grid grid-cols-4 gap-1.5 p-0 list-none">
           {product.gallery.map((g) => (
-            <li key={g.id} className="rounded-base border border-line1 bg-bg2 p-1">
+            <li key={g.id} className="overflow-hidden rounded-base border border-line1 bg-bg2">
               {g.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={g.previewUrl} alt={g.name} className="h-20 w-full rounded-base object-cover" loading="lazy" />
+                <img src={g.previewUrl} alt={g.name} className="h-14 w-full object-cover" loading="lazy" />
               ) : (
-                <span className="flex h-20 items-center justify-center text-callout text-text2">{g.name}</span>
+                <span className="flex h-14 items-center justify-center px-1 text-center text-callout text-text2">
+                  {g.name}
+                </span>
               )}
-              <span className="block truncate px-1 pt-1 text-caption text-text2" title={g.name}>
-                {g.name}
-                {!g.sessao && <span className="text-text2"> · VPS</span>}
-              </span>
-              {canManage && !g.sessao && (
-                <span className="flex gap-2 px-1 pb-1">
-                  {confirmId === g.id ? (
-                    <>
+              <span className="flex items-center gap-1 px-1.5 py-1">
+                <span className="min-w-0 flex-1 truncate text-[11px] text-text2" title={g.name}>
+                  {g.name}
+                </span>
+                {canManage && !g.sessao && (
+                  confirmId === g.id ? (
+                    <span className="inline-flex shrink-0 gap-1">
                       <Button
                         type="button"
                         variant="destructive"
@@ -371,7 +636,7 @@ function GalleryManager({
                         title="Confirmar remoção (linha + bytes)"
                         onClick={() => handleDelete(g)}
                       >
-                        Confirmar
+                        OK
                       </Button>
                       <Button
                         type="button"
@@ -381,9 +646,9 @@ function GalleryManager({
                         title="Voltar sem remover"
                         onClick={() => setConfirmId(null)}
                       >
-                        Voltar
+                        Não
                       </Button>
-                    </>
+                    </span>
                   ) : (
                     <Button
                       type="button"
@@ -395,23 +660,284 @@ function GalleryManager({
                     >
                       Remover
                     </Button>
-                  )}
-                </span>
-              )}
+                  )
+                )}
+              </span>
             </li>
           ))}
         </ul>
+      )}
+      <p className="mb-0 mt-1.5 text-callout text-text2">image/* até 5 MB cada; bytes na VPS.</p>
+    </div>
+  );
+}
+
+type TrialKey = {
+  licenseId: string;
+  key: string;
+  keyMasked: string;
+  expiresAt: string | null;
+};
+
+const PRESETS = [
+  { v: "6", label: "6h" },
+  { v: "24", label: "24h" },
+  { v: "72", label: "3d" },
+  { v: "168", label: "7d" },
+  { v: "720", label: "30d" },
+  { v: "custom", label: "Outro" },
+  { v: "infinite", label: "∞ Vitalícia" },
+] as const;
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * Aba Promo: gera chaves promocionais/demo do produto sem sair do modal.
+ * Produto já vem fixo (sem seletor); herda as máquinas do produto.
+ * Chave em plaintext aparece uma única vez — copie na hora.
+ */
+function PromoTab({ product }: { product: ProductView }) {
+  const canManage = useCan("product.manage");
+  const { notify, notifyError } = useToast();
+  const [preset, setPreset] = useState<string>("24");
+  const [customHours, setCustomHours] = useState("48");
+  const [qty, setQty] = useState("1");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [kind, setKind] = useState<string | null>(null);
+  const [items, setItems] = useState<TrialKey[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const qtyNum = Number(qty);
+  const hoursNum = Number(customHours);
+  const qtyOk = Number.isInteger(qtyNum) && qtyNum >= 1 && qtyNum <= 100;
+  const hoursOk = preset !== "custom" || (Number.isInteger(hoursNum) && hoursNum >= 1 && hoursNum <= 8760);
+  const valid = qtyOk && hoursOk;
+
+  async function handleCopy(it: TrialKey) {
+    const ok = await copyText(it.key);
+    if (ok) {
+      setCopiedId(it.licenseId);
+      notify("success", "Chave copiada", it.keyMasked);
+      window.setTimeout(() => setCopiedId((c) => (c === it.licenseId ? null : c)), 2000);
+    } else {
+      notify("warn", "Não foi possível copiar", "Selecione a chave manualmente (Ctrl+C).");
+    }
+  }
+
+  async function handleGenerate() {
+    if (!valid || busy || !canManage) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const infinite = preset === "infinite";
+      const data = await apiPost<{ batchId?: string; kind?: string; items?: TrialKey[] }>(
+        "/api/licenses/trial-issue",
+        {
+          productId: product.code,
+          qty: qtyNum,
+          maxDevices: product.machinesAllowed,
+          ...(infinite ? { infinite: true } : { expiresInHours: preset === "custom" ? hoursNum : Number(preset) }),
+          ...(note.trim() ? { note: note.trim(), ownerLabel: note.trim() } : {}),
+        },
+        { headers: { "Idempotency-Key": crypto.randomUUID() } },
+      );
+      setBatchId(typeof data.batchId === "string" ? data.batchId : null);
+      setKind(typeof data.kind === "string" ? data.kind : null);
+      setItems(Array.isArray(data.items) ? data.items : []);
+      setCopiedId(null);
+      notify("success", "Lote promocional gerado", `${data.items?.length ?? 0} chave(s) · copie agora, depois só máscara.`);
+    } catch (err) {
+      setError(notifyError(err, "Falha ao gerar lote promocional.").body);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2.5 rounded-base border border-line1 bg-bg2 px-2.5 py-2">
+        <span
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accentsoft text-accent"
+        >
+          <Ticket size={16} strokeWidth={1.75} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="m-0 truncate text-callout font-semibold text-text1">{product.name}</p>
+          <p className="m-0 truncate font-mono tnum text-[0.85em] text-text2">
+            {product.code} · {product.machinesAllowed} {product.machinesAllowed === 1 ? "máquina" : "máquinas"}/chave
+          </p>
+        </div>
+        <Badge tone="info" state="Sem conta">Sem conta</Badge>
+      </div>
+      <p className="m-0 mb-2 text-[11px] font-bold uppercase tracking-wide text-text2" id="promo-validade">
+        Validade da chave
+      </p>
+      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-labelledby="promo-validade">
+        {PRESETS.map((p) => {
+          const active = preset === p.v;
+          return (
+            <button
+              key={p.v}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setPreset(p.v)}
+              disabled={busy}
+              className={
+                active
+                  ? "min-h-[36px] rounded-base border border-accent bg-accentsoft px-3 text-callout font-semibold text-text1 focus-ring"
+                  : "min-h-[36px] rounded-base border border-line2 bg-bg2 px-3 text-callout text-text2 hover:border-line3 hover:text-text1 focus-ring disabled:opacity-45"
+              }
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="m-0 mb-2 text-[11px] font-bold uppercase tracking-wide text-text2" id="promo-lote">
+        Lote
+      </p>
+      <div className={preset === "custom" ? "mb-3 grid grid-cols-[5.5rem_5.5rem_1fr] gap-2" : "mb-3 grid grid-cols-[5.5rem_1fr] gap-2"} role="group" aria-labelledby="promo-lote">
+        {preset === "custom" && (
+          <Field label="Horas · 1–8760" htmlFor="promo-horas">
+            <Input
+              id="promo-horas"
+              mono
+              inputMode="numeric"
+              value={customHours}
+              onChange={(e) => setCustomHours(e.target.value)}
+              disabled={busy}
+              aria-invalid={!hoursOk}
+            />
+          </Field>
+        )}
+        <Field label="Qtd · 1–100" htmlFor="promo-qtd">
+          <Input
+            id="promo-qtd"
+            mono
+            inputMode="numeric"
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            disabled={busy}
+            aria-invalid={!qtyOk}
+          />
+        </Field>
+        <Field label="Rótulo · opcional" htmlFor="promo-nota">
+          <Input
+            id="promo-nota"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="stand feira, parceiro X"
+            disabled={busy}
+            autoComplete="off"
+          />
+        </Field>
+      </div>
+      {preset === "custom" && !hoursOk && (
+        <p className="mt-0 text-callout text-danger dark:text-[#ff9a9e]" role="alert">
+          Horas inválidas — inteiro entre 1 e 8760.
+        </p>
+      )}
+      {!qtyOk && (
+        <p className="mt-0 text-callout text-danger dark:text-[#ff9a9e]" role="alert">
+          Quantidade inválida — inteiro entre 1 e 100.
+        </p>
+      )}
+      {error && (
+        <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]">
+          <TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+          {error}
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={handleGenerate}
+          loading={busy}
+          loadingLabel="Gerando…"
+          disabled={!canManage || !valid || busy}
+          title={
+            busy
+              ? "Gerando…"
+              : !canManage
+                ? "Requer permissão product.manage"
+                : !valid
+                  ? "Ajuste validade e quantidade"
+                  : `Gerar chaves demo de ${product.name}`
+          }
+        >
+          <Ticket size={14} strokeWidth={1.75} aria-hidden="true" />
+          {busy ? "Gerando…" : "Gerar chaves"}
+        </Button>
+        <p className="m-0 text-callout text-text2">Ativação direta no programa, sem cadastro.</p>
+      </div>
+      {items.length > 0 && (
+        <div className="mt-2 rounded-base border border-line1 bg-bg2 px-2.5 py-2" role="status">
+          <p className="m-0 mb-1.5 text-callout text-text1">
+            <Badge tone="ok" state="Lote gerado">Lote {batchId}</Badge> {kind} · copie agora, depois só máscara.
+          </p>
+          <ul className="m-0 grid gap-1 p-0 list-none">
+            {items.map((it) => (
+              <li key={it.licenseId} className="flex items-center gap-1.5 rounded-base bg-bg1 px-2 py-1">
+                <code className="min-w-0 flex-1 truncate font-mono tnum text-[0.85em] text-text1" title={it.key}>
+                  {it.key}
+                </code>
+                <span className="hidden shrink-0 text-[11px] text-text2 sm:inline">
+                  expira {it.expiresAt ? formatDateTimeInTZ(it.expiresAt) : "nunca"}
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => handleCopy(it)}
+                  title={copiedId === it.licenseId ? "Copiada!" : `Copiar chave ${it.keyMasked}`}
+                  aria-label={copiedId === it.licenseId ? "Chave copiada" : `Copiar chave ${it.keyMasked}`}
+                >
+                  {copiedId === it.licenseId ? (
+                    <Check size={14} strokeWidth={1.75} aria-hidden="true" />
+                  ) : (
+                    <Copy size={14} strokeWidth={1.75} aria-hidden="true" />
+                  )}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
 }
 
 /**
- * Detalhe do produto em modal (tamanho `lg`, material `glass` E3 — mesma
- * exceção do detalhe do cliente). Única visualização de detalhe (sem página).
- * Licenças nascem na efetividade da compra (fluxo de billing/cliente) — esta
- * tela só altera preço (por plano vigente) e arquiva, com gate
- * `product.manage`; leitura aberta como o catálogo.
+ * Dossiê compacto do produto (tamanho `md`, `glass`, layout fixo).
+ * Densidade editorial: identidade fina, estatísticas mini, planos e histórico
+ * em linhas (sem tabelas pesadas), galeria 4-col e aba Promo p/ chaves demo.
  */
 export function ProductDetailModal({
   productCode,
@@ -478,8 +1004,8 @@ export function ProductDetailModal({
 
   if (loading) {
     return (
-      <Dialog open onClose={onClose} title="Detalhe do produto" size="lg" material="glass" initialFocus="close">
-        <SkeletonTable rows={5} label="Carregando produto" />
+      <Dialog open onClose={onClose} title="Detalhe do produto" size="md" material="glass" initialFocus="close">
+        <SkeletonTable rows={4} label="Carregando produto" />
       </Dialog>
     );
   }
@@ -496,253 +1022,187 @@ export function ProductDetailModal({
   const planRows = product.plans as PlanRow[];
   const vigentes = planRows.filter((p) => !isSubstituted(p));
   const historico = planRows.filter((p) => isSubstituted(p) || p.validTo);
+  const from = minPrice(planRows);
+  const metaLine = `${product.slug} · ${product.machinesAllowed} ${product.machinesAllowed === 1 ? "máquina" : "máquinas"} · ${vigentes.length} ${vigentes.length === 1 ? "plano vigente" : "planos vigentes"}${from !== null ? ` · desde ${formatBRL(from / 100)}` : ""}`;
+
+  const TABS: Array<{ id: TabId; label: string }> = [
+    { id: "overview", label: "Visão geral" },
+    { id: "plans", label: planRows.length > 0 ? `Planos (${vigentes.length})` : "Planos" },
+    { id: "history", label: history.length > 0 ? `Histórico (${history.length})` : "Histórico" },
+    { id: "gallery", label: product.gallery.length > 0 ? `Galeria (${product.gallery.length})` : "Galeria" },
+    { id: "promo", label: "Promo" },
+  ];
 
   return (
     <Dialog
       open
       onClose={onClose}
       title={`Produto — ${product.name}`}
-      size="lg"
+      size="md"
       material="glass"
+      initialFocus="close"
+      fixedContent={
+        <>
+          <div className="mb-1.5 flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accentsoft text-accent"
+            >
+              <Box size={16} strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="m-0 truncate text-callout font-semibold text-text1">{product.name}</p>
+              <p className="m-0 truncate font-mono tnum text-[0.85em] text-text2">{product.code}</p>
+            </div>
+            <span className="shrink-0">
+              <ProductStatusBadge status={product.status} />
+            </span>
+          </div>
+          <p className="m-0 mb-1.5 truncate text-callout text-text2" title={metaLine}>
+            {metaLine}
+          </p>
+          <Tabs tabs={TABS} value={tab} onChange={setTab} label="Seções do produto" />
+        </>
+      }
       footer={
-        <Button type="button" variant="secondary" onClick={onClose} title="Fechar detalhe do produto">
+        <Button type="button" variant="secondary" size="sm" onClick={onClose} title="Fechar detalhe do produto">
           Fechar
         </Button>
       }
     >
-      <div className="mb-4 flex items-center gap-3">
-        <span
-          aria-hidden="true"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accentsoft text-accent"
-        >
-          <Box size={20} strokeWidth={1.75} />
-        </span>
-        <div className="min-w-0">
-          <p className="m-0 truncate text-headline font-semibold text-text1">{product.name}</p>
-          <p className="m-0 truncate font-mono tnum text-[0.85em] text-text2">{product.code}</p>
-        </div>
-        <span className="ml-auto shrink-0">
-          <ProductStatusBadge status={product.status} />
-        </span>
-      </div>
-
       {notice && (
-        <div className="mb-4 rounded-card border border-line1 bg-bg1 shadow-1 p-4" role="status">
-          <p className="m-0 text-body text-text1">{notice}</p>
+        <div className="mb-2 flex items-center gap-1.5 rounded-base border border-line1 bg-bg2 px-2.5 py-1.5" role="status">
+          <CircleCheck size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent" />
+          <p className="m-0 text-callout text-text1">{notice}</p>
         </div>
       )}
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} label="Seções do produto" />
-      <div className="mt-4">
-        {tab === "overview" && (
-          <TabPanel label="Visão geral do produto">
-            <section aria-label="Informações do produto" className="rounded-card border border-line1 bg-bg1 shadow-1 p-5">
-              <dl className="m-0 grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <dt className="text-callout text-text2">Descrição</dt>
-                  <dd className="m-0 text-body text-text1">{product.description || "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-callout text-text2">Máquinas simultâneas</dt>
-                  <dd className="m-0 text-body text-text1">
-                    <span className="font-mono tnum text-[0.85em]">{product.machinesAllowed}</span> por licença
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-callout text-text2">Criado em</dt>
-                  <dd className="m-0 text-body text-text1">
-                    <time dateTime={product.createdAt}>{formatDateInTZ(product.createdAt)}</time>
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-callout text-text2">Slug</dt>
-                  <dd className="m-0 text-body text-text1">
-                    <span className="font-mono tnum text-[0.85em]">{product.slug}</span>
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-callout text-text2">Código</dt>
-                  <dd className="m-0 text-body text-text1">
-                    <span className="font-mono tnum text-[0.85em]">{product.code}</span>
-                  </dd>
-                </div>
-              </dl>
-            </section>
-            <ActiveClientsCard productCode={product.code} />
-            <section aria-label="Ações do produto" className="mt-4 rounded-card border border-line1 bg-bg1 shadow-1 p-5">
-              <h3 className="mt-0 text-headline text-text1">Ações</h3>
-              <p className="mt-0 text-callout text-text2">
-                Licenças nascem na efetividade da compra, no fluxo de billing/cliente —
-                sem emissão manual nesta tela.
-              </p>
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Ações do produto">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setArchiveOpen(true)}
-                  disabled={!canManage || archived}
-                  title={
-                    archived
-                      ? "Produto já arquivado"
-                      : canManage
-                        ? "Arquivar produto (sai do catálogo)"
-                        : "Requer permissão product.manage"
-                  }
-                >
-                  <Ban size={16} strokeWidth={1.75} aria-hidden="true" />
-                  Arquivar
-                </Button>
-              </div>
-            </section>
-          </TabPanel>
-        )}
-
-        {tab === "plans" && (
-          <TabPanel label="Planos e preços do produto">
-            {product.plans.length === 0 ? (
-              <EmptyState title="Sem planos" message="Este produto ainda não possui planos de preço." />
-            ) : (
-              <>
-                <Table
-                  caption={`Planos vigentes de ${product.name} (ciclo e valor)`}
-                  head={
-                    <>
-                      <Th>Plano</Th>
-                      <Th>Ciclo</Th>
-                      <Th numeric>Valor</Th>
-                      <Th>Estado</Th>
-                      <Th>Ação</Th>
-                    </>
-                  }
-                >
-                  {vigentes.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-3 text-text1">Sem planos vigentes.</td>
-                    </tr>
-                  ) : (
-                    vigentes.map((p) => (
-                      <tr key={p.id}>
-                        <Td>{p.name}</Td>
-                        <Td>
-                          {p.billingInterval === "MONTH" ? (
-                            <Badge tone="accent" state="Pacote mensal">Mensal</Badge>
-                          ) : (
-                            <Badge tone="info" state="Pacote anual">Anual</Badge>
-                          )}
-                        </Td>
-                        <Td numeric>{formatBRL(p.priceCents / 100)}</Td>
-                        <Td>
-                          {planPriceBadge(p)}
-                        </Td>
-                        <Td>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setChangePricePlan(p)}
-                            disabled={!canManage || archived}
-                            title={
-                              archived
-                                ? "Produto arquivado"
-                                : canManage
-                                  ? `Alterar preço do plano ${p.name}`
-                                  : "Requer permissão product.manage"
-                            }
-                          >
-                            Alterar preço
-                          </Button>
-                        </Td>
-                      </tr>
-                    ))
-                  )}
-                </Table>
-                <section aria-label="Histórico de preços" className="mt-4">
-                  <h3 className="mt-0 text-headline text-text1">Histórico</h3>
-                  {historico.length === 0 ? (
-                    <EmptyState
-                      title="Sem histórico de preços"
-                      message="Nenhuma alteração de preço registrada — contratos mantêm o valor original."
-                    />
-                  ) : (
-                    <Table
-                      caption={`Histórico de preços de ${product.name} (linhas substituídas)`}
-                      head={
-                        <>
-                          <Th numeric>Valor</Th>
-                          <Th>Vigência de–até</Th>
-                          <Th>Estado</Th>
-                        </>
-                      }
-                    >
-                      {historico.map((p) => (
-                        <tr key={p.id}>
-                          <Td numeric>{formatBRL(p.priceCents / 100)}</Td>
-                          <Td>{formatValidity(p)}</Td>
-                          <Td>{planPriceBadge(p)}</Td>
-                        </tr>
-                      ))}
-                    </Table>
-                  )}
-                  <p className="mb-0 text-callout text-text2">
-                    Contratos fechados mantêm o preço congelado; só novas cobranças usam o valor vigente.
-                  </p>
-                </section>
-              </>
+      {tab === "overview" && (
+        <TabPanel label="Visão geral do produto">
+          <p className="mt-0 mb-2 text-callout text-text1">
+            {product.description?.trim() ? product.description : (
+              <span className="text-text2">Sem descrição cadastrada.</span>
             )}
-          </TabPanel>
-        )}
-
-        {tab === "history" && (
-          <TabPanel label="Licenças e histórico do produto">
-            <p className="mt-0 text-callout text-text2">
-              Licenças antigas são preservadas para auditoria — a renovação-com-troca nunca
-              apaga o vínculo anterior.
+          </p>
+          <dl className="m-0 mb-2 grid grid-cols-2 gap-1.5">
+            <MiniStat
+              icon={<Cpu size={12} strokeWidth={1.75} aria-hidden="true" />}
+              label="Máquinas"
+              value={`${product.machinesAllowed} por licença`}
+            />
+            <MiniStat
+              icon={<Wallet size={12} strokeWidth={1.75} aria-hidden="true" />}
+              label="A partir de"
+              value={from !== null ? formatBRL(from / 100) : "—"}
+              title={from !== null ? `${vigentes.length} ${vigentes.length === 1 ? "plano vigente" : "planos vigentes"}` : "Sem planos vigentes"}
+            />
+            <MiniStat
+              icon={<Calendar size={12} strokeWidth={1.75} aria-hidden="true" />}
+              label="Criado em"
+              value={formatDateInTZ(product.createdAt)}
+              title={product.slug}
+            />
+            <MiniStat
+              icon={<Archive size={12} strokeWidth={1.75} aria-hidden="true" />}
+              label="Catálogo"
+              value={archived ? "Arquivado" : planRows.length > 0 ? `${planRows.length} ${planRows.length === 1 ? "linha" : "linhas"}` : "Sem linhas"}
+              title={historico.length > 0 ? `${historico.length} no histórico` : "Preço imutável por linha"}
+            />
+          </dl>
+          <div className="mb-2">
+            <ActiveClientsInline productCode={product.code} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-base border border-line1 bg-bg1 px-2.5 py-1.5">
+            <p className="m-0 min-w-0 flex-1 text-callout text-text2">
+              Licenças nascem na compra — sem emissão manual aqui.
             </p>
-            {history.length === 0 ? (
-              <EmptyState title="Sem histórico" message="Nenhuma licença emitida para este produto." />
-            ) : (
-              <Table
-                caption={`Histórico de licenças de ${product.name} (preservado p/ auditoria)`}
-                head={
-                  <>
-                    <Th>Licença</Th>
-                    <Th>Estado</Th>
-                    <Th>Motivo</Th>
-                    <Th>Encerrada em</Th>
-                    <Th>Substituída por</Th>
-                  </>
-                }
-              >
-                {history.map((h) => (
-                  <tr key={h.licenseId}>
-                    <Td mono>{h.keyMasked}</Td>
-                    <Td>{historyBadge(h.status)}</Td>
-                    <Td>{h.reason || "—"}</Td>
-                    <Td>
-                      {h.endedAt ? (
-                        <time dateTime={h.endedAt}>{formatDateTimeInTZ(h.endedAt)}</time>
-                      ) : (
-                        <span className="text-callout text-text2">Ainda vigente</span>
-                      )}
-                    </Td>
-                    <Td mono>{h.replacedBy ?? "—"}</Td>
-                  </tr>
-                ))}
-              </Table>
-            )}
-          </TabPanel>
-        )}
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => setArchiveOpen(true)}
+              disabled={!canManage || archived}
+              title={
+                archived
+                  ? "Produto já arquivado"
+                  : canManage
+                    ? "Arquivar produto (sai do catálogo)"
+                    : "Requer permissão product.manage"
+              }
+            >
+              <Ban size={14} strokeWidth={1.75} aria-hidden="true" />
+              {archived ? "Arquivado" : "Arquivar"}
+            </Button>
+          </div>
+          <div className="mt-2">
+            <TechDetails product={product} />
+          </div>
+        </TabPanel>
+      )}
 
-        {tab === "gallery" && (
-          <TabPanel label="Galeria do produto">
-            <GalleryManager product={product} canManage={canManage} onChanged={refresh} />
-          </TabPanel>
-        )}
-      </div>
+      {tab === "plans" && (
+        <TabPanel label="Planos e preços do produto">
+          {planRows.length === 0 ? (
+            <EmptyState title="Sem planos" message="Este produto ainda não possui planos de preço." />
+          ) : (
+            <>
+              <p className="mt-0 mb-1.5 text-callout text-text2">
+                {vigentes.length} {vigentes.length === 1 ? "vigente" : "vigentes"}
+                {from !== null ? (
+                  <>
+                    {" "}· desde <span className="font-mono tnum text-[0.85em] text-text1">{formatBRL(from / 100)}</span>
+                  </>
+                ) : null}
+                {" "}· congelado em contratos fechados.
+              </p>
+              {vigentes.length === 0 ? (
+                <EmptyState title="Sem planos vigentes" message="Todos os planos deste produto foram substituídos." />
+              ) : (
+                <PlanRows plans={vigentes} canManage={canManage} archived={archived} onChangePrice={setChangePricePlan} />
+              )}
+              {historico.length > 0 && (
+                <details className="mt-1.5 rounded-base border border-line1 bg-bg1 px-2.5 py-1.5">
+                  <summary className="cursor-pointer text-callout font-semibold text-text1 focus-ring">
+                    Histórico de preços ({historico.length})
+                  </summary>
+                  <div className="mt-1.5">
+                    <PriceHistoryRows plans={historico} />
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </TabPanel>
+      )}
+
+      {tab === "history" && (
+        <TabPanel label="Licenças e histórico do produto">
+          <p className="mt-0 mb-1.5 text-callout text-text2">
+            Preservado p/ auditoria — a troca nunca apaga o vínculo anterior.
+          </p>
+          {history.length === 0 ? (
+            <EmptyState title="Sem histórico" message="Nenhuma licença emitida para este produto." />
+          ) : (
+            <LicenseRows history={history} />
+          )}
+        </TabPanel>
+      )}
+
+      {tab === "gallery" && (
+        <TabPanel label="Galeria do produto">
+          <GalleryManager product={product} canManage={canManage} onChanged={refresh} />
+        </TabPanel>
+      )}
+
+      {tab === "promo" && (
+        <TabPanel label="Chaves promocionais do produto">
+          <PromoTab product={product} />
+        </TabPanel>
+      )}
 
       {error && (
         <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]" role="alert">
-          <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+          <TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           {error}
         </p>
       )}

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { upstreamAuthJsonHeaders } from "@/lib/api/upstream";
+import { upstreamAuthHeaders, upstreamAuthJsonHeaders } from "@/lib/api/upstream";
 import { mockCreateProduct, mockProductPage } from "@/lib/mocks";
+import type { ProductView } from "@/lib/types";
 
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL;
 
@@ -28,6 +29,10 @@ function upstreamUnavailable(): NextResponse {
 /**
  * BFF `GET /api/products?q=&cursor=` → Nest `GET /v1/products` (catálogo).
  * Stub: `mockProductPage` (filtro por nome, cursor por id).
+ * Normaliza o upstream (array puro, sem `plans`/`gallery`) p/ `Page<ProductView>`:
+ * - anexa planos vigentes (`GET /v1/plans?status=ALL`, 1 chamada p/ a lista);
+ * - filtra por `q` (nome/código/slug — o Nest ignora o parâmetro);
+ * - `gallery` segue vazia na lista (detalhe compõe via `[code]`).
  * TODO(backend pronto): remover stub — proxy integral abaixo assume.
  */
 export async function GET(req: NextRequest) {
@@ -36,11 +41,69 @@ export async function GET(req: NextRequest) {
 
   if (API_INTERNAL_URL) {
     try {
-      const upstream = await fetch(`${API_INTERNAL_URL}/v1/products?${q.toString()}`, {
-        headers: { ...(session ? { Cookie: `aurum_session=${session}` } : {}) },
-      });
-      const data = await upstream.json().catch(() => ({}));
-      return NextResponse.json(data, { status: upstream.status });
+      // Planos exigem Bearer (global `JwtAuthGuard`) — cookie sozinho dá 401.
+      const headers = upstreamAuthHeaders(session);
+      const [productsRes, plansRes] = await Promise.all([
+        fetch(`${API_INTERNAL_URL}/v1/products?${q.toString()}`, { headers }),
+        fetch(`${API_INTERNAL_URL}/v1/plans?status=ALL`, { headers }),
+      ]);
+      const productsData = (await productsRes.json().catch(() => [])) as
+        | Array<Record<string, unknown>>
+        | { data?: Array<Record<string, unknown>> };
+      if (!productsRes.ok || !Array.isArray(Array.isArray(productsData) ? productsData : productsData.data)) {
+        return NextResponse.json(productsData, { status: productsRes.status });
+      }
+      const rows = Array.isArray(productsData) ? productsData : (productsData.data ?? []);
+      const plansData = (await plansRes.json().catch(() => [])) as
+        | Array<Record<string, unknown>>
+        | { data?: Array<Record<string, unknown>> };
+      const planRows = Array.isArray(plansData) ? plansData : (plansData.data ?? []);
+      const byProduct = new Map<string, ProductView["plans"]>();
+      for (const p of planRows) {
+        const pid = typeof p.productId === "string" ? p.productId : null;
+        if (!pid) continue;
+        const interval = p.billingInterval === "MONTH" || p.billingInterval === "YEAR" ? p.billingInterval : "MONTH";
+        const entry: ProductView["plans"][number] = {
+          id: typeof p.id === "string" ? p.id : `${pid}-${String(interval)}`,
+          productId: pid,
+          name: typeof p.name === "string" ? p.name : String(interval),
+          billingInterval: interval,
+          priceCents: typeof p.priceCents === "number" ? p.priceCents : 0,
+          currency: "BRL",
+          status: p.status === "ACTIVE" ? "ATIVO" : "SUBSTITUIDO",
+          validFrom: typeof p.validFrom === "string" ? p.validFrom : new Date().toISOString(),
+          validTo: typeof p.validTo === "string" ? p.validTo : null,
+          supersededBy: typeof p.supersededBy === "string" ? p.supersededBy : null,
+        };
+        const list = byProduct.get(pid) ?? [];
+        list.push(entry);
+        byProduct.set(pid, list);
+      }
+      const term = (q.get("q") ?? "").trim().toLowerCase();
+      const data: ProductView[] = rows
+        .filter((r) => {
+          if (!term) return true;
+          const hay = `${String(r.name ?? "")} ${String(r.code ?? "")} ${String(r.slug ?? "")}`.toLowerCase();
+          return hay.includes(term);
+        })
+        .map((r) => {
+          const id = typeof r.id === "string" ? r.id : String(r.code ?? "");
+          const st = r.status === "DRAFT" || r.status === "ARCHIVED" ? r.status : "ACTIVE";
+          return {
+            id,
+            code: String(r.code ?? ""),
+            name: String(r.name ?? ""),
+            slug: String(r.slug ?? ""),
+            description: typeof r.description === "string" ? r.description : null,
+            status: st,
+            machinesAllowed: typeof r.machinesAllowed === "number" ? r.machinesAllowed : 3,
+            plans: byProduct.get(id) ?? [],
+            gallery: [],
+            createdAt: typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString(),
+          } satisfies ProductView;
+        });
+      const limit = Number(q.get("limit")) || 20;
+      return NextResponse.json({ data, meta: { nextCursor: null, limit } });
     } catch {
       return upstreamUnavailable();
     }
@@ -79,6 +142,14 @@ export async function POST(req: NextRequest) {
       { status: 422 },
     );
   }
+  // Espelha o `@MaxLength(500)` do Nest (`CreateProductDto.description`):
+  // sem esta trava o upstream devolve 400 com `message` em array.
+  if (typeof body.description === "string" && body.description.trim().length > 500) {
+    return NextResponse.json(
+      { code: "UNPROCESSABLE", message: "Descrição deve ter no máximo 500 caracteres." },
+      { status: 422 },
+    );
+  }
   if (
     typeof body.machinesAllowed !== "number" ||
     !Number.isInteger(body.machinesAllowed) ||
@@ -111,13 +182,16 @@ export async function POST(req: NextRequest) {
     };
     try {
       // O Nest exige code/slug — deriva como o stub quando omitidos.
+      // Convenção canônica: code UPPER_SNAKE (ex. AURUM_TERMINAL, ver
+      // prisma/products/schema.prisma) + slug lower-kebab. Sem toLowerCase
+      // cego no code (case-sensitive no PG: WHERE code=$1).
       const ts = Date.now();
       const base = slugifyBase(name);
       const suffix = ts.toString(36).slice(-4);
-      const code =
-        typeof body.code === "string" && body.code.trim() ? body.code.trim().toLowerCase() : `${base}-${suffix}`;
-      const slug =
-        typeof body.slug === "string" && body.slug.trim() ? body.slug.trim().toLowerCase() : `${base}-${suffix}`;
+      const rawCode = typeof body.code === "string" && body.code.trim() ? body.code.trim() : `${base}-${suffix}`;
+      const rawSlug = typeof body.slug === "string" && body.slug.trim() ? body.slug.trim() : `${base}-${suffix}`;
+      const code = rawCode.toUpperCase().replace(/-/g, "_").slice(0, 64);
+      const slug = rawSlug.toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 120);
       const created = await fetch(`${API_INTERNAL_URL}/v1/products`, {
         method: "POST",
         headers,

@@ -19,17 +19,18 @@ export class ProductsController {
     return this.products.listProducts();
   }
 
-  @Public()
-  @Get(':code')
-  detail(@Param('code') code: string) {
-    return this.products.getProduct(code);
-  }
-
   // Catálogo de cobranças (público): todas as linhas ACTIVE p/ enriquecer o BFF.
+  // Declarado ANTES de ':code' — senão 'plans/all' casaria code='plans' (shadowing Express).
   @Public()
   @Get('plans/all')
   allPlans() {
     return this.plans.listPlans();
+  }
+
+  @Public()
+  @Get(':code')
+  detail(@Param('code') code: string) {
+    return this.products.getProduct(code);
   }
 
   @Public()

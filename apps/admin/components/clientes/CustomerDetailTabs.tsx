@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Ban,
   CircleCheck,
@@ -14,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/table";
 import { Table, Td, Th } from "@/components/ui/table";
-import { Tabs, TabPanel } from "@/components/ui/Tabs";
+import { TabPanel } from "@/components/ui/Tabs";
 import { Button } from "@/components/ui/Button";
 import { ErrorState as FeedbackError } from "@/components/feedback/ErrorState";
 import { MaskedJson } from "@/components/billing/MaskedJson";
@@ -23,33 +24,27 @@ import { HeartbeatDot } from "@/components/licencas/HeartbeatDot";
 import { LicenseActions } from "@/components/licencas/LicenseActions";
 import { LicenseKeyMasked } from "@/components/licencas/LicenseKeyMasked";
 import { SessionTable } from "@/components/licencas/SessionTable";
+import { fadeShift } from "@/lib/motion";
 import { formatBRL, formatDateInTZ, formatDateTimeInTZ } from "@/lib/format";
 import type { LicenseView } from "@/lib/types";
 import {
   getCustomerData,
+  getCustomerProducts,
   planCycleOf,
   subscriptionState,
   type CustomerData,
 } from "./customer-data";
 import { CustomerAccessActions } from "./CustomerAccessActions";
 
-type TabId = "perfil" | "contratos" | "licencas" | "acessos";
-
-const TABS: Array<{ id: TabId; label: string }> = [
-  { id: "perfil", label: "Perfil" },
-  { id: "contratos", label: "Contratos" },
-  { id: "licencas", label: "Licenças" },
-  { id: "acessos", label: "Acessos e diagnóstico" },
-];
+export type TabId = "perfil" | "contratos" | "licencas" | "acessos";
 
 /**
- * Conteúdo em abas do cliente — fonte única usada pelo modal (`page.tsx`) e
- * pela página profunda (`[id]/page.tsx`).
- * Superfícies opacas DS §2 (vidro só no chrome sidebar/topbar, já no ar);
- * elevação por `shadow-1` + borda de token; sem blur em conteúdo denso.
+ * Painéis do detalhe do cliente — as abas vivem fixas no modal
+ * (`CustomerDetailModal`), aqui só o conteúdo rolável.
+ * Superfícies opacas DS §2; troca e expansões animam só opacity+y
+ * (`fadeShift`, 160ms), sem animar width/height (DS §6, 60fps).
  */
-export function CustomerDetailTabs({ customerId }: { customerId: string }) {
-  const [tab, setTab] = useState<TabId>("perfil");
+export function CustomerDetailTabs({ customerId, tab }: { customerId: string; tab: TabId }) {
   const data = getCustomerData(customerId);
 
   if (!data) {
@@ -58,29 +53,36 @@ export function CustomerDetailTabs({ customerId }: { customerId: string }) {
 
   return (
     <div>
-      <Tabs tabs={TABS} value={tab} onChange={setTab} label="Seções do cliente" />
-      <div className="mt-4">
-        {tab === "perfil" && (
-          <TabPanel label="Perfil do cliente">
-            <PerfilPanel data={data} />
-          </TabPanel>
-        )}
-        {tab === "contratos" && (
-          <TabPanel label="Contratos do cliente">
-            <ContratosPanel data={data} />
-          </TabPanel>
-        )}
-        {tab === "licencas" && (
-          <TabPanel label="Licenças do cliente">
-            <LicencasPanel data={data} />
-          </TabPanel>
-        )}
-        {tab === "acessos" && (
-          <TabPanel label="Acessos e diagnóstico">
-            <AcessosPanel data={data} />
-          </TabPanel>
-        )}
-      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={tab}
+          variants={fadeShift}
+          initial="hidden"
+          animate="show"
+          exit="exit"
+        >
+          {tab === "perfil" && (
+            <TabPanel label="Perfil do cliente">
+              <PerfilPanel data={data} />
+            </TabPanel>
+          )}
+          {tab === "contratos" && (
+            <TabPanel label="Contratos do cliente">
+              <ContratosPanel data={data} />
+            </TabPanel>
+          )}
+          {tab === "licencas" && (
+            <TabPanel label="Licenças do cliente">
+              <LicencasPanel data={data} />
+            </TabPanel>
+          )}
+          {tab === "acessos" && (
+            <TabPanel label="Acessos e diagnóstico">
+              <AcessosPanel data={data} />
+            </TabPanel>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
@@ -89,43 +91,54 @@ export function CustomerDetailTabs({ customerId }: { customerId: string }) {
 
 function PanelCard({ children, label }: { children: React.ReactNode; label: string }) {
   return (
-    <section aria-label={label} className="rounded-card border border-line1 bg-bg1 shadow-1 p-5">
+    <section aria-label={label} className="rounded-card border border-line1 bg-bg1 shadow-1 p-4">
       {children}
     </section>
   );
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="mt-0 mb-2 text-headline font-semibold text-text1">{children}</h3>;
+}
+
+function SubTitle({ children }: { children: React.ReactNode }) {
+  return <h4 className="m-0 mb-1.5 text-callout font-semibold uppercase tracking-wide text-text2">{children}</h4>;
+}
+
 function PerfilPanel({ data }: { data: CustomerData }) {
   const { customer } = data;
-  const [blocked, setBlocked] = useState(customer.status === "blocked");
-  const [trail, setTrail] = useState<string | null>(null);
+  const products = getCustomerProducts(customer.id);
+  const blocked = customer.status === "blocked";
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <PanelCard label="Informações do perfil">
-        <dl className="m-0 grid gap-3 sm:grid-cols-2">
+        <SectionTitle>Informações do perfil</SectionTitle>
+        <dl className="m-0 grid gap-x-6 gap-y-4 sm:grid-cols-2">
           <div>
             <dt className="text-callout text-text2">Nome completo</dt>
-            <dd className="m-0 text-body font-semibold text-text1">{customer.name}</dd>
+            <dd className="m-0 mt-0.5 text-body font-semibold text-text1">{customer.name}</dd>
           </div>
           <div>
             <dt className="text-callout text-text2">E-mail</dt>
-            <dd className="m-0 text-body text-text1">{customer.email}</dd>
+            <dd className="m-0 mt-0.5 break-all text-body text-text1">{customer.email}</dd>
           </div>
           <div>
             <dt className="text-callout text-text2">CPF/CNPJ</dt>
-            <dd className="m-0 text-body text-text1">
+            <dd className="m-0 mt-0.5 text-body text-text1">
               <span className="font-mono tnum text-[0.85em]">{customer.docMasked}</span>
               <span className="block text-callout text-text2">Mascarado (LGPD — sem dado cru na UI).</span>
             </dd>
           </div>
           <div>
             <dt className="text-callout text-text2">Registrado em</dt>
-            <dd className="m-0 text-body text-text1">{formatDateInTZ(customer.createdAt)}</dd>
+            <dd className="m-0 mt-0.5 text-body text-text1">
+              <time dateTime={customer.createdAt}>{formatDateInTZ(customer.createdAt)}</time>
+            </dd>
           </div>
           <div>
             <dt className="text-callout text-text2">Status</dt>
-            <dd className="m-0 text-body text-text1">
+            <dd className="m-0 mt-1 text-body text-text1">
               {blocked ? (
                 <Badge tone="danger" state="Bloqueado">
                   <Ban size={14} strokeWidth={1.75} aria-hidden="true" />
@@ -141,28 +154,31 @@ function PerfilPanel({ data }: { data: CustomerData }) {
           </div>
           <div>
             <dt className="text-callout text-text2">Organização</dt>
-            <dd className="m-0 text-body text-text1">
+            <dd className="m-0 mt-0.5 text-body text-text1">
               <span className="font-mono tnum text-[0.85em]">{customer.organizationId}</span>
             </dd>
           </div>
+          <div className="sm:col-span-2">
+            <dt className="text-callout text-text2">Produtos vinculados</dt>
+            <dd className="m-0 mt-1 text-body text-text1">
+              {products.length === 0 ? (
+                <span className="text-callout text-text2">Somente conta — sem produto vinculado.</span>
+              ) : (
+                <span className="flex flex-wrap gap-1">
+                  {products.map((p) => (
+                    <Badge key={p} tone={/mensal/i.test(p) ? "accent" : /anual/i.test(p) ? "info" : "neutral"} state={p}>
+                      <Package size={14} strokeWidth={1.75} aria-hidden="true" />
+                      {p}
+                    </Badge>
+                  ))}
+                </span>
+              )}
+            </dd>
+          </div>
         </dl>
-        {trail && (
-          <p className="mb-0 mt-3 text-callout text-text2" role="status">
-            Trilha de acesso: <span className="font-mono tnum text-[0.85em]">{trail}</span>
-          </p>
-        )}
-      </PanelCard>
-      <PanelCard label="Ajustes de acesso">
-        <h3 className="mt-0 text-headline text-text1">Ajustes de acesso</h3>
-        <CustomerAccessActions
-          customer={customer}
-          licenses={data.licenses}
-          blocked={blocked}
-          onBlockedChange={(next, auditId) => {
-            setBlocked(next);
-            setTrail(auditId);
-          }}
-        />
+        <p className="mb-0 mt-3 border-t border-line1 pt-3 text-callout text-text2">
+          Gestão (bloquear, bonificar, máquinas, cobrança) em Acessos e diagnóstico.
+        </p>
       </PanelCard>
     </div>
   );
@@ -178,89 +194,100 @@ function ContratosPanel({ data }: { data: CustomerData }) {
     );
   }
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {subscriptions.length > 0 && (
-        <Table
-          caption="Produtos assinados (validade e estado da cobrança)"
-          head={
-            <>
-              <Th>Produto</Th>
-              <Th>Pacote</Th>
-              <Th>Validade</Th>
-              <Th numeric>Valor</Th>
-              <Th>Status</Th>
-            </>
-          }
-        >
-          {subscriptions.map((s) => {
-            const cycle = planCycleOf(s.planName);
-            const st = subscriptionState(s);
-            return (
-              <tr key={s.id}>
-                <Td>
-                  <span className="inline-flex items-center gap-2">
-                    <Package size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-text2" />
-                    {s.planName}
-                  </span>
-                </Td>
-                <Td>
-                  {cycle === "Mensal" ? (
-                    <Badge tone="accent" state="Pacote mensal">Mensal</Badge>
-                  ) : cycle === "Anual" ? (
-                    <Badge tone="info" state="Pacote anual">Anual</Badge>
-                  ) : (
-                    <Badge tone="neutral">—</Badge>
-                  )}
-                </Td>
-                <Td>
-                  <time dateTime={s.nextDue}>{formatDateInTZ(s.nextDue)}</time>
-                  <span className="block text-callout text-text2">próxima cobrança</span>
-                </Td>
-                <Td numeric>{formatBRL(s.amount)}</Td>
-                <Td>
-                  {st.state === "em-dia" ? (
-                    <Badge tone="ok" state={st.label}>
-                      <CircleCheck size={14} strokeWidth={1.75} aria-hidden="true" />
-                      {st.label}
-                    </Badge>
-                  ) : st.state === "atrasado" ? (
-                    <Badge tone="danger" state={st.label}>
-                      <Ban size={14} strokeWidth={1.75} aria-hidden="true" />
-                      {st.label}
-                    </Badge>
-                  ) : (
-                    <Badge tone="neutral" state={st.label}>{st.label}</Badge>
-                  )}
-                </Td>
-              </tr>
-            );
-          })}
-        </Table>
+        <PanelCard label={`Assinaturas (${subscriptions.length})`}>
+          <SectionTitle>Assinaturas ({subscriptions.length})</SectionTitle>
+          <p className="mt-0 text-callout text-text2">
+            Validade e estado da cobrança de cada produto assinado.
+          </p>
+          <Table
+            caption="Produtos assinados (validade e estado da cobrança)"
+            head={
+              <>
+                <Th>Produto</Th>
+                <Th>Pacote</Th>
+                <Th>Validade</Th>
+                <Th numeric>Valor</Th>
+                <Th>Status</Th>
+              </>
+            }
+          >
+            {subscriptions.map((s) => {
+              const cycle = planCycleOf(s.planName);
+              const st = subscriptionState(s);
+              return (
+                <tr key={s.id}>
+                  <Td>
+                    <span className="inline-flex items-center gap-2">
+                      <Package size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-text2" />
+                      {s.planName}
+                    </span>
+                  </Td>
+                  <Td>
+                    {cycle === "Mensal" ? (
+                      <Badge tone="accent" state="Pacote mensal">Mensal</Badge>
+                    ) : cycle === "Anual" ? (
+                      <Badge tone="info" state="Pacote anual">Anual</Badge>
+                    ) : (
+                      <Badge tone="neutral">—</Badge>
+                    )}
+                  </Td>
+                  <Td>
+                    <time dateTime={s.nextDue}>{formatDateInTZ(s.nextDue)}</time>
+                    <span className="block text-callout text-text2">próxima cobrança</span>
+                  </Td>
+                  <Td numeric>{formatBRL(s.amount)}</Td>
+                  <Td>
+                    {st.state === "em-dia" ? (
+                      <Badge tone="ok" state={st.label}>
+                        <CircleCheck size={14} strokeWidth={1.75} aria-hidden="true" />
+                        {st.label}
+                      </Badge>
+                    ) : st.state === "atrasado" ? (
+                      <Badge tone="danger" state={st.label}>
+                        <Ban size={14} strokeWidth={1.75} aria-hidden="true" />
+                        {st.label}
+                      </Badge>
+                    ) : (
+                      <Badge tone="neutral" state={st.label}>{st.label}</Badge>
+                    )}
+                  </Td>
+                </tr>
+              );
+            })}
+          </Table>
+        </PanelCard>
       )}
       {contracts.length > 0 && (
-        <Table
-          caption="Contratos (preço congelado)"
-          head={
-            <>
-              <Th>Produto</Th>
-              <Th numeric>Preço congelado</Th>
-              <Th>Início</Th>
-            </>
-          }
-        >
-          {contracts.map((c) => (
-            <tr key={c.id}>
-              <Td>
-                <span className="inline-flex items-center gap-2">
-                  <FileText size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-text2" />
-                  {c.productName}
-                </span>
-              </Td>
-              <Td numeric>{formatBRL(c.priceFrozen)}</Td>
-              <Td>{formatDateInTZ(c.startedAt)}</Td>
-            </tr>
-          ))}
-        </Table>
+        <PanelCard label={`Contratos com preço congelado (${contracts.length})`}>
+          <SectionTitle>Contratos — preço congelado ({contracts.length})</SectionTitle>
+          <Table
+            caption="Contratos (preço congelado)"
+            head={
+              <>
+                <Th>Produto</Th>
+                <Th numeric>Preço congelado</Th>
+                <Th>Início</Th>
+              </>
+            }
+          >
+            {contracts.map((c) => (
+              <tr key={c.id}>
+                <Td>
+                  <span className="inline-flex items-center gap-2">
+                    <FileText size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-text2" />
+                    {c.productName}
+                  </span>
+                </Td>
+                <Td numeric>{formatBRL(c.priceFrozen)}</Td>
+                <Td>
+                  <time dateTime={c.startedAt}>{formatDateInTZ(c.startedAt)}</time>
+                </Td>
+              </tr>
+            ))}
+          </Table>
+        </PanelCard>
       )}
     </div>
   );
@@ -275,8 +302,9 @@ function LicencasPanel({ data }: { data: CustomerData }) {
   }
   return (
     <div className="flex flex-col gap-3">
-      <p className="m-0 text-callout text-text2">
-        Chaves sempre mascaradas (PROJECT §2). Revelação exige{" "}
+      <p className="m-0 rounded-card border border-line1 bg-bg1 p-3 text-callout text-text2">
+        {data.licenses.length} {data.licenses.length === 1 ? "licença" : "licenças"} · chaves
+        sempre mascaradas (PROJECT §2). Revelação exige{" "}
         <code className="font-mono tnum text-[0.85em]">license.read</code> + MFA, auditada.
       </p>
       {data.licenses.map((l) => {
@@ -309,7 +337,19 @@ function LicencasPanel({ data }: { data: CustomerData }) {
                 </Button>
               </span>
             </div>
-            {open && <LicenseDetails license={l} data={data} />}
+            <AnimatePresence initial={false}>
+              {open && (
+                <motion.div
+                  key={`lic-${l.id}`}
+                  variants={fadeShift}
+                  initial="hidden"
+                  animate="show"
+                  exit="exit"
+                >
+                  <LicenseDetails license={l} data={data} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
         );
       })}
@@ -320,20 +360,20 @@ function LicencasPanel({ data }: { data: CustomerData }) {
 function LicenseDetails({ license, data }: { license: LicenseView; data: CustomerData }) {
   const devices = data.devices.filter((d) => d.licenseId === license.id);
   return (
-    <div className="mt-4 flex flex-col gap-4 border-t border-line1 pt-4">
+    <div className="mt-3 flex flex-col gap-3 border-t border-line1 pt-3">
       <div>
-        <h4 className="m-0 mb-2 text-headline text-text1">Chave de ativação</h4>
+        <SubTitle>Chave de ativação</SubTitle>
         <LicenseKeyMasked licenseId={license.id} keyMasked={license.keyMasked} />
-        <p className="mb-0 mt-2 text-callout text-text2">
-          Validade: expira em {formatDateInTZ(license.expiresAt)}
-          {license.graceUntil && <> · graça até {formatDateInTZ(license.graceUntil)}</>} · origem{" "}
+        <p className="mb-0 mt-1.5 text-callout text-text2">
+          Expira em <time dateTime={license.expiresAt}>{formatDateInTZ(license.expiresAt)}</time>
+          {license.graceUntil && <> · graça até <time dateTime={license.graceUntil}>{formatDateInTZ(license.graceUntil)}</time></>} · origem{" "}
           {license.origin}
         </p>
       </div>
       <div>
-        <h4 className="m-0 mb-2 text-headline text-text1">Máquinas vinculadas</h4>
+        <SubTitle>Máquinas vinculadas ({devices.length})</SubTitle>
         {devices.length === 0 ? (
-          <EmptyState title="Sem máquinas" message="Nenhuma máquina vinculada a esta licença." />
+          <p className="m-0 text-callout text-text2">Nenhuma máquina vinculada a esta licença.</p>
         ) : (
           <Table
             caption={`Máquinas da licença ${license.id} (id por hash, nunca hardware cru)`}
@@ -371,39 +411,12 @@ function LicenseDetails({ license, data }: { license: LicenseView; data: Custome
         )}
       </div>
       <div>
-        <h4 className="m-0 mb-2 text-headline text-text1">Endereços de IP e conexão</h4>
-        {data.sessions.length === 0 ? (
-          <EmptyState title="Sem sessões" message="Nenhuma sessão registrada para este cliente." />
-        ) : (
-          <Table
-            caption="Sessões do cliente (IP mascarado /24, nunca raw — PROJECT §4)"
-            head={
-              <>
-                <Th>Dispositivo</Th>
-                <Th>IP</Th>
-                <Th>Conectado</Th>
-              </>
-            }
-          >
-            {data.sessions.map((s) => (
-              <tr key={s.id}>
-                <Td>{s.deviceLabel}</Td>
-                <Td mono>{s.ipMasked}</Td>
-                <Td>
-                  <HeartbeatDot lastActivity={s.lastActivity} />
-                </Td>
-              </tr>
-            ))}
-          </Table>
-        )}
-        <p className="mb-0 mt-2 text-callout text-text2">
-          Vínculo sessão↔licença aproximado no stub; o backend resolve pelo `device_hash` + `license_id`.
-        </p>
-      </div>
-      <div>
-        <h4 className="m-0 mb-2 text-headline text-text1">Ajustes da licença</h4>
+        <SubTitle>Ajustes da licença</SubTitle>
         <LicenseActions license={license} />
       </div>
+      <p className="m-0 text-callout text-text2">
+        IPs e sessões em Acessos e diagnóstico.
+      </p>
     </div>
   );
 }
@@ -412,21 +425,45 @@ function LicenseDetails({ license, data }: { license: LicenseView; data: Custome
 
 function AcessosPanel({ data }: { data: CustomerData }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState(data.customer.status === "blocked");
+  const [trail, setTrail] = useState<string | null>(null);
   return (
-    <div className="flex flex-col gap-4">
-      <section aria-label="Gestão de acessos">
-        <h3 className="mt-0 text-headline text-text1">Gestão de acessos</h3>
+    <div className="flex flex-col gap-3">
+      <PanelCard label="Ações de acesso">
+        <SectionTitle>Ações de acesso</SectionTitle>
+        <p className="mt-0 text-callout text-text2">
+          Bloqueio reversível (SUSPEND, nunca CANCEL), liberação, bônus com cortesia
+          financeira e cobrança — cada ação gera trilhas primária + secundárias
+          ligadas por `correlationId` (visíveis em Logs, abaixo).
+        </p>
+        <CustomerAccessActions
+          customer={{ ...data.customer, status: blocked ? "blocked" : "active" }}
+          licenses={data.licenses}
+          blocked={blocked}
+          onBlockedChange={(next, auditId) => {
+            setBlocked(next);
+            setTrail(auditId);
+          }}
+        />
+        {trail && (
+          <p className="mb-0 mt-3 text-callout text-text2" role="status">
+            Última trilha: <span className="font-mono tnum text-[0.85em]">{trail}</span>
+          </p>
+        )}
+      </PanelCard>
+      <PanelCard label={`Gestão de acessos (${data.sessions.length})`}>
+        <SectionTitle>Gestão de acessos ({data.sessions.length})</SectionTitle>
         <SessionTable sessions={data.sessions} />
-      </section>
-      <section aria-label="Erros de ferramenta e diagnóstico">
-        <h3 className="mt-0 text-headline text-text1">Erros de ferramenta e diagnóstico</h3>
+      </PanelCard>
+      <PanelCard label="Erros de ferramenta e diagnóstico">
+        <SectionTitle>Erros de ferramenta e diagnóstico</SectionTitle>
         {data.devices.filter((d) => d.suspectClone || !d.live).length === 0 && data.sessions.length > 0 ? (
-          <div className="rounded-card border border-line1 bg-bg1 shadow-1 p-4" role="status">
-            <p className="m-0 text-body text-text1">
-              <Badge tone="ok" state="Sem anomalias">Sem anomalias</Badge> Nenhum clone suspeito nem
-              sessão ociosa fora da janela no momento.
-            </p>
-          </div>
+          <p className="m-0 text-body text-text1" role="status">
+            <Badge tone="ok" state="Sem anomalias">Sem anomalias</Badge> Nenhum clone suspeito nem
+            sessão ociosa fora da janela no momento.
+          </p>
+        ) : data.devices.length === 0 ? (
+          <EmptyState title="Sem dispositivos" message="Nenhum dispositivo vinculado para diagnosticar." />
         ) : (
           <Table
             caption="Diagnóstico por dispositivo (clone suspeito, heartbeat)"
@@ -452,17 +489,21 @@ function AcessosPanel({ data }: { data: CustomerData }) {
                     <Badge tone="ok" state="Saudável">Saudável</Badge>
                   )}
                 </Td>
-                <Td>{formatDateTimeInTZ(d.lastActivity)}</Td>
+                <Td>
+                  <time dateTime={d.lastActivity}>{formatDateTimeInTZ(d.lastActivity)}</time>
+                </Td>
               </tr>
             ))}
           </Table>
         )}
-      </section>
-      <section aria-label="Logs para auditoria">
-        <h3 className="mt-0 flex items-center gap-2 text-headline text-text1">
-          <ScrollText size={16} strokeWidth={1.75} aria-hidden="true" className="text-text2" />
-          Logs para auditoria
-        </h3>
+      </PanelCard>
+      <PanelCard label={`Logs para auditoria (${data.audit.length})`}>
+        <SectionTitle>
+          <span className="inline-flex items-center gap-2">
+            <ScrollText size={16} strokeWidth={1.75} aria-hidden="true" className="text-text2" />
+            Logs para auditoria ({data.audit.length})
+          </span>
+        </SectionTitle>
         {data.audit.length === 0 ? (
           <EmptyState title="Sem logs vinculados" message="Nenhum evento de auditoria para este cliente." />
         ) : (
@@ -481,7 +522,9 @@ function AcessosPanel({ data }: { data: CustomerData }) {
             >
               {data.audit.map((e) => (
                 <tr key={e.id}>
-                  <Td>{formatDateTimeInTZ(e.occurredAt)}</Td>
+                  <Td>
+                    <time dateTime={e.occurredAt}>{formatDateTimeInTZ(e.occurredAt)}</time>
+                  </Td>
                   <Td>
                     <code className="font-mono tnum text-[0.85em]">{e.action}</code>
                     <span className="block text-callout text-text2">{e.resource}:{e.resourceId}</span>
@@ -503,12 +546,22 @@ function AcessosPanel({ data }: { data: CustomerData }) {
                 </tr>
               ))}
             </Table>
-            {expanded && (
-              <ExpandedAudit event={data.audit.find((e) => e.id === expanded) ?? null} onClose={() => setExpanded(null)} />
-            )}
+            <AnimatePresence initial={false}>
+              {expanded && (
+                <motion.div
+                  key={expanded}
+                  variants={fadeShift}
+                  initial="hidden"
+                  animate="show"
+                  exit="exit"
+                >
+                  <ExpandedAudit event={data.audit.find((e) => e.id === expanded) ?? null} onClose={() => setExpanded(null)} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </>
         )}
-      </section>
+      </PanelCard>
     </div>
   );
 }
@@ -522,8 +575,8 @@ function ExpandedAudit({
 }) {
   if (!event) return null;
   return (
-    <section aria-label={`Log ${event.id}`} className="mt-3 rounded-card border border-line1 bg-bg1 shadow-1 p-4">
-      <h4 className="m-0 text-headline text-text1">
+    <section aria-label={`Log ${event.id}`} className="mt-3 rounded-card border border-line1 bg-bg2 p-4">
+      <h4 className="m-0 text-headline font-semibold text-text1">
         <code className="font-mono tnum text-[0.85em]">{event.action}</code>{" "}
         <span className="font-normal text-text2">{event.id}</span>
       </h4>

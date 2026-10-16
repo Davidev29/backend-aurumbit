@@ -31,6 +31,15 @@ export class ActivateByKeyDto {
   @MaxLength(128)
   app_instance_id?: string;
 
+  /**
+   * IP local da máquina, enviado pelo app (bonificação/promo: o limite conta
+   * máquinas distintas por IP). Ausente = IP observado da conexão.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  ip?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(120)
@@ -78,7 +87,7 @@ export class ActivationController {
       const out = await this.devices.linkDevice(found.id, {
         app_instance_id: dto.app_instance_id,
         label: dto.label,
-        ip: clientIp(req),
+        ip: dto.ip ?? clientIp(req),
       });
       device = { device_hash: out.device.device_hash, created: out.created };
     } catch (e: unknown) {

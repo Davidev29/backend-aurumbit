@@ -18,6 +18,8 @@ const TITLES: Record<string, string> = {
   "/financeiro": "Financeiro",
   "/notificacoes": "Notificações",
   "/filas": "Filas",
+  "/produtos": "Produtos",
+  "/promocionais": "Promocionais",
   "/perfil": "Meu perfil",
 };
 

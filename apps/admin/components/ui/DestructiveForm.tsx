@@ -34,6 +34,7 @@ export function DestructiveForm({
   pending = false,
   error,
   autoFocusReason = true,
+  errorLive = true,
   onBack,
   onSubmit,
 }: {
@@ -47,6 +48,11 @@ export function DestructiveForm({
   pending?: boolean;
   error?: string | null;
   autoFocusReason?: boolean;
+  /**
+   * Quando o diálogo já anuncia a falha via Toast (`notifyError`), desliga o
+   * `role=alert` inline p/ não anunciar duas vezes (o texto persiste visível).
+   */
+  errorLive?: boolean;
   onBack: () => void;
   /** Recebe o motivo já com `trim()`; nunca limpa o campo em erro de rede. */
   onSubmit: (motivo: string) => void | Promise<void>;
@@ -93,7 +99,10 @@ export function DestructiveForm({
         </label>
       </div>
       {error && (
-        <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]" role="alert">
+        <p
+          className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]"
+          role={errorLive === false ? undefined : "alert"}
+        >
           <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           {error}
         </p>

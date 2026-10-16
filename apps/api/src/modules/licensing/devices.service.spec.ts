@@ -11,6 +11,7 @@ const NEW2 = H('c');
 function licRow(over: Record<string, unknown> = {}) {
   return {
     id: 'lic-1',
+    ownerType: 'CUSTOMER',
     ownerId: 'cust-1',
     productId: 'prod-1',
     planId: null,
@@ -70,12 +71,12 @@ function emittedOutbox(
   return queries.some((x) => (JSON.stringify(x.params ?? []) as string).includes(type));
 }
 
-describe('DevicesService — limite (COUNT FOR UPDATE → 409 DEVICE_LIMIT)', () => {
+describe('DevicesService — limite (COUNT sem FOR UPDATE → 409 DEVICE_LIMIT)', () => {
   it('nega quando o limite foi atingido e retorna a lista', async () => {
     const existing = devRow(OLD);
     const { pool, queries } = mockPool((sql, params) => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
-      if (sql.startsWith('SELECT id, "ownerId"')) return { rows: [licRow()] }; // lock licença
+      if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow()] }; // lock licença
       if (sql.includes('AND device_hash') && (params as string[])?.[1] === NEW1) return { rows: [] };
       if (sql.includes('COUNT(*)')) return { rows: [{ n: 1 }] }; // 1 ativo, max 1
       if (sql.includes("status = 'active'") && sql.includes('ORDER BY')) return { rows: [existing] };
@@ -92,7 +93,7 @@ describe('DevicesService — limite (COUNT FOR UPDATE → 409 DEVICE_LIMIT)', ()
 
   it('vincula quando há vaga e emite DeviceLinked', async () => {
     const { pool, queries } = mockPool((sql, params) => {
-      if (sql.startsWith('SELECT id, "ownerId"')) return { rows: [licRow({ maxDevices: 3 })] };
+      if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow({ maxDevices: 3 })] };
       if (sql.includes('AND device_hash')) return { rows: [] };
       if (sql.includes('COUNT(*)')) return { rows: [{ n: 1 }] };
       if (sql.startsWith('INSERT INTO license_devices')) {
@@ -109,9 +110,30 @@ describe('DevicesService — limite (COUNT FOR UPDATE → 409 DEVICE_LIMIT)', ()
     expect(emittedOutbox(queries, 'DeviceLinked.v1')).toBe(true);
   });
 
+  it('regressão: COUNT do limite nunca leva FOR UPDATE (PG 0A000 → 500)', async () => {
+    const { pool, queries } = mockPool((sql, params) => {
+      if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow({ maxDevices: 3 })] };
+      if (sql.includes('AND device_hash')) return { rows: [] };
+      if (sql.includes('COUNT(*)')) return { rows: [{ n: 0 }] };
+      if (sql.startsWith('INSERT INTO license_devices')) {
+        return { rows: [devRow((params as string[])[2] as string)] };
+      }
+      if (sql.startsWith('INSERT INTO outbox_events')) return { rows: [] };
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      throw new Error(`SQL inesperado: ${sql}`);
+    });
+    const svc = new DevicesService(pool as never);
+    await svc.linkDevice('lic-1', { device_hash: NEW2 }, NOW);
+    const counts = queries.filter((x) => x.sql.includes('COUNT(*)'));
+    expect(counts).toHaveLength(1);
+    expect(counts[0].sql).not.toMatch(/FOR UPDATE/i);
+    // A serialização continua vindo do lock na linha da licença.
+    expect(queries.some((x) => x.sql.includes('FROM licenses WHERE id = $1 FOR UPDATE'))).toBe(true);
+  });
+
   it('re-link do mesmo hash é idempotente', async () => {
     const { pool } = mockPool((sql) => {
-      if (sql.startsWith('SELECT id, "ownerId"')) return { rows: [licRow()] };
+      if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow()] };
       if (sql.includes('AND device_hash')) return { rows: [devRow(OLD)] };
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
       throw new Error(`SQL inesperado: ${sql}`);
@@ -119,6 +141,103 @@ describe('DevicesService — limite (COUNT FOR UPDATE → 409 DEVICE_LIMIT)', ()
     const svc = new DevicesService(pool as never);
     const out = await svc.linkDevice('lic-1', { device_hash: OLD }, NOW);
     expect(out.created).toBe(false);
+  });
+});
+
+describe('DevicesService — promo: limite conta máquinas distintas (IP)', () => {
+  const IP_A = '192.168.0.10';
+  const IP_B = '192.168.0.20';
+
+  function promoPool(sameIpRows: Record<string, unknown>[]) {
+    return mockPool((sql, params) => {
+      if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow({ ownerType: 'PROMO', maxDevices: 3 })] };
+      if (sql.includes('ip_hash = ANY')) return { rows: sameIpRows }; // mesma máquina?
+      if (sql.includes('ip_hash = COALESCE')) return { rows: [devRow(OLD)] }; // reafirma
+      if (sql.includes('AND device_hash')) return { rows: [] }; // instância nova
+      if (sql.includes('COUNT(*)')) return { rows: [{ n: 1 }] };
+      if (sql.startsWith('INSERT INTO license_devices')) {
+        return { rows: [devRow((params as string[])[2] as string)] };
+      }
+      if (sql.startsWith('INSERT INTO outbox_events')) return { rows: [] };
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      throw new Error(`SQL inesperado: ${sql}`);
+    });
+  }
+
+  it('mesmo IP + instância nova reafirma o device sem consumir slot', async () => {
+    process.env.IP_HASH_SALT = 'test-salt-1234';
+    try {
+      const { pool, queries } = promoPool([devRow(OLD)]);
+      const svc = new DevicesService(pool as never);
+      const out = await svc.linkDevice('lic-1', { app_instance_id: 'inst-nova', ip: IP_A }, NOW);
+      expect(out.created).toBe(false);
+      expect(out.device.device_hash).toBe(OLD);
+      expect(queries.some((x) => x.sql.startsWith('INSERT INTO license_devices'))).toBe(false);
+    } finally {
+      delete process.env.IP_HASH_SALT;
+    }
+  });
+
+  it('IP distinto consome slot (nova máquina)', async () => {
+    process.env.IP_HASH_SALT = 'test-salt-1234';
+    try {
+      const { pool, queries } = promoPool([]);
+      const svc = new DevicesService(pool as never);
+      const out = await svc.linkDevice('lic-1', { app_instance_id: 'inst-outro-pc', ip: IP_B }, NOW);
+      expect(out.created).toBe(true);
+      expect(queries.some((x) => x.sql.startsWith('INSERT INTO license_devices'))).toBe(true);
+    } finally {
+      delete process.env.IP_HASH_SALT;
+    }
+  });
+
+  it('ponte legada: linha com hash do IP cru (::ffff:) ainda é reconhecida', async () => {
+    process.env.IP_HASH_SALT = 'test-salt-1234';
+    try {
+      const { hashIp } = await import('./device-hash');
+      const legacyHash = hashIp('::ffff:192.168.0.10', 'test-salt-1234');
+      const { pool, queries } = mockPool((sql, params) => {
+        if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow({ ownerType: 'PROMO', maxDevices: 3 })] };
+        if (sql.includes('ip_hash = ANY')) {
+          const hs = (params as unknown[])[1] as string[];
+          return { rows: hs.includes(legacyHash) ? [devRow(OLD)] : [] };
+        }
+        if (sql.includes('ip_hash = COALESCE')) return { rows: [devRow(OLD)] };
+        if (sql.includes('AND device_hash')) return { rows: [] };
+        if (sql.includes('COUNT(*)')) return { rows: [{ n: 1 }] };
+        if (sql.startsWith('INSERT INTO license_devices')) {
+          return { rows: [devRow((params as string[])[2] as string)] };
+        }
+        if (sql.startsWith('INSERT INTO outbox_events')) return { rows: [] };
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+        throw new Error(`SQL inesperado: ${sql}`);
+      });
+      const svc = new DevicesService(pool as never);
+      const out = await svc.linkDevice('lic-1', { app_instance_id: 'inst-nova', ip: '::ffff:192.168.0.10' }, NOW);
+      expect(out.created).toBe(false);
+      expect(out.device.device_hash).toBe(OLD);
+      expect(queries.some((x) => x.sql.startsWith('INSERT INTO license_devices'))).toBe(false);
+    } finally {
+      delete process.env.IP_HASH_SALT;
+    }
+  });
+
+  it('licença paga (CUSTOMER) mantém o estrito por instalação mesmo no mesmo IP', async () => {
+    const { pool, queries } = mockPool((sql, params) => {
+      if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow({ maxDevices: 3 })] }; // CUSTOMER
+      if (sql.includes('AND device_hash')) return { rows: [] };
+      if (sql.includes('COUNT(*)')) return { rows: [{ n: 1 }] };
+      if (sql.startsWith('INSERT INTO license_devices')) {
+        return { rows: [devRow((params as string[])[2] as string)] };
+      }
+      if (sql.startsWith('INSERT INTO outbox_events')) return { rows: [] };
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      throw new Error(`SQL inesperado: ${sql}`);
+    });
+    const svc = new DevicesService(pool as never);
+    const out = await svc.linkDevice('lic-1', { app_instance_id: 'inst-nova', ip: IP_A }, NOW);
+    expect(out.created).toBe(true);
+    expect(queries.some((x) => x.sql.includes('ip_hash = ANY'))).toBe(false);
   });
 });
 
@@ -151,7 +270,7 @@ describe('DevicesService — rotate (janela 15min, duplo-aceite)', () => {
   it('hash antigo dentro da janela → DUAL_ACCEPT_ROTATE; após → ROTATED_EXPIRED', async () => {
     async function validateAt(now: Date, rotateExpires: Date) {
       const { pool } = mockPool((sql, params) => {
-        if (sql.startsWith('SELECT id, "ownerId"')) return { rows: [licRow()] };
+        if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow()] };
         if (sql.includes('AND device_hash')) {
           return {
             rows: [devRow(OLD, { status: 'rotated', rotated_to: NEW1, rotate_expires_at: rotateExpires })],
@@ -189,7 +308,7 @@ describe('DevicesService — rotate (janela 15min, duplo-aceite)', () => {
 describe('DevicesService — clone (marca + outbox + DENY CLONE_SUSPECT)', () => {
   async function validateWith(device: Record<string, unknown>, sight: { country?: string; tokenIatS?: number; ctr?: number }) {
     const { pool, queries } = mockPool((sql) => {
-      if (sql.startsWith('SELECT id, "ownerId"')) return { rows: [licRow()] };
+      if (sql.startsWith('SELECT id, "ownerType"')) return { rows: [licRow()] };
       if (sql.includes('AND device_hash')) return { rows: [device] };
       if (sql.startsWith('UPDATE license_devices SET cloned_suspect')) return { rows: [] };
       if (sql.startsWith('INSERT INTO outbox_events')) return { rows: [] };

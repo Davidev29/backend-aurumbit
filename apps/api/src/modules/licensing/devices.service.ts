@@ -3,11 +3,13 @@ import type { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { emitSecurityEvent, getSecurityEventPool } from '../audit/security-events';
 import { detectCloneSuspect } from './clone-policy';
-import { computeDeviceHash, decryptLabel, encryptLabel, hashIp, isValidDeviceHash, maskIp24 } from './device-hash';
+import { computeDeviceHash, decryptLabel, encryptLabel, hashIp, isValidDeviceHash, maskIp24, normalizeIp } from './device-hash';
 import { LICENSING_POOL } from './licensing-pool.provider';
 
 // Serviço de devices da licença (Fase 3, PROJECT.md §§1/4, REQUIREMENTS.md §2).
-// Enforcement do limite no backend com COUNT ... FOR UPDATE dentro de transação.
+// Enforcement do limite no backend com COUNT dentro de transação (a linha da
+// licença é travada com FOR UPDATE — agregar (COUNT) nunca leva FOR UPDATE:
+// Postgres recusa com 0A000).
 // Retenção (PROJECT.md §4): vida da licença + 12 meses, depois anonimiza; unlink
 // remove o vínculo (DELETE) mas preserva o hash na trilha (outbox DeviceUnlinked).
 
@@ -16,6 +18,7 @@ const DEFAULT_MAX_DEVICES = 3;
 
 export type LicenseRow = {
   id: string;
+  ownerType: string;
   ownerId: string;
   productId: string;
   planId: string | null;
@@ -102,6 +105,7 @@ type Q = { query: (text: string, params?: unknown[]) => Promise<{ rows: Array<Re
 function mapLicense(r: Record<string, unknown>): LicenseRow {
   return {
     id: String(r.id),
+    ownerType: typeof r.ownerType === 'string' && r.ownerType ? r.ownerType : 'CUSTOMER',
     ownerId: String(r.ownerId),
     productId: String(r.productId),
     planId: (r.planId as string | null) ?? null,
@@ -201,7 +205,7 @@ export class DevicesService {
 
   async getLicense(licenseId: string): Promise<LicenseRow | null> {
     const { rows } = await this.pool.query(
-      `SELECT id, "ownerId", "productId", "planId", status, "startsAt", "expiresAt",
+      `SELECT id, "ownerType", "ownerId", "productId", "planId", status, "startsAt", "expiresAt",
               "graceUntil", "tokenVersion", "maxDevices", features
        FROM licenses WHERE id = $1`,
       [licenseId],
@@ -253,7 +257,7 @@ export class DevicesService {
     const hash = this.resolveDeviceHash(licenseId, opts);
     return this.withTx(async (tx) => {
       const licRes = await tx.query(
-        `SELECT id, "ownerId", "productId", "planId", status, "startsAt", "expiresAt",
+        `SELECT id, "ownerType", "ownerId", "productId", "planId", status, "startsAt", "expiresAt",
                 "graceUntil", "tokenVersion", "maxDevices", features
          FROM licenses WHERE id = $1 FOR UPDATE`,
         [licenseId],
@@ -277,9 +281,66 @@ export class DevicesService {
         // rotated/unlinked: segue para re-vincular como novo ciclo abaixo.
       }
 
-      // Enforcement do limite: COUNT ... FOR UPDATE (serializa vinculações concorrentes).
+      // Enforcement do limite: COUNT simples dentro da tx. A serialização vem
+      // do FOR UPDATE na linha da licença acima (COUNT com FOR UPDATE é
+      // rejeitado pelo Postgres: 0A000 "FOR UPDATE is not allowed with
+      // aggregate functions" — causava 500 em toda primeira ativação).
+      //
+      // Chaves promo/bonificação (ownerType PROMO/GUEST): o limite conta
+      // MÁQUINAS distintas (por IP), não instalações. Reativação vinda do
+      // mesmo IP — mesmo com app_instance_id novo (reinstalação) — reafirma o
+      // device da máquina sem consumir slot. Licenças pagas (CUSTOMER e demais)
+      // mantêm o comportamento estrito por instalação.
+      const machineIp = normalizeIp(opts.ip);
+      if (machineIp && (lic.ownerType === 'PROMO' || lic.ownerType === 'GUEST')) {
+        const rawIp = typeof opts.ip === 'string' ? opts.ip : null;
+        const hashes: string[] = [];
+        try {
+          hashes.push(hashIp(machineIp, ipSalt()));
+        } catch {
+          /* sem salt: tenta só pelo hint */
+        }
+        if (rawIp && rawIp !== machineIp) {
+          try {
+            // Ponte p/ linhas gravadas antes da normalização (hash do IP cru).
+            const legacy = hashIp(rawIp, ipSalt());
+            if (!hashes.includes(legacy)) hashes.push(legacy);
+          } catch {
+            /* noop */
+          }
+        }
+        const hint = maskIp24(machineIp);
+        // Igualdade EXATA de IP (ip_hash): máquinas distintas na mesma sub-rede
+        // (/24) NÃO podem se fundir — o limite conta IPs diferentes. O hint fica
+        // só p/ suporte/detecção, nunca p/ agrupar.
+        const sameIp =
+          hashes.length > 0
+            ? await tx.query(
+                `SELECT ${DEVICE_COLS} FROM license_devices
+                  WHERE "licenseId" = $1 AND status = 'active'
+                    AND ip_hash = ANY($2)
+                  ORDER BY "firstSeenAt" ASC LIMIT 1 FOR UPDATE`,
+                [licenseId, hashes],
+              )
+            : { rows: [] as unknown[] };
+        if (sameIp.rows.length > 0) {
+          const prev = mapDevice(sameIp.rows[0] as Record<string, unknown>);
+          // Reafirma o vínculo e cura ip_hash/ip_hint p/ o formato normalizado.
+          const upd = await tx.query(
+            `UPDATE license_devices SET "lastSeenAt" = $3,
+                    ip_hash = COALESCE($4, ip_hash), ip_hint = COALESCE($5, ip_hint),
+                    device_label_enc = COALESCE($6, device_label_enc)
+              WHERE "licenseId" = $1 AND device_hash = $2
+              RETURNING ${DEVICE_COLS}`,
+            [licenseId, prev.device_hash, now.toISOString(), hashes[0], hint, encryptLabel(opts.label)],
+          );
+          const dev = mapDevice(upd.rows[0] as Record<string, unknown>);
+          return { device: toDeviceView(dev), created: false };
+        }
+      }
+
       const counted = await tx.query(
-        `SELECT COUNT(*)::int AS n FROM license_devices WHERE "licenseId" = $1 AND status = 'active' FOR UPDATE`,
+        `SELECT COUNT(*)::int AS n FROM license_devices WHERE "licenseId" = $1 AND status = 'active'`,
         [licenseId],
       );
       const activeCount = Number((counted.rows[0] as Record<string, unknown>).n ?? 0);
@@ -295,10 +356,11 @@ export class DevicesService {
         );
       }
 
-      const ipHint = maskIp24(opts.ip ?? null);
+      const normIp = normalizeIp(opts.ip);
+      const ipHint = maskIp24(normIp ?? opts.ip);
       let ipHash: string | null = null;
       try {
-        ipHash = opts.ip ? hashIp(opts.ip, ipSalt()) : null;
+        ipHash = normIp ? hashIp(normIp, ipSalt()) : null;
       } catch {
         ipHash = null;
       }

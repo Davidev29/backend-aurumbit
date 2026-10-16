@@ -37,9 +37,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     let code = "INTERNAL";
     let message = `Falha na requisição (${res.status}).`;
     try {
-      const body = (await res.json()) as Partial<ApiError>;
+      const body = (await res.json()) as Partial<ApiError> & { message?: unknown };
       if (typeof body.code === "string") code = body.code;
-      if (typeof body.message === "string") message = body.message;
+      // O Nest valida com `message` em array (`BadRequestException`) — sem
+      // este achatamento a UI exibia só o genérico "Falha na requisição (400)".
+      if (typeof body.message === "string" && body.message) message = body.message;
+      else if (Array.isArray(body.message)) {
+        const flat = body.message.filter((m): m is string => typeof m === "string" && m.length > 0);
+        if (flat.length > 0) message = flat.join("; ");
+      }
     } catch {
       // Mantém mensagem padrão.
     }

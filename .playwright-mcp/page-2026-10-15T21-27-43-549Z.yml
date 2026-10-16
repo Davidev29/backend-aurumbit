@@ -1,0 +1,70 @@
+- generic [active] [ref=f2e1]:
+  - link "Pular para o conteúdo" [ref=f2e2] [cursor=pointer]:
+    - /url: "#conteudo"
+  - generic [ref=f2e3]:
+    - complementary [ref=f2e4]:
+      - generic [ref=f2e6]:
+        - img "Aurum Bit" [ref=f2e8]
+        - generic [ref=f2e9]:
+          - generic [ref=f2e10]: Aurum Admin
+          - generic [ref=f2e11]: Terminal administrativo
+      - navigation "Navegação principal" [ref=f2e12]:
+        - generic [ref=f2e13]:
+          - region "Principal" [ref=f2e14]:
+            - paragraph [aria-hidden] [ref=f2e15]: Principal
+            - list [ref=f2e16]:
+              - listitem [ref=f2e17]:
+                - link "Dashboard" [ref=f2e18] [cursor=pointer]:
+                  - /url: /dashboard
+              - listitem [ref=f2e26]:
+                - link "Atendimento" [ref=f2e27] [cursor=pointer]:
+                  - /url: /atendimento
+          - region "Operação" [ref=f2e35]:
+            - paragraph [aria-hidden] [ref=f2e36]: Operação
+            - list [ref=f2e37]:
+              - listitem [ref=f2e38]:
+                - link "Produtos" [ref=f2e39] [cursor=pointer]:
+                  - /url: /produtos
+      - button "Recolher menu" [expanded] [ref=f2e46] [cursor=pointer]
+      - link "Abrir meu perfil" [ref=f2e50] [cursor=pointer]:
+        - /url: /perfil
+        - generic [aria-hidden] [ref=f2e51]: C
+        - generic [ref=f2e52]: Conta
+    - generic [ref=f2e54]:
+      - banner [ref=f2e55]:
+        - navigation "Caminho" [ref=f2e57]:
+          - list [ref=f2e58]:
+            - listitem [aria-hidden] [ref=f2e59]: Aurum
+            - listitem [aria-hidden] [ref=f2e60]: /
+            - listitem [ref=f2e61]: Aurum Admin
+        - button "Abrir busca (Ctrl+K)" [ref=f2e64] [cursor=pointer]:
+          - generic [ref=f2e68]: Buscar…
+          - generic [ref=f2e69]: Ctrl+K
+        - generic [ref=f2e70]:
+          - button "Alternar para tema claro" [pressed] [ref=f2e71] [cursor=pointer]
+          - button "Notificações. Abrir prévia" [ref=f2e79] [cursor=pointer]
+          - button "Menu da conta" [ref=f2e84] [cursor=pointer]:
+            - generic [ref=f2e89]: Conta
+      - main [ref=f2e92]:
+        - generic [ref=f2e93]:
+          - generic [ref=f2e94]:
+            - generic [ref=f2e99]:
+              - heading "Atendimento" [level=1] [ref=f2e100]
+              - paragraph [ref=f2e101]:
+                - text: Conversas da landpage e da área do cliente, em tempo real
+                - status "Reconectando" [ref=f2e102]:
+                  - generic [ref=f2e104]: reconectando…
+            - group "Estado da conversa" [ref=f2e105]:
+              - button "aberta" [ref=f2e106] [cursor=pointer]
+              - button "pendente" [ref=f2e107] [cursor=pointer]
+              - button "ativa" [ref=f2e108] [cursor=pointer]
+              - button "fechada" [ref=f2e109] [cursor=pointer]
+          - generic [ref=f2e110]:
+            - region "Fila de conversas" [ref=f2e111]:
+              - generic [ref=f2e112]:
+                - paragraph [ref=f2e116]: Nenhuma conversa
+                - paragraph [ref=f2e117]: Novas conversas da landpage aparecem aqui na hora.
+            - region "Conversa ativa" [ref=f2e118]:
+              - generic [ref=f2e119]:
+                - paragraph [ref=f2e123]: Escolha uma conversa
+                - paragraph [ref=f2e124]: O histórico e a digitação aparecem aqui em tempo real.

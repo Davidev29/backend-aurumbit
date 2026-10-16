@@ -121,10 +121,13 @@ model ChatConversation {
   lastMessageAt DateTime                 @default(now())
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt @default(now())
+  // Lixeira auditável (tela de arquivados): `null` = na fila ativa.
+  archivedAt    DateTime?
   messages      ChatMessage[]
 
   @@index([status])
   @@index([lastMessageAt])
+  @@index([archivedAt])
   @@map("chat_conversations")
   @@schema("communications")
 }

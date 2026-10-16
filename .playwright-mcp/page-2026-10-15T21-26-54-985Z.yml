@@ -1,0 +1,28 @@
+- generic [active] [ref=f1e1]:
+  - link "Pular para o conteúdo" [ref=f1e2] [cursor=pointer]:
+    - /url: "#conteudo"
+  - main [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - generic [ref=f1e5]:
+        - generic [aria-hidden] [ref=f1e6]: A
+        - generic [ref=f1e7]:
+          - paragraph [ref=f1e8]: Aurum Bit
+          - paragraph [ref=f1e9]: Terminal administrativo
+      - heading "Bem-vindo de volta" [level=1] [ref=f1e10]
+      - paragraph [ref=f1e11]: Entre com suas credenciais para gerenciar produtos, licenças e cobranças.
+      - generic [ref=f1e12]:
+        - generic [ref=f1e13]:
+          - generic [ref=f1e14]: E-mail
+          - textbox "E-mail" [ref=f1e15]:
+            - /placeholder: voce@empresa.com.br
+          - paragraph [ref=f1e16]: O mesmo e-mail do seu usuário administrativo.
+        - generic [ref=f1e17]:
+          - generic [ref=f1e18]: Senha
+          - generic [ref=f1e19]:
+            - textbox "Senha" [ref=f1e20]:
+              - /placeholder: ••••••••
+            - button "Mostrar senha" [ref=f1e21] [cursor=pointer]
+          - paragraph [ref=f1e25]: Sua senha + verificação em duas etapas.
+        - button "Entrar" [ref=f1e26] [cursor=pointer]
+      - paragraph [ref=f1e27]: Protegido por verificação em duas etapas.
+  - alert [ref=f1e28]

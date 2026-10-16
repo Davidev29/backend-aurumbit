@@ -1,4 +1,4 @@
-import { computeDeviceHash, decryptLabel, encryptLabel, hashIp, isValidDeviceHash, maskIp24 } from './device-hash';
+import { computeDeviceHash, decryptLabel, encryptLabel, hashIp, isValidDeviceHash, maskIp24, normalizeIp } from './device-hash';
 
 describe('device-hash (PROJECT.md §4)', () => {
   it('HMAC determinístico por (license, instância) e distinto por instância', () => {
@@ -19,6 +19,17 @@ describe('device-hash (PROJECT.md §4)', () => {
     expect(maskIp24('2001:db8:abcd:12::1')).toContain('/48');
     expect(maskIp24(null)).toBeNull();
     expect(hashIp('192.168.10.77', 'salt')).not.toContain('192.168.10.77');
+  });
+
+  it('normalização: mesma máquina com/sem prefixo ::ffff: é igual', () => {
+    expect(normalizeIp('::ffff:127.0.0.1')).toBe('127.0.0.1');
+    expect(normalizeIp('  192.168.0.10 ')).toBe('192.168.0.10');
+    expect(normalizeIp('2001:DB8::1')).toBe('2001:db8::1');
+    expect(normalizeIp(null)).toBeNull();
+    expect(normalizeIp('')).toBeNull();
+    // Máscara do mapeado resolve p/ o /24 do IPv4 (antes virava "::ffff::/48").
+    expect(maskIp24('::ffff:127.0.0.1')).toBe('127.0.0.0/24');
+    expect(maskIp24('::ffff:192.168.10.77')).toBe('192.168.10.0/24');
   });
 
   it('label: stub round-trip; formato desconhecido falha fechado', () => {

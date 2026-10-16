@@ -12,10 +12,23 @@ const TONE_STYLE: Record<ToastTone, { bar: string; Icon: typeof Info }> = {
   error: { bar: "bg-danger", Icon: XCircle },
 };
 
+/** Rótulo percebível sem cor/ícone (ícones são `aria-hidden`). */
+const TONE_LABEL: Record<ToastTone, string> = {
+  success: "Sucesso",
+  info: "Informação",
+  warn: "Atenção",
+  error: "Erro",
+};
+
 /**
  * Viewport de toasts (único canal de alertas do admin).
- * Fixo inferior-direito, `role="status"` + `aria-live="polite"`, z canônico
- * de tooltip (70). Auto-dispensa em ~5,6s; fechar manual via botão 44px.
+ * Fixo inferior-direito, z canônico de tooltip (70). Auto-dispensa em ~5,6s;
+ * fechar manual via botão 44px.
+ *
+ * Acessibilidade por tom (nunca só cor):
+ * - `error` usa `role="alert"` (anúncio assertivo imediato);
+ * - demais usam `role="status"` (anúncio educado);
+ * - todo toast prefixa o título com rótulo textual do tom p/ leitor de tela.
  */
 export function Toaster() {
   const { toasts, dismiss } = useToast();
@@ -38,7 +51,7 @@ export function Toaster() {
         return (
           <div
             key={t.id}
-            role="status"
+            role={t.tone === "error" ? "alert" : "status"}
             className="pointer-events-auto flex items-start gap-3 rounded-card border border-line1 bg-bg1 p-3 shadow-3"
           >
             <span aria-hidden="true" className={cn("mt-1 h-8 w-1 shrink-0 rounded-full", bar)} />
@@ -46,7 +59,10 @@ export function Toaster() {
               <Icon size={20} strokeWidth={1.75} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-body font-semibold text-text1">{t.title}</span>
+              <span className="block text-body font-semibold text-text1">
+                <span className="sr-only">{TONE_LABEL[t.tone]}: </span>
+                {t.title}
+              </span>
               {t.body && <span className="mt-0.5 block text-callout text-text2">{t.body}</span>}
             </span>
             <button

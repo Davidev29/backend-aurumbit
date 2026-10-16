@@ -44,6 +44,12 @@ Sem backend (`API_INTERNAL_URL` ausente): stub honesto com `stub: true`,
 { "key": "AURUM-XXXX-XXXX-XXXX", "app_instance_id": "uuid-da-instalação", "label": "PC do caixa" }
 ```
 
+O app deve ainda enviar `"ip": "<ip-local-da-máquina>"` (bonificação/promo: o
+limite conta máquinas distintas por IP — sem esse campo o backend usa o IP da
+conexão, que atrás de proxy/NAT é igual p/ todos). `app_instance_id` deve ser
+persistido entre sessões (reinstalação com ID novo na mesma máquina não consome
+slot em chaves promo, mas o ID estável evita vínculos órfãos).
+
 Resposta: mesmo `ActivationResult` com `"mode": "key"` (sem `keyMasked`? com —
 mascarada). Erros: `404 KEY_INVALID` (genérico de propósito — igual para chave
 inexistente e malformada, anti-enumeração), `403 LICENSE_INACTIVE` (suspensa,

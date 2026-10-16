@@ -23,6 +23,7 @@ export const MOCK_SUPPORT_CONVERSATIONS: ChatConversation[] = [
     unreadVisitor: 0,
     createdAt: now(12 * 60_000),
     updatedAt: now(60_000),
+    archivedAt: null,
   },
   {
     id: "chat-demo-2",
@@ -39,6 +40,7 @@ export const MOCK_SUPPORT_CONVERSATIONS: ChatConversation[] = [
     unreadVisitor: 0,
     createdAt: now(40 * 60_000),
     updatedAt: now(5 * 60_000),
+    archivedAt: null,
   },
 ];
 

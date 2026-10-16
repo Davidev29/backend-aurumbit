@@ -3,6 +3,8 @@
  * Valores alinhados a PROJECT §§1-2 e REQUIREMENTS §1:
  * - login 5/min por IP+email (anti-enumeração/brute-force, com lockout na Fase 2)
  * - recovery 3/h por IP+email | webhook Asaas 100/min por IP | reveal 10/h por ator
+ * - devicePoll 120/min por IP (polling do app instalado: validate + offline-token,
+ *   públicos no modo chave — ver global-rate-limit.guard `devicePoll`)
  * Exporta presets agnósticos (p/ `@nestjs/throttler` ou `express-rate-limit`)
  * + um token-bucket em memória p/ workers/scripts Fase 1 sem Redis.
  */
@@ -22,6 +24,7 @@ export const RATE_LIMITS = {
   recovery: { windowMs: 3_600_000, limit: 3, policy: "recovery;w=3600", message: "Limite de recuperação excedido. Tente mais tarde." },
   webhook: { windowMs: 60_000, limit: 100, policy: "webhook;w=60" },
   licenseReveal: { windowMs: 3_600_000, limit: 10, policy: "license-reveal;w=3600", message: "Limite de revelação de chave excedido." },
+  devicePoll: { windowMs: 60_000, limit: 120, policy: "device-poll;w=60", message: "Muitas validações. Tente em 1 minuto." },
   mfa: { windowMs: 300_000, limit: 5, policy: "mfa;w=300" },
   apiDefault: { windowMs: 60_000, limit: 120, policy: "api;w=60" },
 } as const satisfies Record<string, RateLimitPreset>;

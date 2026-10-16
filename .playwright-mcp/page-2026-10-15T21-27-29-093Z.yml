@@ -1,0 +1,102 @@
+- generic [ref=f1e1]:
+  - link "Pular para o conteúdo" [ref=f1e2] [cursor=pointer]:
+    - /url: "#conteudo"
+  - alert [ref=f1e28]
+  - generic [ref=f1e29]:
+    - complementary [ref=f1e30]:
+      - generic [ref=f1e32]:
+        - img "Aurum Bit" [ref=f1e34]
+        - generic [ref=f1e35]:
+          - generic [ref=f1e36]: Aurum Admin
+          - generic [ref=f1e37]: Terminal administrativo
+      - navigation "Navegação principal" [ref=f1e38]:
+        - generic [ref=f1e39]:
+          - region "Principal" [ref=f1e40]:
+            - paragraph [aria-hidden] [ref=f1e41]: Principal
+            - list [ref=f1e42]:
+              - listitem [ref=f1e43]:
+                - link "Dashboard" [ref=f1e44] [cursor=pointer]:
+                  - /url: /dashboard
+              - listitem [ref=f1e54]:
+                - link "Clientes" [ref=f1e55] [cursor=pointer]:
+                  - /url: /clientes
+              - listitem [ref=f1e63]:
+                - link "Cobranças" [ref=f1e64] [cursor=pointer]:
+                  - /url: /cobrancas
+              - listitem [ref=f1e69]:
+                - link "Atendimento" [ref=f1e70] [cursor=pointer]:
+                  - /url: /atendimento
+          - region "Operação" [ref=f1e76]:
+            - paragraph [aria-hidden] [ref=f1e77]: Operação
+            - list [ref=f1e78]:
+              - listitem [ref=f1e79]:
+                - link "Financeiro" [ref=f1e80] [cursor=pointer]:
+                  - /url: /financeiro
+              - listitem [ref=f1e85]:
+                - link "Notificações" [ref=f1e86] [cursor=pointer]:
+                  - /url: /notificacoes
+              - listitem [ref=f1e92]:
+                - link "Filas" [ref=f1e93] [cursor=pointer]:
+                  - /url: /filas
+              - listitem [ref=f1e99]:
+                - link "Assinaturas" [ref=f1e100] [cursor=pointer]:
+                  - /url: /assinaturas
+              - listitem [ref=f1e107]:
+                - link "Produtos" [ref=f1e108] [cursor=pointer]:
+                  - /url: /produtos
+          - region "Sistema" [ref=f1e114]:
+            - paragraph [aria-hidden] [ref=f1e115]: Sistema
+            - list [ref=f1e116]:
+              - listitem [ref=f1e117]:
+                - link "Auditoria" [ref=f1e118] [cursor=pointer]:
+                  - /url: /auditoria
+              - listitem [ref=f1e124]:
+                - link "Usuários" [ref=f1e125] [cursor=pointer]:
+                  - /url: /usuarios
+      - button "Recolher menu" [expanded] [ref=f1e132] [cursor=pointer]
+      - link "Abrir meu perfil" [ref=f1e136] [cursor=pointer]:
+        - /url: /perfil
+        - generic [aria-hidden] [ref=f1e137]: A
+        - generic [ref=f1e138]:
+          - generic [ref=f1e139]: Ada Administradora
+          - generic [ref=f1e140]: admin@aurum.test
+    - generic [ref=f1e141]:
+      - banner [ref=f1e142]:
+        - navigation "Caminho" [ref=f1e144]:
+          - list [ref=f1e145]:
+            - listitem [aria-hidden] [ref=f1e146]: Aurum
+            - listitem [aria-hidden] [ref=f1e147]: /
+            - listitem [ref=f1e148]: Dashboard
+        - button "Abrir busca (Ctrl+K)" [active] [ref=f1e151] [cursor=pointer]:
+          - generic [ref=f1e155]: Buscar…
+          - generic [ref=f1e156]: Ctrl+K
+        - generic [ref=f1e157]:
+          - button "Alternar para tema claro" [pressed] [ref=f1e158] [cursor=pointer]
+          - button "Notificações. Abrir prévia" [ref=f1e166] [cursor=pointer]
+          - button "Menu da conta" [ref=f1e171] [cursor=pointer]:
+            - generic [ref=f1e176]: Ada Administradora
+      - main [ref=f1e179]:
+        - generic [ref=f1e180]:
+          - generic [ref=f1e181]:
+            - heading "Painel" [level=1] [ref=f1e182]
+            - group "Período" [ref=f1e183]:
+              - button "Semana" [ref=f1e184] [cursor=pointer]
+              - button "Mês" [pressed] [ref=f1e185] [cursor=pointer]
+              - button "Ano" [ref=f1e186] [cursor=pointer]
+          - generic [ref=f1e187]:
+            - generic [ref=f1e188]:
+              - paragraph [ref=f1e189]: Receita (período)
+              - paragraph [ref=f1e190]: R$ 48.230,00
+              - paragraph [ref=f1e191]: Stub Fase 2
+            - generic [ref=f1e192]:
+              - paragraph [ref=f1e193]: Licenças ativas
+              - paragraph [ref=f1e194]: "1.204"
+              - paragraph [ref=f1e195]: Stub Fase 2
+            - generic [ref=f1e196]:
+              - paragraph [ref=f1e197]: Pagamentos em atraso
+              - paragraph [ref=f1e198]: "46"
+              - paragraph [ref=f1e199]: Stub Fase 2
+            - generic [ref=f1e200]:
+              - paragraph [ref=f1e201]: Novos clientes
+              - paragraph [ref=f1e202]: "73"
+              - paragraph [ref=f1e203]: Stub Fase 2

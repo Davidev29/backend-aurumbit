@@ -11,6 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Public } from '../../common/decorators/public.decorator';
 import { DeviceConflictError, DeviceLimitError, DevicesService, LicenseNotFoundError } from './devices.service';
 import {
   BlockDeviceDto,
@@ -21,8 +22,11 @@ import {
   ValidateDeviceDto,
 } from './dto';
 
-// Devices da licença (Fase 3). Rotas autenticadas pela cadeia padrão da plataforma;
-// device-key auth do app é fase futura. `validate`/`offline-token` exigem online.
+// Devices da licença (Fase 3). Rotas autenticadas pela cadeia padrão da plataforma,
+// exceto `validate` (pública — o app instalado no modo chave não tem JWT de usuário;
+// a credencial é o `device_hash` HMAC, imperscrutável sem o segredo do servidor,
+// + rate-limit `devicePoll`); device-key auth dedicada é fase futura.
+// `validate`/`offline-token` exigem online.
 // Rotas Express-safe: `/link` ≡ `:link` da especificação (mesma semântica).
 
 function clientIp(req: Request, explicit?: string): string | undefined {
@@ -62,7 +66,7 @@ export class DevicesController {
     try {
       const out = await this.devices.linkDevice(
         id,
-        { device_hash: dto.deviceHash, app_instance_id: dto.appInstanceId, label: dto.label, ip: clientIp(req) },
+        { device_hash: dto.deviceHash, app_instance_id: dto.appInstanceId, label: dto.label, ip: dto.ip ?? clientIp(req) },
       );
       return { licenseId: id, ...out };
     } catch (e) {
@@ -115,6 +119,7 @@ export class DevicesController {
   }
 
   /** Validação online com detecção de clone (200 sempre; o corpo diz allow/deny). */
+  @Public()
   @Post(':id/validate')
   @HttpCode(200)
   async validate(@Param('id') id: string, @Body() dto: ValidateDeviceDto, @Req() req: Request) {

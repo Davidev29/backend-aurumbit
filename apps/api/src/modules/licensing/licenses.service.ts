@@ -20,7 +20,7 @@ import {
   maskFromParts,
   sha256Hex,
 } from './license-keys';
-import { IssueLicenseDto } from './licenses.dto';
+import { IssueLicenseDto, IssueTrialDto } from './licenses.dto';
 
 function isUniqueViolation(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
@@ -510,6 +510,111 @@ export class LicensesService {
         }
       }
       throw new ConflictException('não foi possível gerar chave única; tente novamente');
+    } catch (e) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* noop */
+      }
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Emite lote demo/promo sem conta (trial horas/dias ou lifetime parceria).
+   * ownerType PROMO + ownerId `promo:<batchId>` (sem migration, colunas String).
+   * Retorna plaintext 1x por chave — o admin exibe uma vez e depois só máscara.
+   */
+  async issueTrial(
+    dto: IssueTrialDto,
+    actor: string,
+    now = new Date(),
+  ): Promise<{
+    batchId: string;
+    kind: string;
+    expiresAt: string | null;
+    items: Array<{ licenseId: string; key: string; keyMasked: string; expiresAt: string | null }>;
+  }> {
+    const qty = dto.qty ?? 1;
+    if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+      throw new BadRequestException('qty deve ser inteiro entre 1 e 100.');
+    }
+    const maxDevices = dto.maxDevices ?? 1;
+    if (!Number.isInteger(maxDevices) || maxDevices < 1 || maxDevices > 100) {
+      throw new BadRequestException('maxDevices deve ser inteiro entre 1 e 100.');
+    }
+    const infinite = dto.infinite === true;
+    const startsAt = dto.startsAt ? new Date(dto.startsAt) : now;
+    if (Number.isNaN(startsAt.getTime())) throw new BadRequestException('startsAt inválido (ISO-8601).');
+    const kind = infinite ? 'lifetime' : 'trial';
+    const { expiresAt } =
+      kind === 'lifetime' ? { expiresAt: null as Date | null } : calcExpiry(startsAt, 'trial', { expiresInHours: dto.expiresInHours });
+    if (kind === 'trial' && !expiresAt) throw new BadRequestException('trial exige expiresInHours (1..8760).');
+    // Sem graça extra p/ trial: graceUntil = expiresAt (expira seco).
+    const graceUntil = kind === 'lifetime' ? null : expiresAt;
+    const features = normalizeFeatureSnapshot(dto.features);
+    const batchId = randomUUID().slice(0, 8);
+    const ownerId = `promo:${batchId}`;
+    const items: Array<{ licenseId: string; key: string; keyMasked: string; expiresAt: string | null }> = [];
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < qty; i++) {
+        let inserted: LicenseRow | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const key = generateLicenseKey();
+          try {
+            const { rows } = await client.query(
+              `INSERT INTO licenses (id, "ownerType", "ownerId", "ownerLabel", "productId", "planId", "contractItemId",
+                kind, status, key_hash, key_prefix, key_last4, key_enc, "tokenVersion", "maxDevices",
+                "issuedAt", "startsAt", "expiresAt", "graceUntil", features, "createdAt", "updatedAt")
+               VALUES ($1,'PROMO',$2,$3,$4,$5,NULL,$6,'active',$7,$8,$9,$10,1,$11,now(),$12,$13,$14,$15,now(),now())
+               RETURNING ${SELECT_COLS}`,
+              [
+                randomUUID(), ownerId, dto.ownerLabel ?? dto.note ?? null,
+                dto.productId, dto.planId ?? null, kind,
+                sha256Hex(key), key.slice(6, 10), key.slice(-4), encryptLicenseKey(key),
+                maxDevices, startsAt, expiresAt, graceUntil,
+                features.length > 0 ? JSON.stringify(features) : null,
+              ],
+            );
+            inserted = rows[0] as LicenseRow;
+            await this.insertOutbox(client, inserted.id, 'LicenseIssued', {
+              licenseId: inserted.id,
+              ownerType: 'PROMO',
+              ownerId,
+              ownerLabel: dto.ownerLabel ?? null,
+              productId: dto.productId,
+              planId: dto.planId ?? null,
+              kind,
+              batchId,
+              trial: true,
+              infinite,
+              startsAt: startsAt.toISOString(),
+              expiresAt: expiresAt ? expiresAt.toISOString() : null,
+              graceUntil: graceUntil ? (graceUntil as Date).toISOString() : null,
+              maxDevices,
+              note: dto.note ?? null,
+              actor,
+            });
+            items.push({
+              licenseId: inserted.id,
+              key,
+              keyMasked: maskFromParts(inserted.key_last4),
+              expiresAt: expiresAt ? (expiresAt as Date).toISOString() : null,
+            });
+            break;
+          } catch (e) {
+            if (isUniqueViolation(e)) continue;
+            throw e;
+          }
+        }
+        if (!inserted) throw new ConflictException('não foi possível gerar chave única; tente novamente');
+      }
+      await client.query('COMMIT');
+      return { batchId, kind, expiresAt: expiresAt ? (expiresAt as Date).toISOString() : null, items };
     } catch (e) {
       try {
         await client.query('ROLLBACK');

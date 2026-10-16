@@ -131,6 +131,7 @@ export class SupportService implements OnModuleInit {
       unreadVisitor: 0,
       createdAt: at,
       updatedAt: at,
+      archivedAt: null,
     };
     this.conversations.set(id, conversation);
     this.messages.set(id, []);
@@ -160,9 +161,19 @@ export class SupportService implements OnModuleInit {
   }
 
   listConversations(): ChatConversation[] {
+    // Arquivadas saem da fila (vão p/ `listArchived` — tela de arquivados).
     return [...this.conversations.values()]
+      .filter((c) => c.archivedAt == null)
       .map((c) => this.publicConversation(c, true))
       .sort((a, b) => (a.lastMessageAt < b.lastMessageAt ? 1 : -1));
+  }
+
+  /** Lixeira auditável: só arquivadas, mais recentemente arquivadas primeiro. */
+  listArchived(): ChatConversation[] {
+    return [...this.conversations.values()]
+      .filter((c) => c.archivedAt != null)
+      .map((c) => this.publicConversation(c, true))
+      .sort((a, b) => ((a.archivedAt ?? '') < (b.archivedAt ?? '') ? 1 : -1));
   }
 
   getConversation(id: string): ChatConversation | null {
@@ -187,6 +198,20 @@ export class SupportService implements OnModuleInit {
     c.updatedAt = nowIso();
     this.emitConversation(c);
     void this.persistConversationBestEffort(c);
+    return this.publicConversation(c);
+  }
+
+  /**
+   * Arquiva/restaura (lixeira auditável — gate de role no controller).
+   * Arquivar não apaga: esconde da fila, mantém mensagens + restauração.
+   */
+  setArchived(id: string, archived: boolean): ChatConversation | null {
+    const c = this.conversations.get(id);
+    if (!c) return null;
+    c.archivedAt = archived ? nowIso() : null;
+    c.updatedAt = nowIso();
+    this.emitConversation(c);
+    void this.persistArchivedBestEffort(c);
     return this.publicConversation(c);
   }
 
@@ -350,6 +375,25 @@ export class SupportService implements OnModuleInit {
     }
   }
 
+  /**
+   * Persiste só o arquivamento em statement isolado: se a coluna `archivedAt`
+   * não existir (migração `0003` pendente), só este UPDATE falha em silêncio —
+   * nunca quebra a persistência da conversa/mensagem.
+   */
+  private async persistArchivedBestEffort(c: ChatConversation): Promise<void> {
+    try {
+      const pool = this.optionalPool();
+      if (!pool) return;
+      await pool.query('UPDATE chat_conversations SET "archivedAt" = $2, "updatedAt" = $3 WHERE id = $1', [
+        c.id,
+        c.archivedAt,
+        c.updatedAt,
+      ]);
+    } catch {
+      /* coluna ausente — memória segue valendo */
+    }
+  }
+
   private async persistMessageBestEffort(m: ChatMessage): Promise<void> {
     try {
       const pool = this.optionalPool();
@@ -417,10 +461,27 @@ export class SupportService implements OnModuleInit {
           unreadVisitor: msgs.filter((m) => m.sender !== 'visitor' && m.status !== 'read').length,
           createdAt: isoOf(r.createdAt),
           updatedAt: isoOf(r.updatedAt),
+          archivedAt: null,
         };
         this.conversations.set(id, conversation);
         this.messages.set(id, msgs);
         this.streams.set(id, new Subject<ChatEvent>());
+      }
+      // Overlay do arquivamento em query isolada: sem a coluna (migração 0003
+      // pendente) este SELECT falha sozinho e o histórico acima segue válido.
+      try {
+        const pool = this.optionalPool();
+        if (pool) {
+          const archRes = (await pool.query('SELECT id, "archivedAt" FROM chat_conversations')) as {
+            rows: Array<Record<string, unknown>>;
+          };
+          for (const r of Array.isArray(archRes?.rows) ? archRes.rows : []) {
+            const c = this.conversations.get(String(r.id));
+            if (c && r.archivedAt) c.archivedAt = isoOf(r.archivedAt);
+          }
+        }
+      } catch {
+        /* sem coluna — tudo segue não-arquivado */
       }
     } catch {
       /* boot nunca quebra por causa do histórico */

@@ -1,0 +1,203 @@
+- generic [ref=f2e1]:
+  - link "Pular para o conteúdo" [ref=f2e2] [cursor=pointer]:
+    - /url: "#conteudo"
+  - generic [ref=f2e3]:
+    - complementary [ref=f2e4]:
+      - generic [ref=f2e6]:
+        - img "Aurum Bit" [ref=f2e8]
+        - generic [ref=f2e9]:
+          - generic [ref=f2e10]: Aurum Admin
+          - generic [ref=f2e11]: Terminal administrativo
+      - navigation "Navegação principal" [ref=f2e12]:
+        - generic [ref=f2e13]:
+          - region "Principal" [ref=f2e14]:
+            - paragraph [aria-hidden] [ref=f2e15]: Principal
+            - list [ref=f2e16]:
+              - listitem [ref=f2e17]:
+                - link "Dashboard" [ref=f2e18] [cursor=pointer]:
+                  - /url: /dashboard
+              - listitem [ref=f2e125]:
+                - link "Clientes" [ref=f2e126] [cursor=pointer]:
+                  - /url: /clientes
+              - listitem [ref=f2e134]:
+                - link "Cobranças" [ref=f2e135] [cursor=pointer]:
+                  - /url: /cobrancas
+              - listitem [ref=f2e26]:
+                - link "Atendimento" [ref=f2e27] [cursor=pointer]:
+                  - /url: /atendimento
+          - region "Operação" [ref=f2e35]:
+            - paragraph [aria-hidden] [ref=f2e36]: Operação
+            - list [ref=f2e37]:
+              - listitem [ref=f2e140]:
+                - link "Financeiro" [ref=f2e141] [cursor=pointer]:
+                  - /url: /financeiro
+              - listitem [ref=f2e146]:
+                - link "Notificações" [ref=f2e147] [cursor=pointer]:
+                  - /url: /notificacoes
+              - listitem [ref=f2e153]:
+                - link "Filas" [ref=f2e154] [cursor=pointer]:
+                  - /url: /filas
+              - listitem [ref=f2e160]:
+                - link "Assinaturas" [ref=f2e161] [cursor=pointer]:
+                  - /url: /assinaturas
+              - listitem [ref=f2e38]:
+                - link "Produtos" [ref=f2e39] [cursor=pointer]:
+                  - /url: /produtos
+          - region "Sistema" [ref=f2e168]:
+            - paragraph [aria-hidden] [ref=f2e169]: Sistema
+            - list [ref=f2e170]:
+              - listitem [ref=f2e171]:
+                - link "Auditoria" [ref=f2e172] [cursor=pointer]:
+                  - /url: /auditoria
+              - listitem [ref=f2e178]:
+                - link "Usuários" [ref=f2e179] [cursor=pointer]:
+                  - /url: /usuarios
+      - button "Recolher menu" [expanded] [ref=f2e46] [cursor=pointer]
+      - link "Abrir meu perfil" [ref=f2e50] [cursor=pointer]:
+        - /url: /perfil
+        - generic [aria-hidden] [ref=f2e51]: A
+        - generic [ref=f2e52]:
+          - generic [ref=f2e53]: Ada Administradora
+          - generic [ref=f2e186]: admin@aurum.test
+    - generic [ref=f2e54]:
+      - banner [ref=f2e55]:
+        - navigation "Caminho" [ref=f2e57]:
+          - list [ref=f2e58]:
+            - listitem [aria-hidden] [ref=f2e59]: Aurum
+            - listitem [aria-hidden] [ref=f2e60]: /
+            - listitem [ref=f2e61]: Aurum Admin
+        - button "Abrir busca (Ctrl+K)" [ref=f2e64] [cursor=pointer]:
+          - generic [ref=f2e68]: Buscar…
+          - generic [ref=f2e69]: Ctrl+K
+        - generic [ref=f2e70]:
+          - button "Alternar para tema claro" [pressed] [ref=f2e71] [cursor=pointer]
+          - button "Notificações. Abrir prévia" [ref=f2e79] [cursor=pointer]
+          - button "Menu da conta" [ref=f2e84] [cursor=pointer]:
+            - generic [ref=f2e89]: Ada Administradora
+      - main [ref=f2e92]:
+        - generic [ref=f2e93]:
+          - generic [ref=f2e94]:
+            - generic [ref=f2e99]:
+              - heading "Atendimento" [level=1] [ref=f2e100]
+              - paragraph [ref=f2e101]:
+                - text: Conversas da landpage e da área do cliente, em tempo real
+                - status "Tempo real ativo" [ref=f2e187]:
+                  - generic [ref=f2e104]: tempo real ativo
+            - group "Estado da conversa" [ref=f2e105]:
+              - button "aberta" [ref=f2e106] [cursor=pointer]
+              - button "pendente" [pressed] [ref=f2e107] [cursor=pointer]
+              - button "ativa" [ref=f2e108] [cursor=pointer]
+              - button "fechada" [ref=f2e109] [cursor=pointer]
+          - generic [ref=f2e110]:
+            - region "Fila de conversas" [ref=f2e111]:
+              - list [ref=f2e188]:
+                - listitem [ref=f2e189]:
+                  - button "Davi landpage · 18:26" [active] [ref=f2e190] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e191]: D
+                    - generic [ref=f2e193]:
+                      - generic [ref=f2e194]: Davi
+                      - generic [ref=f2e196]: landpage · 18:26
+                - listitem [ref=f2e197]:
+                  - button "Guest SSE landpage · 18:23" [ref=f2e198] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e199]: G
+                    - generic [ref=f2e201]:
+                      - generic [ref=f2e202]: Guest SSE
+                      - generic [ref=f2e204]: landpage · 18:23
+                - listitem [ref=f2e205]:
+                  - button "Diag Direct landpage · 18:22" [ref=f2e206] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e207]: D
+                    - generic [ref=f2e209]:
+                      - generic [ref=f2e210]: Diag Direct
+                      - generic [ref=f2e212]: landpage · 18:22
+                - listitem [ref=f2e213]:
+                  - button "Diag Portal landpage · 18:21" [ref=f2e214] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e215]: D
+                    - generic [ref=f2e217]:
+                      - generic [ref=f2e218]: Diag Portal
+                      - generic [ref=f2e220]: landpage · 18:21
+                - listitem [ref=f2e221]:
+                  - button "SSE Probe landpage · 18:21" [ref=f2e222] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e223]: S
+                    - generic [ref=f2e225]:
+                      - generic [ref=f2e226]: SSE Probe
+                      - generic [ref=f2e228]: landpage · 18:21
+                - listitem [ref=f2e229]:
+                  - button "Smoke UI landpage · 18:16" [ref=f2e230] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e231]: S
+                    - generic [ref=f2e233]:
+                      - generic [ref=f2e234]: Smoke UI
+                      - generic [ref=f2e236]: landpage · 18:16
+                - listitem [ref=f2e237]:
+                  - button "Maria Landpage Duvidas sobre planos · landpage · 17:00" [ref=f2e238] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e239]: M
+                    - generic [ref=f2e241]:
+                      - generic [ref=f2e242]: Maria Landpage
+                      - generic [ref=f2e244]: Duvidas sobre planos · landpage · 17:00
+                - listitem [ref=f2e245]:
+                  - button "Seed Probe landpage · 16:57" [ref=f2e246] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e247]: S
+                    - generic [ref=f2e249]:
+                      - generic [ref=f2e250]: Seed Probe
+                      - generic [ref=f2e252]: landpage · 16:57
+                - listitem [ref=f2e253]:
+                  - button "Probe Portal landpage · 16:57" [ref=f2e254] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e255]: P
+                    - generic [ref=f2e257]:
+                      - generic [ref=f2e258]: Probe Portal
+                      - generic [ref=f2e260]: landpage · 16:57
+                - listitem [ref=f2e261]:
+                  - button "Maria Landpage Duvidas sobre planos · landpage · 16:53" [ref=f2e262] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e263]: M
+                    - generic [ref=f2e265]:
+                      - generic [ref=f2e266]: Maria Landpage
+                      - generic [ref=f2e268]: Duvidas sobre planos · landpage · 16:53
+                - listitem [ref=f2e269]:
+                  - button "Maria Landpage Duvidas sobre planos · landpage · 16:50" [ref=f2e270] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e271]: M
+                    - generic [ref=f2e273]:
+                      - generic [ref=f2e274]: Maria Landpage
+                      - generic [ref=f2e276]: Duvidas sobre planos · landpage · 16:50
+            - region "Conversa ativa" [ref=f2e118]:
+              - generic [ref=f2e277]:
+                - generic [aria-hidden] [ref=f2e278]: D
+                - generic [ref=f2e279]:
+                  - paragraph [ref=f2e280]: Davi
+                  - paragraph [ref=f2e281]: sem e-mail · sem triagem · landpage
+                - generic [ref=f2e282]: pending
+              - log "Mensagens de Davi" [ref=f2e283]:
+                - generic [ref=f2e285]:
+                  - paragraph [ref=f2e286]: Atendimento AurumBit
+                  - paragraph [ref=f2e287]: Olá, Davi! 👋 Bem-vindo ao atendimento AurumBit. Escolha um assunto para começar — um especialista entra em instantes.
+                  - paragraph [ref=f2e288]:
+                    - time [ref=f2e289]: 18:24
+                - generic [ref=f2e291]:
+                  - paragraph [ref=f2e292]: Olá! Davi, como podemos ajudar você?
+                  - paragraph [ref=f2e293]:
+                    - time [ref=f2e294]: 18:24
+                    - img "Lida" [ref=f2e295]
+                - generic [ref=f2e299]:
+                  - paragraph [ref=f2e300]: Davi
+                  - paragraph [ref=f2e301]: Queria saber mais sobre seus produtos e serviços
+                  - paragraph [ref=f2e302]:
+                    - time [ref=f2e303]: 18:25
+                - generic [ref=f2e305]:
+                  - paragraph [ref=f2e306]: Claro! você ja conhece algum dos nossos produtos ou serviços?
+                  - paragraph [ref=f2e307]:
+                    - time [ref=f2e308]: 18:25
+                    - img "Lida" [ref=f2e309]
+                - generic [ref=f2e313]:
+                  - paragraph [ref=f2e314]: Davi
+                  - paragraph [ref=f2e315]: Sim! 😀
+                  - paragraph [ref=f2e316]:
+                    - time [ref=f2e317]: 18:25
+                - generic [ref=f2e319]:
+                  - paragraph [ref=f2e320]: Olá
+                  - paragraph [ref=f2e321]:
+                    - time [ref=f2e322]: 18:26
+                    - img "Lida" [ref=f2e323]
+              - generic [ref=f2e326]:
+                - generic [ref=f2e327]: Responder Davi
+                - textbox "Responder Davi" [ref=f2e328]:
+                  - /placeholder: Responder Davi…
+                - button "Enviar resposta" [disabled] [ref=f2e329]
+  - alert [ref=f2e185]

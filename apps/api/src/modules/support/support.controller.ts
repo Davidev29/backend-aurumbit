@@ -96,8 +96,12 @@ export class SupportController {
   }
 
   // Lista p/ o módulo administrativo (JWT obrigatório).
+  // `?archived=true` devolve só a lixeira (tela de arquivados p/ auditoria).
   @Get()
-  list(@CurrentUser() _user: AuthPrincipal | undefined) {
+  list(@CurrentUser() _user: AuthPrincipal | undefined, @Query('archived') archived?: string) {
+    if (archived === 'true') {
+      return { data: this.support.listArchived(), presence: this.support.presence() };
+    }
     return { data: this.support.listConversations(), presence: this.support.presence() };
   }
 
@@ -187,9 +191,21 @@ export class SupportController {
   @Patch(':id')
   patch(
     @Param('id') id: string,
-    @Body() body: { status?: 'open' | 'pending' | 'active' | 'closed'; assignee?: string | null },
-    @CurrentUser() _user: AuthPrincipal | undefined,
+    @Body() body: { status?: 'open' | 'pending' | 'active' | 'closed'; assignee?: string | null; archived?: unknown },
+    @CurrentUser() user: AuthPrincipal | undefined,
   ) {
+    // Arquivamento (lixeira): só admin/manager. Operadores de suporte
+    // (`STAFF_SUPPORT`) arquivam; financeiro e demais, não. Sem roles no
+    // token (stub/dev), mantém o comportamento staff-atual.
+    if (body.archived !== undefined) {
+      const roles = user?.roles ?? [];
+      const canArchive =
+        roles.length === 0 || roles.includes('STAFF_ADMIN') || roles.includes('STAFF_SUPPORT');
+      if (!canArchive) return { code: 'FORBIDDEN', message: 'Arquivamento restrito a admin/manager.' };
+      const archived = this.support.setArchived(id, body.archived === true);
+      if (!archived) return { code: 'NOT_FOUND', message: 'Conversa não encontrada.' };
+      return { conversation: archived };
+    }
     const allowed = ['open', 'pending', 'active', 'closed'] as const;
     const status = allowed.includes(body.status as (typeof allowed)[number]) ? body.status : undefined;
     const updated = this.support.patchConversation(id, { status, assignee: body.assignee });

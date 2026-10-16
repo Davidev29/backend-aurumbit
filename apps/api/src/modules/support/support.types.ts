@@ -29,6 +29,12 @@ export interface ChatConversation {
   unreadVisitor: number;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Arquivamento (lixeira/auditável — só admin/manager via `PATCH {archived}`).
+   * Não é exclusão: a conversa sai da fila mas segue legível + restaurável
+   * na tela de arquivados. `null` = na fila ativa.
+   */
+  archivedAt: string | null;
 }
 
 export interface ChatMessage {

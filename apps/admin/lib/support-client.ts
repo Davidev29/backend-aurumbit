@@ -16,6 +16,7 @@ async function readJson<T>(res: Response): Promise<T> {
 
 export function useAdminSupport() {
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [archived, setArchivedList] = useState<ChatConversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typingVisitor, setTypingVisitor] = useState(false);
@@ -41,6 +42,17 @@ export function useAdminSupport() {
       setDegraded(true);
     }
   }, [activeId]);
+
+  const loadArchived = useCallback(async () => {
+    try {
+      const res = await fetch("/api/support/conversations?archived=true", { credentials: "include" });
+      if (!res.ok) return;
+      const data = await readJson<{ data: ChatConversation[] }>(res);
+      if (Array.isArray(data.data)) setArchivedList(data.data);
+    } catch {
+      /* gaveta abre vazia — fila ativa não é afetada */
+    }
+  }, []);
 
   const loadMessages = useCallback(async (id: string) => {
     try {
@@ -192,8 +204,41 @@ export function useAdminSupport() {
     [activeId, loadList]
   );
 
+  /**
+   * Arquiva/restaura (lixeira — só admin/manager na UI; backend barra por role).
+   * Otimista entre as listas + reconcilia com reload das duas.
+   * Retorna `false` quando o backend recusar (ex.: 403).
+   */
+  const setArchived = useCallback(
+    async (id: string, archivedFlag: boolean): Promise<boolean> => {
+      if (archivedFlag) {
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+      } else {
+        setArchivedList((prev) => prev.filter((c) => c.id !== id));
+      }
+      try {
+        const res = await fetch(`/api/support/conversations/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archived: archivedFlag }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+      } catch {
+        await loadList();
+        await loadArchived();
+        return false;
+      }
+      await loadList();
+      await loadArchived();
+      return true;
+    },
+    [loadArchived, loadList]
+  );
+
   return {
     conversations,
+    archived,
     activeId,
     setActiveId,
     messages,
@@ -204,6 +249,8 @@ export function useAdminSupport() {
     sendTyping,
     markRead,
     setStatus,
+    setArchived,
     reload: loadList,
+    reloadArchived: loadArchived,
   };
 }

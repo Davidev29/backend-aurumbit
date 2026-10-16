@@ -147,6 +147,17 @@ export class LinkDeviceDto {
   @Expose({ name: 'app_instance_id' })
   appInstanceId?: string;
 
+  /**
+   * IP local da máquina, enviado pelo app instalado (bonificação/promo: o
+   * limite conta máquinas distintas por IP — mesma máquina reativa à vontade).
+   * Ausente = cai para o IP observado da conexão (atrás de proxy/NAT todos os
+   * clientes parecem um só — o app deve enviar este campo p/ distinção real).
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  ip?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(120)

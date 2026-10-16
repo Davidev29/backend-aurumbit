@@ -4,6 +4,13 @@ import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { DestructiveForm } from "@/components/ui/DestructiveForm";
 import { RequirePerm } from "@/lib/auth/permissions";
+import {
+  getCustomerData,
+  planBlockTrails,
+  planUnblockTrails,
+  recordActionTrails,
+  setCustomerBlocked,
+} from "./customer-data";
 
 /**
  * Bloqueio/liberação de acesso do cliente (2 passos: motivo ≥10 + checkbox).
@@ -32,9 +39,34 @@ export function BlockCustomerDialog({
     setPending(true);
     setError(null);
     try {
-      // Stub: sem endpoint de bloqueio no Nest — aplica local + trilha sintética.
+      // Stub: sem endpoint de bloqueio no Nest — persiste em sessão
+      // (fonte única p/ tabela + modal) e registra primária + secundárias
+      // (entitlement/billing/finance) sob o mesmo `correlationId`.
       await new Promise((r) => setTimeout(r, 400));
-      onDone(!blocked, `aud-customer-${customerId}-${Date.now()}`, motivo);
+      const next = !blocked;
+      const stamp = Date.now();
+      const correlationId = `corr-customer-${customerId}-${stamp}`;
+      const auditId = `aud-customer-${customerId}-${stamp}`;
+      setCustomerBlocked(customerId, next);
+      try {
+        const data = getCustomerData(customerId);
+        const secondaries = next ? planBlockTrails(data, correlationId) : planUnblockTrails(data, correlationId);
+        recordActionTrails(customerId, correlationId, [
+          {
+            id: auditId,
+            action: next ? "customer.block" : "customer.unblock",
+            resource: "customer",
+            resourceId: customerId,
+            detail: next
+              ? `Bloqueio reversível (SUSPEND; motivo auditado) · ${motivo}`
+              : `Liberação (CANCELADAS exigem nova assinatura) · ${motivo}`,
+          },
+          ...secondaries,
+        ]);
+      } catch {
+        /* trilhas são acessórias — nunca quebram a ação */
+      }
+      onDone(next, auditId, motivo);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao atualizar o acesso.");
