@@ -82,3 +82,65 @@ model WebhookReceipt {
   @@schema("communications")
 }
 
+// Ponte de atendimento em tempo real (portal ↔ admin).
+// - `guestToken` autentica o visitante sem login (header `x-chat-token` / `?token=` no SSE).
+// - LGPD: só nome + e-mail do visitante; corpo da mensagem é funcional do suporte.
+//   Retenção 90d (mesma do domínio communications).
+enum ChatConversationStatus {
+  OPEN
+  PENDING
+  ACTIVE
+  CLOSED
+  @@schema("communications")
+}
+
+enum ChatSender {
+  VISITOR
+  AGENT
+  SYSTEM
+  @@schema("communications")
+}
+
+enum ChatMessageStatus {
+  SENT
+  DELIVERED
+  READ
+  @@schema("communications")
+}
+
+model ChatConversation {
+  id            String                   @id
+  guestToken    String                   @unique
+  visitorName   String
+  visitorEmail  String?
+  origin        String                   @default("landpage")
+  triage        Json?
+  status        ChatConversationStatus   @default(OPEN)
+  assignee      String?
+  customerId    String?
+  lastMessageAt DateTime                 @default(now())
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt @default(now())
+  messages      ChatMessage[]
+
+  @@index([status])
+  @@index([lastMessageAt])
+  @@map("chat_conversations")
+  @@schema("communications")
+}
+
+model ChatMessage {
+  id             String            @id
+  conversationId String
+  conversation   ChatConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         ChatSender
+  authorName     String
+  body           String
+  status         ChatMessageStatus @default(SENT)
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
+  @@schema("communications")
+}
+

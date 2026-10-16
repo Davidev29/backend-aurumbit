@@ -9,6 +9,7 @@ import {
   Box,
   ChevronsLeft,
   ChevronsRight,
+  Headset,
   KeyRound,
   Landmark,
   LayoutDashboard,
@@ -55,6 +56,9 @@ const GROUPS: NavGroup[] = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/clientes", label: "Clientes", icon: Users, perm: "customer.read" },
       { href: "/cobrancas", label: "Cobranças", icon: ReceiptText, perm: "billing.read" },
+      // Ponte portal ↔ admin: fila em tempo real (leitura aberta como Produtos;
+      // o backend protege mutações por sessão; sem `perm` p/ aparecer no mock).
+      { href: "/atendimento", label: "Atendimento", icon: Headset },
     ],
   },
   {

@@ -15,6 +15,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { BillingReconcileModule } from './modules/billing/reconcile.module';
 import { BillingWebhookModule } from './modules/billing/webhook.module';
 import { CommunicationsModule } from './modules/communications/communications.module';
+import { SupportModule } from './modules/support/support.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { LicensingModule } from './modules/licensing/licensing.module';
@@ -64,6 +65,7 @@ import { RetentionModule } from './modules/retention/retention.module';
     FinanceModule,
     AuditModule,
     CommunicationsModule,
+    SupportModule,
     RetentionModule,
   ],
 })
