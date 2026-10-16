@@ -297,6 +297,27 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------- sessions
+  // Perfil mínimo da sessão (identidade própria, sem PII além do necessário).
+  async me(identityId: string): Promise<{
+    identityId: string;
+    email: string;
+    emailVerified: boolean;
+    mfaEnabled: boolean;
+    createdAt: Date;
+  }> {
+    const identity = await this.repo.findIdentityById(identityId);
+    if (!identity || identity.status === IDENTITY_STATUS.DELETED) {
+      throw new AuthError('NOT_FOUND', 404, 'Identidade não encontrada.');
+    }
+    return {
+      identityId: identity.id,
+      email: identity.emailDisplay,
+      emailVerified: identity.emailVerifiedAt !== null,
+      mfaEnabled: identity.mfaEnabled,
+      createdAt: identity.createdAt,
+    };
+  }
+
   async listSessions(identityId: string): Promise<Array<{ id: string; deviceLabel: string | null; status: string; expiresAt: Date; lastSeenAt: Date }>> {
     const all = await this.repo.listSessionsByIdentity(identityId);
     return all.map((s) => ({ id: s.id, deviceLabel: s.deviceLabel, status: s.status, expiresAt: s.expiresAt, lastSeenAt: s.lastSeenAt }));

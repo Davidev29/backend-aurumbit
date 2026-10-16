@@ -139,6 +139,16 @@ export class AuthController {
     }
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard, SessionGuard)
+  async me(@Req() req: any) {
+    try {
+      return await this.auth.me(reqAuth(req).identityId);
+    } catch (e) {
+      toHttp(e);
+    }
+  }
+
   @Get('sessions')
   @UseGuards(JwtAuthGuard, SessionGuard)
   async sessions(@Req() req: any) {
