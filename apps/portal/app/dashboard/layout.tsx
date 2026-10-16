@@ -10,6 +10,7 @@ import {
   Receipt,
   ShoppingCart,
   User,
+  Headset,
   LogOut,
   Menu,
   X,
@@ -50,7 +51,10 @@ const navGroups: NavGroup[] = [
   },
   {
     title: "Conta",
-    items: [{ href: "/dashboard/perfil", label: "Perfil", icon: User }],
+    items: [
+      { href: "/dashboard/perfil", label: "Perfil", icon: User },
+      { href: "/dashboard/atendimento", label: "Atendimento", icon: Headset },
+    ],
   },
 ];
 

@@ -3,6 +3,7 @@ import { PortalProvider } from "@/lib/portal-context";
 import { Navbar, Footer, StickyCta, BackToTop } from "@/components/layout";
 import { Hero, SummarySection, ProductsSection, PurposeSection, ServicesSection, AiAgentsSection, CostBenefitSection, AssuranceSection, HowItWorksSection, FaqSection, FinalCTASection } from "@/components/sections";
 import { AuthModalWrapper } from "@/components/auth/AuthModalWrapper";
+import { ChatWidget } from "@/components/support/ChatWidget";
 import { LoginParamOpener } from "@/components/auth/LoginParamOpener";
 import { mockCatalogPage } from "@/lib/mocks";
 
@@ -105,9 +106,9 @@ export default async function LandingPage() {
         name: "Como começar a usar a AurumBit",
         inLanguage: "pt-BR",
         step: [
-          { "@type": "HowToStep", name: "Você escolhe o plano e paga", text: "Pix, boleto ou cartão, com o total e as condições escritos antes de confirmar." },
-          { "@type": "HowToStep", name: "Você recebe a chave", text: "Liberada logo após a confirmação do pagamento, junto com o passo a passo de instalação." },
-          { "@type": "HowToStep", name: "Você instala e usa", text: "Nos computadores liberados pelo plano, com ou sem internet." },
+          { "@type": "HowToStep", name: "Escolha o plano e pague", text: "Pix, boleto ou cartão, com o total e as condições escritos antes de você confirmar." },
+          { "@type": "HowToStep", name: "Receba a chave de ativação", text: "Liberada logo após a confirmação do pagamento, com o passo a passo para instalar." },
+          { "@type": "HowToStep", name: "Instale e volte ao trabalho", text: "Instale nos computadores do seu plano e use com ou sem internet." },
         ],
       },
     ],
@@ -137,6 +138,7 @@ export default async function LandingPage() {
         <Footer />
         <StickyCta />
         <BackToTop />
+        <ChatWidget origin="landpage" />
         <AuthModalWrapper />
         <Suspense fallback={null}>
           <LoginParamOpener />

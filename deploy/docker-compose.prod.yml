@@ -10,8 +10,9 @@
 # sem mailhog em prod (SMTP real via T2/Resend), migrate one-shot antes da api.
 #
 # Rollback por tags (nunca `:latest`):
-#   - Build gera `aurum-<svc>:local`; `deploy/scripts/tag-images.sh` congela
-#     em `aurum-<svc>:<GIT_SHA>` (ex.: aurum-api:a3f9c1e).
+#   - Build gera `aurum_bit_backend:local` (api) e `aurum-<svc>:local`
+#     (workers/admin/portal); `deploy/scripts/tag-images.sh` congela
+#     em `aurum_bit_backend:<GIT_SHA>` / `aurum-<svc>:<GIT_SHA>`.
 #   - Voltar para a tag anterior: `GIT_SHA=<sha-anterior> docker compose
 #     -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d`
 #   - Listar retenção: `docker images | grep aurum`
@@ -85,7 +86,7 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
-    image: aurum-api:${GIT_SHA:-local} # mesma imagem da api: rollback único.
+    image: aurum_bit_backend:${GIT_SHA:-local} # mesma imagem da api: rollback único.
     container_name: aurum-migrate
     restart: "no" # one-shot concluído fica parado (ver comentário acima).
     user: "0:0" # só p/ instalar bash do one-shot; api/workers seguem non-root.
@@ -127,7 +128,7 @@ services:
       - aurum-net
 
   api:
-    image: aurum-api:${GIT_SHA:-local} # tag fixa por SHA; nunca :latest.
+    image: aurum_bit_backend:${GIT_SHA:-local} # tag fixa por SHA; nunca :latest.
     restart: unless-stopped
     env_file:
       - path: ../.env

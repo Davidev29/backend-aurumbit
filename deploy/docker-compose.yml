@@ -1,3 +1,10 @@
+# deploy/docker-compose.yml — stack DEV local (single-file).
+# Projeto canônico: aurum_bit_backend (agrupa tudo no Docker Desktop).
+# ATENÇÃO Docker: nome de IMAGEM precisa ser minúsculo por regra do Docker,
+# por isso a imagem é `aurum_bit_backend:local`. O CONTAINER aceita
+# maiúsculas e aparece exatamente como `Aurum_Bit_Backend` (pedido do dono).
+name: aurum_bit_backend
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -97,8 +104,13 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
-    image: aurum-api:local
-    container_name: aurum-api
+    # NOME PEDIDO PELO DONO:
+    # - Imagem  -> `aurum_bit_backend:local` (aba IMAGES do Docker Desktop).
+    #   Minúscula por exigência do Docker (repositório não aceita A-Z).
+    # - Container -> `Aurum_Bit_Backend` (aba CONTAINERS + `docker ps`).
+    #   Exato, com maiúsculas e underscores, como pedido.
+    image: aurum_bit_backend:local
+    container_name: Aurum_Bit_Backend
     restart: unless-stopped
     env_file:
       - path: ../.env

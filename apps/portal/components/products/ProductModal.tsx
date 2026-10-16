@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { Check, Monitor, Smartphone, Globe, Cpu, Shield, Database, Zap, WifiOff } from "lucide-react";
 import { Modal, Badge, Button } from "@/components/ui";
-import { GoldIcon } from "@/components/ui/GoldIcon";
+import { ProductModalBackground } from "./ProductModalBackground";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { ProductView, PlanView } from "@/types";
 
@@ -80,28 +79,46 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
       title={product.name}
       description={short}
       size="xl"
+      background={<ProductModalBackground media={product.gallery} productName={product.name} />}
     >
       <div className="flex max-h-[80dvh] flex-col md:max-h-[70dvh]">
         <div className="grid flex-1 min-h-0 flex-shrink gap-5 overflow-y-auto pr-1 md:grid-cols-[300px_minmax(0,1fr)] md:overflow-hidden md:pr-0">
-          {/* Coluna esquerda: visual + specs compactos (fixa no desktop) */}
+          {/* Coluna esquerda: identidade + specs compactos (fixa no desktop) */}
           <aside className="min-w-0 space-y-3 md:overflow-hidden md:pr-1">
-            <ProductVisual product={product} />
+            <div className="flex flex-wrap gap-1.5">
+              {product.category && (
+                <Badge variant="gold" size="sm">
+                  {product.category}
+                </Badge>
+              )}
+              <Badge variant="neutral" size="sm">
+                {product.machinesAllowed} computador{product.machinesAllowed > 1 ? "es" : ""}
+              </Badge>
+              {product.gallery.length > 1 && (
+                <Badge variant="neutral" size="sm">
+                  {product.gallery.length} mídias
+                </Badge>
+              )}
+            </div>
+            {product.tags && product.tags.length > 0 && (
+              <p className="truncate text-caption text-text2">{product.tags.join(" · ")}</p>
+            )}
 
             {/* Specs em tiles compactos */}
             <section aria-label="Especificações" className="grid grid-cols-3 gap-1.5">
-              <div className="rounded-base border border-line2 px-2 py-2 text-center">
+              <div className="rounded-base border border-line2 bg-bg1/60 px-2 py-2 text-center backdrop-blur-sm">
                 <Monitor className="mx-auto mb-1 h-4 w-4 text-accent" aria-hidden="true" />
                 <p className="font-display text-body font-bold leading-none text-text1">
                   {product.machinesAllowed}
                 </p>
                 <p className="mt-0.5 text-caption text-text3">computadores</p>
               </div>
-              <div className="rounded-base border border-line2 px-2 py-2 text-center">
+              <div className="rounded-base border border-line2 bg-bg1/60 px-2 py-2 text-center backdrop-blur-sm">
                 <WifiOff className="mx-auto mb-1 h-4 w-4 text-ok" aria-hidden="true" />
                 <p className="font-display text-body font-bold leading-none text-text1">100%</p>
                 <p className="mt-0.5 text-caption text-text3">offline</p>
               </div>
-              <div className="rounded-base border border-line2 px-2 py-2 text-center">
+              <div className="rounded-base border border-line2 bg-bg1/60 px-2 py-2 text-center backdrop-blur-sm">
                 <Database className="mx-auto mb-1 h-4 w-4 text-info" aria-hidden="true" />
                 <p className="truncate font-display text-body font-bold leading-none text-text1">
                   {product.category ?? "Geral"}
@@ -175,7 +192,7 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
                         }
                       }}
                       className={cn(
-                        "flex cursor-pointer items-center justify-between gap-3 rounded-base border-2 px-2.5 py-2 transition-[border-color,background-color] duration-200",
+                        "flex cursor-pointer items-center justify-between gap-3 rounded-base border-2 bg-bg1/60 px-2.5 py-2 backdrop-blur-sm transition-[border-color,background-color] duration-200",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                         selected || (isAnnual && !selectedPlan)
                           ? "border-accent bg-accent-soft"
@@ -229,7 +246,7 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
                 {uniqueFeatures.slice(0, 4).map((feature) => (
                   <li
                     key={feature.featureCode}
-                    className="flex items-center gap-1.5 rounded-base border border-line2 bg-bg2/50 px-2.5 py-1.5"
+                    className="flex items-center gap-1.5 rounded-base border border-line2 bg-bg2/60 px-2.5 py-1.5 backdrop-blur-sm"
                   >
                     <Check className="h-3.5 w-3.5 flex-shrink-0 text-ok" aria-hidden="true" />
                     <span className="truncate text-caption font-medium text-text1">
@@ -285,60 +302,5 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
         </div>
       </div>
     </Modal>
-  );
-}
-
-/** Card visual vertical para a coluna esquerda — compacto, sem esticar o modal. */
-function ProductVisual({ product }: { product: ProductView }) {
-  const [failed, setFailed] = useState(false);
-  const img = product.gallery[0];
-
-  useEffect(() => {
-    setFailed(false);
-  }, [product.id]);
-
-  return (
-    <div className="relative h-36 overflow-hidden rounded-card border border-line2 bg-gradient-to-br from-accent/25 via-bg2 to-bg2 md:h-[190px]">
-      <div className="bg-grid-gold absolute inset-0 opacity-70" aria-hidden="true" />
-      {!failed && img?.url ? (
-        <>
-          <Image
-            src={img.url}
-            alt={img.alt || product.name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 640px) 100vw, 512px"
-            onError={() => setFailed(true)}
-          />
-          <div
-            className="absolute inset-0 bg-gradient-to-t from-bg0/85 via-bg0/20 to-transparent"
-            aria-hidden="true"
-          />
-        </>
-      ) : null}
-      <div className="absolute inset-0 flex items-center gap-3 p-4">
-        <GoldIcon icon={Cpu} size="lg" />
-        <div className="min-w-0">
-          <div className="flex flex-wrap gap-1.5">
-            {product.category && (
-              <Badge variant="gold" size="sm">
-                {product.category}
-              </Badge>
-            )}
-            <Badge variant="neutral" size="sm">
-              {product.machinesAllowed} computador{product.machinesAllowed > 1 ? "es" : ""}
-            </Badge>
-            {product.gallery.length > 1 && (
-              <Badge variant="neutral" size="sm">
-                +{product.gallery.length - 1} fotos
-              </Badge>
-            )}
-          </div>
-          {product.tags && product.tags.length > 0 && (
-            <p className="mt-1.5 truncate text-caption text-text2">{product.tags.join(" · ")}</p>
-          )}
-        </div>
-      </div>
-    </div>
   );
 }

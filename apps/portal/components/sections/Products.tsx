@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Reveal } from "@/components/motion";
 import { ProductGrid } from "@/components/products/ProductGrid";
-import { ProductSpotlight } from "@/components/products/ProductSpotlight";
 import { ProductModal } from "@/components/products/ProductModal";
 import { SectionHeading, SectionSkeleton, AuroraWaves } from "@/components/ui";
 import { usePortal } from "@/lib/portal-context";
@@ -130,7 +129,6 @@ export function ProductsSection({ products: initialProducts = [] }: { products?:
           </Suspense>
         </Reveal>
 
-        <ProductSpotlight products={products} onSelect={handleProductClick} />
       </div>
 
       {/* Product Detail Modal */}

@@ -46,7 +46,15 @@ export interface ProductImage {
   url: string;
   alt?: string;
   order: number;
+  /** Tipo da mídia — a galeria aceita imagens e vídeos do backend. */
+  kind?: "image" | "video";
+  mime?: string;
+  /** Poster do vídeo (quando o backend enviar). */
+  poster?: string;
 }
+
+/** Alias de leitura: a galeria do produto é uma lista de mídias (imagem/vídeo). */
+export type ProductMedia = ProductImage;
 
 export interface ProductView {
   id: string;

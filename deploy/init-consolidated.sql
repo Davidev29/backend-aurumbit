@@ -113,6 +113,11 @@ ALTER ROLE app_audit_read WITH LOGIN CONNECTION LIMIT 5 PASSWORD :'app_audit_rea
 -- 5. CONNECT no banco
 -- ---------------------------------------------------------------------------
 GRANT CONNECT ON DATABASE aurumbit TO migrator;
+-- DDL do migrator: todo baseline Prisma começa com
+-- `CREATE SCHEMA IF NOT EXISTS "public"` — sem CREATE no banco, o
+-- `migrate deploy` morre com `permission denied for database` (só CONNECT não basta).
+-- Mínimo necessário: só o migrator ganha CREATE; app_* seguem sem.
+GRANT CREATE ON DATABASE aurumbit TO migrator;
 GRANT CONNECT ON DATABASE aurumbit TO app_auth, app_customers, app_products;
 GRANT CONNECT ON DATABASE aurumbit TO app_access, app_licensing;
 GRANT CONNECT ON DATABASE aurumbit TO app_billing, app_communications;
@@ -134,7 +139,7 @@ CREATE TABLE IF NOT EXISTS audit.audit_events (
   entity TEXT NOT NULL,
   "entityId" TEXT,
   metadata JSONB,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT now(),
   CONSTRAINT audit_events_pkey PRIMARY KEY ("createdAt", id)
 ) PARTITION BY RANGE ("createdAt");
 
@@ -148,7 +153,7 @@ CREATE TABLE IF NOT EXISTS audit.security_events (
   entity TEXT,
   "entityId" TEXT,
   metadata JSONB,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT now(),
   CONSTRAINT security_events_pkey PRIMARY KEY ("createdAt", id)
 ) PARTITION BY RANGE ("createdAt");
 
@@ -188,6 +193,18 @@ CREATE INDEX IF NOT EXISTS idx_security_events_created_id
   ON audit.security_events ("createdAt", id);
 CREATE INDEX IF NOT EXISTS idx_security_correlation
   ON audit.security_events (((metadata ->> 'correlationId')), "createdAt");
+
+-- Dono das tabelas de auditoria = migrator (não o superusuário do init).
+-- Sem isso, `migrate deploy` do domínio audit falha com
+-- `must be owner of table security_events` ao criar índices/partições
+-- (CREATE INDEX exige ownership). Bloco idempotente.
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'audit' LOOP
+    EXECUTE format('ALTER TABLE audit.%I OWNER TO migrator', r.tablename);
+  END LOOP;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- 7. USAGE por schema (migrator opera DDL em todos; app só no seu domínio)

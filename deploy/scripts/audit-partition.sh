@@ -26,7 +26,15 @@ PGUSER="${POSTGRES_USER:-aurum}"
 export PGPASSWORD="${POSTGRES_PASSWORD:-aurum}"
 
 psql_audit() {
-  if [ -n "${DATABASE_URL_AUDIT:-}" ]; then
+  if [ -n "${DATABASE_URL_AUDIT:-}" ] && command -v psql >/dev/null 2>&1; then
+    psql -v ON_ERROR_STOP=1 "$DATABASE_URL_AUDIT" -c "$1"
+  elif command -v docker >/dev/null 2>&1; then
+    # Sem `psql` local (ex.: Windows dev): executa dentro do container do
+    # Postgres (container_name fixo `aurum-postgres`, salvo PG_CONTAINER).
+    PG_CONTAINER="${PG_CONTAINER:-aurum-postgres}"
+    printf '%s\n' "$1" | docker exec -i -e PGPASSWORD="${POSTGRES_PASSWORD:-aurum}" \
+      "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-aurum}" -d aurumbit
+  elif [ -n "${DATABASE_URL_AUDIT:-}" ]; then
     psql -v ON_ERROR_STOP=1 "$DATABASE_URL_AUDIT" -c "$1"
   else
     psql -v ON_ERROR_STOP=1 -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d audit -c "$1"

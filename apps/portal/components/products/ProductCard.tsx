@@ -63,7 +63,7 @@ export function ProductCard({ product, onClick, variant = "default" }: ProductCa
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); }}}
       >
         <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-base bg-gradient-gold/20">
-          {product.gallery[0] ? (
+          {product.gallery[0] && product.gallery[0].kind !== "video" ? (
             <Image
               src={product.gallery[0].url}
               alt={product.name}

@@ -15,6 +15,42 @@ if [ -f "$ROOT/.env" ]; then
   set +a
 fi
 
+# DEV com .env least-privilege: as DATABASE_URL_* do .env usam roles de app
+# (sem DDL) — migrate direto com elas morre em `permission denied`.
+# Com MIGRATE_AS_MIGRATOR=1, deriva URLs do role `migrator` (DDL) a partir de
+# MIGRATOR_PASSWORD. Host/porta via MIGRATE_HOST/MIGRATE_PORT (default:
+# localhost:5432 = ferramentas do HOST; dentro do compose o serviço `migrate`
+# já recebe URLs prontas e NÃO precisa desta flag).
+# start-backend.ps1 exporta MIGRATE_AS_MIGRATOR=1 automaticamente no DEV.
+if [ "${MIGRATE_AS_MIGRATOR:-0}" = "1" ]; then
+  MIG_PW="${MIGRATOR_PASSWORD:-dev_migrator_pw}"
+  MIG_HOST="${MIGRATE_HOST:-localhost}"
+  MIG_PORT="${MIGRATE_PORT:-5432}"
+  for d in $DOMAINS; do
+    # export explícito: sem ele o npx/prisma (processo filho) não enxerga a
+    # derivação e cai nos valores do .env (roles de app, sem DDL).
+    u=$(echo "$d" | tr '[:lower:]' '[:upper:]')
+    export "DATABASE_URL_${u}=postgresql://migrator:${MIG_PW}@${MIG_HOST}:${MIG_PORT}/aurumbit?schema=${d}"
+  done
+  export "DATABASE_URL=postgresql://migrator:${MIG_PW}@${MIG_HOST}:${MIG_PORT}/aurumbit?schema=auth"
+  export "MIGRATOR_DATABASE_URL=postgresql://migrator:${MIG_PW}@${MIG_HOST}:${MIG_PORT}/aurumbit"
+  echo "migrate-all: usando role migrator (${MIG_HOST}:${MIG_PORT}) via MIGRATE_AS_MIGRATOR=1"
+fi
+
+# BASELINE DO AUDIT (E6): o init-consolidated.sql (§6) pré-cria as tabelas
+# particionadas (fonte única compartilhada com as migrations 0001/0002, tudo
+# IF NOT EXISTS). Num banco novo, o `deploy` do audit morreria com P3005
+# (schema não vazio sem histórico). Marca 0001 como aplicada SOMENTE quando
+# ainda não há registro — idempotente: primeira passada registra ("marked as
+# applied"), repetições caem no P3008 ("already recorded as applied") e seguem.
+echo "==> audit baseline (0001_baseline)"
+AUDIT_BASE="$(npx -y "prisma@${PRISMA_VERSION}" migrate resolve --applied 0001_baseline --schema="$ROOT/prisma/audit/schema.prisma" 2>&1)" || true
+echo "$AUDIT_BASE" | tail -n 2
+case "$AUDIT_BASE" in
+  *"marked as applied"*|*"already recorded as applied"*) ;;
+  *) echo "ERRO: baseline do audit falhou (ver saída acima)" >&2; exit 1 ;;
+esac
+
 for d in $DOMAINS; do
   echo "==> migrate deploy: $d"
   npx -y "prisma@${PRISMA_VERSION}" migrate deploy --schema="$ROOT/prisma/$d/schema.prisma"
@@ -23,13 +59,23 @@ done
 # GRANT-REPAIR (Fase 9, ADR-006): migrate cria tabelas como migrator.
 # DEFAULT PRIVILEGES cobrem o futuro; tabelas desta passada precisam do GRANT.
 # Idempotente via deploy/grant-repair.sql; nunca falha o deploy.
+# Sem `psql` no PATH (ex.: Windows dev), usa o container do Postgres via
+# `docker exec` (container_name fixo `aurum-postgres`, salvo PG_CONTAINER).
 MIG_URL="${MIGRATOR_DATABASE_URL:-}"
 if [ -n "$MIG_URL" ] && command -v psql >/dev/null 2>&1; then
   echo "==> grant-repair (DML por schema)"
   psql "$MIG_URL" -v ON_ERROR_STOP=1 -f "$ROOT/deploy/grant-repair.sql" \
     || echo "WARN: grant-repair falhou - rode deploy/grant-repair.sql manualmente."
+elif [ -n "$MIG_URL" ] && command -v docker >/dev/null 2>&1; then
+  echo "==> grant-repair via docker exec (sem psql local)"
+  PG_CONTAINER="${PG_CONTAINER:-aurum-postgres}"
+  MIG_PW_EXEC="${MIGRATOR_PASSWORD:-dev_migrator_pw}"
+  docker exec -i -e PGPASSWORD="$MIG_PW_EXEC" "$PG_CONTAINER" \
+    psql -U migrator -d aurumbit -v ON_ERROR_STOP=1 \
+    < "$ROOT/deploy/grant-repair.sql" \
+    || echo "WARN: grant-repair via docker falhou - rode deploy/grant-repair.sql manualmente."
 else
-  echo "WARN: MIGRATOR_DATABASE_URL/psql ausentes - grant-repair pulado."
+  echo "WARN: MIGRATOR_DATABASE_URL/psql/docker ausentes - grant-repair pulado."
 fi
 
 echo "migrate-all OK (9 dominios)"

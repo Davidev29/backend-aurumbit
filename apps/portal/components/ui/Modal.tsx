@@ -17,6 +17,12 @@ export interface ModalProps {
   closeOnOverlayClick?: boolean;
   closeOnEscape?: boolean;
   className?: string;
+  /**
+   * Fundo do painel (ex.: galeria do produto). Renderizado em camada absoluta
+   * atrás do cabeçalho/conteúdo — o `background` deve incluir o próprio véu
+   * de vidro (cf. `hero-brand-veil` + `hero-brand-glass` do banner).
+   */
+  background?: ReactNode;
 }
 
 export function Modal({
@@ -30,6 +36,7 @@ export function Modal({
   closeOnOverlayClick = true,
   closeOnEscape = true,
   className,
+  background,
 }: ModalProps) {
   const uid = useId().replace(/:/g, "");
   const titleId = title ? `modal-title-${uid}` : undefined;
@@ -123,7 +130,7 @@ export function Modal({
               tabIndex={-1}
               onKeyDown={handleTrap}
               className={cn(
-                "glass-modal w-full pointer-events-auto",
+                "glass-modal w-full pointer-events-auto relative overflow-hidden",
                 sizes[size],
                 className
               )}
@@ -133,8 +140,13 @@ export function Modal({
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             >
+              {background && (
+                <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+                  {background}
+                </div>
+              )}
               {(title || showCloseButton) && (
-                <div className="flex items-start justify-between gap-4 p-6 border-b border-line2">
+                <div className="relative z-10 flex items-start justify-between gap-4 p-6 border-b border-line2">
                   <div>
                     {title && (
                       <h2
@@ -164,7 +176,7 @@ export function Modal({
                   )}
                 </div>
               )}
-              <div className={cn(title || showCloseButton ? "p-6 pt-0" : "p-6")}>
+              <div className={cn("relative z-10", title || showCloseButton ? "p-6 pt-0" : "p-6")}>
                 {children}
               </div>
             </motion.div>

@@ -139,7 +139,18 @@ function Refresh-BoardFromCompose() {
     $out = docker compose -f $ComposeFile ps --format '{{.Name}} {{.Status}}' 2>$null
   } catch { return }
   foreach ($line in $out) {
-    if ($line -match 'aurum-(\S+)\s+(.*)') {
+    # Nome canônico pedido pelo dono: container `Aurum_Bit_Backend` = serviço `api`.
+    # Imagem correspondente (minúscula, exigência do Docker): `aurum_bit_backend:local`.
+    if ($line -match 'Aurum_Bit_Backend\s+(.*)') {
+      $svc = 'api'; $status = $Matches[1]
+      $st = 'subindo'; $color = $status
+      if ($status -match '\(healthy\)|healthy') { $st = 'saudavel' }
+      elseif ($status -match '\(health: starting\)|Starting|Restarting') { $st = 'subindo' }
+      elseif ($status -match 'Exited|failed|unhealthy') { $st = 'falha' }
+      elseif ($status -match 'Up') { $st = 'no ar' }
+      Set-ServiceStatus $svc $st $status
+    }
+    elseif ($line -match 'aurum-(\S+)\s+(.*)') {
       $svc = $Matches[1]; $status = $Matches[2]
       $st = 'subindo'; $color = $status
       if ($status -match '\(healthy\)|healthy') { $st = 'saudavel' }
@@ -281,6 +292,9 @@ if (-not $SkipSeed) {
     # Captura em arquivo e joga no bloco de log (tamanho fixo).
     $stepLog = Join-Path ([IO.Path]::GetTempPath()) 'aurum-step.log'
     Write-BoardLog 'migrate-all.sh: iniciando (9 dominios)...'
+    # .env DEV usa roles de app (sem DDL): o migrate precisa do role `migrator`
+    # (ver MIGRATE_AS_MIGRATOR em deploy/scripts/migrate-all.sh).
+    $env:MIGRATE_AS_MIGRATOR = '1'
     cmd /c "`"$bashExe`" deploy/scripts/migrate-all.sh > `"$stepLog`" 2>&1"
     $migCode = $LASTEXITCODE
     Get-Content $stepLog | ForEach-Object { Write-BoardLog ([string]$_) }

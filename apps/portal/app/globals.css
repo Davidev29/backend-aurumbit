@@ -613,6 +613,25 @@
   z-index: 40;
 }
 
+/* === Fundo em mídia do modal do produto (crossfade suave entre fotos) === */
+.product-modal-media {
+  opacity: 0;
+  transition: opacity 1200ms ease;
+}
+.product-modal-media.is-on {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .product-modal-media {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .product-modal-media {
+    display: none;
+  }
+}
+
 /* Tooltip */
 .tooltip {
   position: absolute;
@@ -944,6 +963,12 @@ section[id] {
 }
 @media (forced-colors: active){
   .prod-aurora-canvas,.prod-aurora-glass,.prod-aurora-veil{display:none}
+}
+
+/* === Stepper "Do pagamento ao trabalho": trilho e pílula no alto contraste === */
+@media (forced-colors: active){
+  .how-track{border:1px solid CanvasText}
+  .how-pill{background:CanvasText}
 }
 
 /* === Logomarca AurumBit desenhada em CSS (banner HeroBrandBanner) === */

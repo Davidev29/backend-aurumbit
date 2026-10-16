@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AlertTriangle, Package } from "lucide-react";
 import { ProductCard } from "./ProductCard";
 import { Button, ProductCardSkeleton } from "@/components/ui";
@@ -18,8 +18,9 @@ interface ProductGridProps {
 }
 
 const GRID_CLASSES = "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 md:gap-6 lg:grid-cols-3";
+const EASE = [0.16, 1, 0.3, 1] as const;
 
-function FilterChip({
+function FilterOption({
   label,
   count,
   active,
@@ -32,20 +33,26 @@ function FilterChip({
 }) {
   return (
     <button
+      role="tab"
+      aria-selected={active}
       onClick={onSelect}
-      aria-pressed={active}
       className={cn(
-        "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 py-2 text-caption font-semibold transition-[background-color,border-color,color] duration-150",
+        "relative flex min-h-[44px] items-center gap-2 rounded-full px-4 text-caption font-semibold transition-colors duration-200 sm:px-5",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active
-          ? "border-transparent bg-gradient-gold text-on-gold shadow-glow-sm"
-          : "border-line2 bg-transparent text-text2 hover:border-accent/60 hover:text-accent"
+        active ? "text-on-gold" : "text-text2 hover:text-text1"
       )}
     >
-      {label}
+      {active && (
+        <motion.span
+          layoutId="product-filter-pill"
+          className="absolute inset-0 rounded-full bg-gradient-gold shadow-glow-sm"
+          transition={{ duration: 0.32, ease: EASE }}
+        />
+      )}
+      <span className="relative z-10">{label}</span>
       <span
         className={cn(
-          "rounded-full px-1.5 font-mono text-micro",
+          "relative z-10 rounded-full px-1.5 font-mono text-micro tabular-nums",
           active ? "bg-[#1A140B]/15 text-on-gold" : "bg-bg2 text-text3"
         )}
       >
@@ -64,6 +71,7 @@ export function ProductGrid({
   onRetry,
 }: ProductGridProps) {
   const [activeCategory, setActiveCategory] = useState(initialCategory);
+  const reduceMotion = useReducedMotion();
 
   // Extract unique categories
   const categories = useMemo(() => {
@@ -115,23 +123,29 @@ export function ProductGrid({
 
   return (
     <div>
-      {/* Category Filter — gold pills with active glow */}
-      <div className="mb-6 flex flex-wrap gap-2 sm:mb-8" role="group" aria-label="Filtrar por categoria">
-        <FilterChip
-          label="Todos"
-          count={products.length}
-          active={activeCategory === "all"}
-          onSelect={() => setActiveCategory("all")}
-        />
-        {categories.map((category) => (
-          <FilterChip
-            key={category}
-            label={category}
-            count={countFor.get(category) ?? 0}
-            active={activeCategory === category}
-            onSelect={() => setActiveCategory(category)}
+      {/* Filtro por categoria — segmented control com pílula deslizante */}
+      <div className="mb-6 flex justify-center sm:mb-8">
+        <div
+          role="tablist"
+          aria-label="Filtrar por categoria"
+          className="inline-flex max-w-full flex-wrap items-center justify-center gap-1 rounded-[26px] border border-line2 bg-bg1/60 p-1.5 shadow-1 backdrop-blur-sm sm:rounded-full"
+        >
+          <FilterOption
+            label="Todos"
+            count={products.length}
+            active={activeCategory === "all"}
+            onSelect={() => setActiveCategory("all")}
           />
-        ))}
+          {categories.map((category) => (
+            <FilterOption
+              key={category}
+              label={category}
+              count={countFor.get(category) ?? 0}
+              active={activeCategory === category}
+              onSelect={() => setActiveCategory(category)}
+            />
+          ))}
+        </div>
       </div>
 
       {filteredProducts.length === 0 ? (
@@ -148,24 +162,22 @@ export function ProductGrid({
           )}
         </div>
       ) : (
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={activeCategory}
-            className={GRID_CLASSES}
-            initial={false}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            role="list"
-            aria-label={`Produtos${activeCategory !== "all" ? ` - ${activeCategory}` : ""}`}
-          >
-            {filteredProducts.map((product, index) => (
+        <motion.div
+          layout={!reduceMotion}
+          className={GRID_CLASSES}
+          transition={{ duration: 0.32, ease: EASE }}
+          role="list"
+          aria-label={`Produtos${activeCategory !== "all" ? ` - ${activeCategory}` : ""}`}
+        >
+          <AnimatePresence initial={false}>
+            {filteredProducts.map((product) => (
               <motion.div
                 key={product.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3, delay: 0, ease: [0.16, 1, 0.3, 1] }}
+                layout={!reduceMotion}
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.32, ease: EASE }}
                 role="listitem"
               >
                 <ProductCard
@@ -174,8 +186,8 @@ export function ProductGrid({
                 />
               </motion.div>
             ))}
-          </motion.div>
-        </AnimatePresence>
+          </AnimatePresence>
+        </motion.div>
       )}
 
       {/* Results count */}
