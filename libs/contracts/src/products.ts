@@ -11,33 +11,41 @@ export type BillingInterval = z.infer<typeof BillingIntervalSchema>;
 /**
  * Catálogo canônico de plataformas do produto.
  *
- * O slug é ESTÁVEL e vai para o banco (`products.Product.platforms`): é o mesmo
- * id do catálogo de ícones (`tools/build-tag-icons.py`). Renomear um id aqui
- * exige migration de dado — nunca renomeie por vaidade.
+ * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` (dado — o mesmo que
+ * o `tools/build-tag-icons.py` lê para gerar os PNGs). Este arquivo NÃO lista
+ * ids/labels à mão: ele reexporta o artefato gerado por
+ * `tools/sync-platform-catalog.mjs` (`pnpm catalog:sync`), e o CI reprova
+ * drift com `pnpm catalog:check` (inclusive ícone órfão em `public/tags`).
  *
- * Este é o único lugar onde o catálogo deveria viver; `apps/api` mantém uma
- * cópia defensiva em `modules/products/dto.ts` porque ainda NÃO consome este
- * pacote (ver o TODO lá). Quando o workspace passar a linkingar
- * `@aurum-bit/contracts`, apague a cópia da API.
+ * O slug é ESTÁVEL e vai para o banco (`products.Product.platforms`): renomear
+ * um id exige migration de dado — nunca renomeie por vaidade.
+ *
+ * As cópias defensivas dos apps (`apps/api/modules/products/dto.ts`,
+ * `apps/{admin,portal}/lib/platforms.ts`) também são geradas da MESMA fonte —
+ * não existe mais "manter os dois iguais à mão".
  */
-export const PLATFORM_IDS = ["windows", "macos", "linux", "web", "apple"] as const;
+import {
+  CATALOG_DELIVERY_MODES,
+  CATALOG_PLATFORM_IDS,
+  CATALOG_PLATFORM_LABELS,
+  CATALOG_PLATFORM_SHORT_LABELS,
+} from "./products.catalog.generated";
+
+export const PLATFORM_IDS = CATALOG_PLATFORM_IDS;
 export const PLATFORM_ID_SCHEMA = z.enum(PLATFORM_IDS);
 export type PlatformId = z.infer<typeof PLATFORM_ID_SCHEMA>;
 
 /** Rótulos pt-BR para UI (admin/portal). Ícone correspondente: `PlatformIcon`. */
-export const PLATFORM_LABELS: Record<PlatformId, string> = {
-  windows: "Windows",
-  macos: "macOS",
-  linux: "Linux",
-  web: "Web",
-  apple: "Apple (iOS/iPadOS)",
-};
+export const PLATFORM_LABELS: Record<PlatformId, string> = CATALOG_PLATFORM_LABELS;
+
+/** Versão curta (cards estreitos, onde o rótulo completo não cabe). */
+export const PLATFORM_SHORT_LABELS: Record<PlatformId, string> = CATALOG_PLATFORM_SHORT_LABELS;
 
 /**
  * Como o produto é entregue: `OFFLINE` (só no dispositivo, sem rede) ou
  * `HYBRID` (opera offline e sincroniza com o servidor). Default `OFFLINE`.
  */
-export const DELIVERY_MODES = ["OFFLINE", "HYBRID"] as const;
+export const DELIVERY_MODES = CATALOG_DELIVERY_MODES;
 export const DELIVERY_MODE_SCHEMA = z.enum(DELIVERY_MODES);
 export type DeliveryMode = z.infer<typeof DELIVERY_MODE_SCHEMA>;
 

@@ -14,15 +14,18 @@ Saidas (PNG RGBA 256px, recorte pela caixa de alfa + padding uniforme):
     apps/portal/public/tags/<id>.png
     apps/portal/public/tags/<id>-dark.png
 
-O `id` e estavel e vai para o banco (products.platforms TEXT[]), entao nao deve
-mudar sem migration. `label` e o rotulo pt-BR exibido no admin e na landpage.
+CATALOGO: este script NAO tem lista propria — le a fonte unica
+`libs/contracts/src/products.catalog.json` (id/rotulo/assetFile/monochrome), a
+mesma que `pnpm catalog:sync` gera para o front e a API. O `id` e estavel e vai
+para o banco (products.platforms TEXT[]), entao nao deve mudar sem migration.
 
 Uso:  python tools/build-tag-icons.py
-Idempotente: sempre reescreve a partir de ASSETS/tags (fonte da verdade).
+Idempotente: sempre reescreve a partir de ASSETS/tags (fonte da arte).
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from collections import deque
 from pathlib import Path
@@ -36,22 +39,31 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = ROOT / "ASSETS" / "tags"
 TARGETS = [ROOT / "apps" / "admin" / "public" / "tags", ROOT / "apps" / "portal" / "public" / "tags"]
 
+# FONTE UNICA do catalogo (mesmo dado que o front/API consomem via `pnpm catalog:sync`).
+CATALOG_PATH = ROOT / "libs" / "contracts" / "src" / "products.catalog.json"
+
 SIZE = 256
 INNER_RATIO = 0.82
 WHITE_TOL = 245
 WHITE_TOL_C = 28
 
-# id estavel (vai p/ products.platforms) | rotulo pt-BR | arquivo de origem
-PLATFORMS: list[tuple[str, str, str]] = [
-    ("windows", "Windows", "windows icon.png"),
-    ("macos", "macOS", "mac os icon.png"),
-    ("linux", "Linux", "linux icon.png"),
-    ("web", "Web", "web icon.jfif"),
-    ("apple", "Apple (iOS/iPadOS)", "apple icon.png"),
-]
 
-# So estas sao monocromaticas (uma cor) -> precisam de variante p/ tema dark.
-MONOCHROME = {"apple"}
+def load_catalog() -> tuple[list[tuple[str, str, str]], set[str]]:
+    """(id, rotulo pt-BR, arquivo de origem) + ids monocromaticos.
+
+    Nao ha copia da lista aqui de proposito: id/rotulo/assetFile/monochrome vem
+    do JSON. O gate `pnpm catalog:check` confere que os PNGs gerados batem com o
+    catalogo (inclusive orfaos).
+    """
+    if not CATALOG_PATH.exists():
+        sys.exit(f"catalogo nao encontrado: {CATALOG_PATH.relative_to(ROOT)}")
+    data = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    platforms = [(item["id"], item["label"], item["assetFile"]) for item in data["platforms"]]
+    monochrome = {item["id"] for item in data["platforms"] if item["monochrome"]}
+    return platforms, monochrome
+
+
+PLATFORMS, MONOCHROME = load_catalog()
 
 
 def _strip_border_white(im: Image.Image) -> Image.Image:

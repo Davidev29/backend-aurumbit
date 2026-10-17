@@ -19,27 +19,23 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
+import { PRODUCT_DELIVERY_MODES, PRODUCT_PLATFORM_IDS } from './platform-catalog.generated';
+
+export { PRODUCT_DELIVERY_MODES, PRODUCT_PLATFORM_IDS };
+export type { ProductDeliveryMode, ProductPlatformId } from './platform-catalog.generated';
 
 /**
- * Cópia defensiva do catálogo canônico de plataformas (fail-closed na borda).
+ * Catálogo canônico de plataformas (fail-closed na borda) — artefato GERADO.
  *
- * TODO(contrato): o destino único é `libs/contracts/src/products.ts`
- * (`PLATFORM_IDS` / `DELIVERY_MODES`), mas `apps/api` NÃO resolve
- * `@aurum-bit/contracts` (sem dependência no package.json e sem symlink em
- * `apps/api/node_modules/@aurum-bit`) — somar a dependência exigiria mudança de
- * workspace + install, fora do escopo desta lane. Quando o link existir,
- * trocar estas duas listas por `import { PLATFORM_IDS, DELIVERY_MODES } from
- * '@aurum-bit/contracts'` e apagar a cópia daqui.
+ * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` (o contrato zod em
+ * `libs/contracts/src/products.ts` valida o mesmo dado). Este arquivo NÃO lista
+ * ids à mão: reexporta `./platform-catalog.generated`, produzido por
+ * `tools/sync-platform-catalog.mjs` (`pnpm catalog:sync`); o CI reprova drift
+ * com `pnpm catalog:check`.
  *
  * Os ids são ESTÁVEIS e vão para `products.platforms` — são os mesmos ids do
  * catálogo de ícones (`tools/build-tag-icons.py`). Nunca renomear.
  */
-export const PRODUCT_PLATFORM_IDS = ['windows', 'macos', 'linux', 'web', 'apple'] as const;
-export type ProductPlatformId = (typeof PRODUCT_PLATFORM_IDS)[number];
-
-/** OFFLINE = só no dispositivo (legado). HYBRID = offline + sincroniza. */
-export const PRODUCT_DELIVERY_MODES = ['OFFLINE', 'HYBRID'] as const;
-export type ProductDeliveryMode = (typeof PRODUCT_DELIVERY_MODES)[number];
 
 export class CreateProductDto {
   @IsString({ message: 'O código deve ser um texto.' })

@@ -1,25 +1,26 @@
 /**
- * Plataformas do produto + modo de entrega — ESPELHO LOCAL do contrato do
- * backend (front-only, sem import de workspace).
+ * Plataformas do produto + modo de entrega — artefato GERADO + lógica de exibição.
  *
- * FONTE DA VERDADE (edite sempre nos dois, nesta ordem):
- *   1. `libs/contracts/src/products.ts` → `PLATFORM_IDS` / `PLATFORM_LABELS`
- *      (zod = fail-closed) e `DELIVERY_MODES`;
- *   2. `tools/build-tag-icons.py` → `PLATFORMS`, que liga cada id ao PNG em
- *      `ASSETS/tags/` e gera `apps/portal/public/tags/<id>.png`.
+ * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` — o mesmo dado que a
+ * API valida na borda e que o `tools/build-tag-icons.py` usa p/ gerar os PNGs
+ * em `apps/portal/public/tags/<id>.png`. Este módulo reexporta
+ * `./platforms.generated` (produzido por `tools/sync-platform-catalog.mjs`;
+ * rode `pnpm catalog:sync`) e mantém só a lógica de UI. NUNCA edite ids/labels
+ * aqui: o CI reprova drift com `pnpm catalog:check` — que também pega ícone
+ * órfão em `public/tags`.
  *
- * POR QUE UM ESPELHO E NÃO O IMPORT: `apps/portal` não declara dependência de
- * workspace (`apps/portal/package.json` não lista `@aurum-bit/contracts` e
- * `apps/portal/node_modules/@aurum-bit` não existe), então o import direto é
- * impossível hoje. Este arquivo é a única cópia do FRONT; apague-o no momento
- * em que o portal passar a linkar o pacote (mesmo caminho de
- * `apps/api/modules/products/dto.ts`, que também mantém cópia defensiva).
+ * POR QUE UM GERADO E NÃO O IMPORT DO PACOTE: `apps/portal` não declara
+ * dependência de workspace (`apps/portal/package.json` não lista
+ * `@aurum-bit/contracts` e `apps/portal/node_modules/@aurum-bit` não existe),
+ * então o import direto é impossível hoje. Quando o portal linkar o pacote,
+ * troque o import por `@aurum-bit/contracts` e apague o gerado (mesmo caminho
+ * de `apps/api/modules/products/dto.ts`).
  *
  * VALIDAÇÃO FAIL-SOFT: o backend já é fail-closed (`PLATFORM_ID_SCHEMA`), mas
  * aqui a entrada pode ser cache velho, API desatualizada ou stub — então
- * `platforms` ausente/vazio/não-array vira `[]` e slug desconhecido é
- * DESCARTADO em silêncio. `[]` significa "nenhuma plataforma declarada", NUNCA
- * "todas as plataformas" (essa é a mentira que a landpage contava antes).
+ * `platforms` ausente/vazio/não-array ou com slug desconhecido é DESCARTADO em
+ * silêncio. `[]` significa "nenhuma plataforma declarada", NUNCA "todas as
+ * plataformas" (essa é a mentira que a landpage contava antes).
  *
  * ÍCONES: PNGs locais em `apps/portal/public/tags/<id>.png`, servidos por
  * `next/image` (path local não entra na allowlist `images.remotePatterns`).
@@ -28,41 +29,20 @@
  * `lucide-react` para o resto da UI, `aria-hidden`/rótulo pt-BR, alvos de
  * 44px em interativo, cores 100% via `var(--*)`, zero emoji.
  */
+import {
+  DARK_VARIANT,
+  DELIVERY_MODES,
+  PLATFORM_IDS,
+  PLATFORM_LABELS,
+  PLATFORM_SHORT_LABELS,
+  type DeliveryMode,
+  type PlatformId,
+} from "./platforms.generated";
 
-/** Slugs estáveis — vão para `products.platforms TEXT[]`. Renomear = migration. */
-export const PLATFORM_IDS = ["windows", "macos", "linux", "web", "apple"] as const;
-export type PlatformId = (typeof PLATFORM_IDS)[number];
-
-/** Modo de entrega — espelha `products.delivery_mode`. Default do banco: `OFFLINE`. */
-export const DELIVERY_MODES = ["OFFLINE", "HYBRID"] as const;
-export type DeliveryMode = (typeof DELIVERY_MODES)[number];
+export { DELIVERY_MODES, PLATFORM_IDS, PLATFORM_LABELS, PLATFORM_SHORT_LABELS };
+export type { DeliveryMode, PlatformId };
 
 const PLATFORM_ID_SET = new Set<string>(PLATFORM_IDS);
-
-/** Rótulos pt-BR da UI (admin + landpage) — espelha `PLATFORM_LABELS`. */
-export const PLATFORM_LABELS: Record<PlatformId, string> = {
-  windows: "Windows",
-  macos: "macOS",
-  linux: "Linux",
-  web: "Web",
-  apple: "Apple (iOS/iPadOS)",
-};
-
-/** Versão curta p/ onde o rótulo completo não cabe (card da vitrine). */
-export const PLATFORM_SHORT_LABELS: Record<PlatformId, string> = {
-  windows: "Windows",
-  macos: "macOS",
-  linux: "Linux",
-  web: "Web",
-  apple: "Apple",
-};
-
-/**
- * Só a marca Apple é monocromática (preta) — `build-tag-icons.py` gera a
- * variante invertida `-dark`. As outras têm cor própria e funcionam nos dois
- * temas sobre `--bg-2`.
- */
-const DARK_VARIANT: Partial<Record<PlatformId, true>> = { apple: true };
 
 /**
  * Normaliza `platforms` vindo de API/mock/cache.
