@@ -172,6 +172,24 @@ export class LicenseReasonDto {
   replacedBy?: string;
 }
 
+/**
+ * Prorrogação IN-PLACE (`POST /v1/licenses/:id/extend`): estende a MESMA
+ * licença (preserva id/chave_hash/vínculos de máquina), diferente do
+ * `renew`, que cria licença nova. `months` em meses-calendário UTC.
+ * Motivo obrigatório no mesmo padrão de `LicenseReasonDto` (>=10 chars).
+ */
+export class ExtendLicenseDto {
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  months!: number;
+
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
+  reason!: string;
+}
+
 export class RevealLicenseDto {
   // Motivo opcional do reveal — vai p/ trilha `license.reveal` com o ator.
   @IsOptional()

@@ -12,6 +12,7 @@ import { LicensingController } from './licensing.controller';
 import { LicensingFlowService } from './licensing-flow.service';
 import { OfflineTokenController } from './offline-token.controller';
 import { OfflineTokenService } from './offline-token.service';
+import { ProductLicensesController } from './product-licenses.controller';
 import { RevealRateLimitGuard } from './reveal.guard';
 
 // Fase 3 — Licensing core (emissão/renovação/suspensão/revogação/reveal).
@@ -22,9 +23,19 @@ import { RevealRateLimitGuard } from './reveal.guard';
 // Coberto pelo e2e isolado `test/offline.e2e-spec.ts`.
 // `LicenseQueryController` expõe SÓ os GETs novos do BFF
 // (`by-product/:productId`, `:id/history`, trilha in-memory) — sem colisão.
+// `ProductLicensesController` expõe `GET /v1/products/:code/licenses`
+// (estado ATUAL por produto, via PG + `toMasked`). Sem colisão com o
+// ProductsModule: 2º segmento literal `licenses`.
 @Module({
   imports: [AuditModule],
-  controllers: [LicensingController, LicenseQueryController, DevicesController, OfflineTokenController, ActivationController],
+  controllers: [
+    LicensingController,
+    LicenseQueryController,
+    ProductLicensesController,
+    DevicesController,
+    OfflineTokenController,
+    ActivationController,
+  ],
   providers: [
     { provide: LICENSING_POOL, useFactory: createLicensingPool },
     { provide: LICENSE_STORE, useClass: InMemoryLicenseStore },

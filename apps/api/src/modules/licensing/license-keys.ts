@@ -128,6 +128,34 @@ export function calcExpiry(
 }
 
 /**
+ * Soma de meses-calendário em UTC, mesma aritmética de `calcExpiry`
+ * (PRIOR.md §1: 1M/12M de calendário, não 30/365 dias). Não muta a
+ * entrada. Usada pela prorrogação in-place (`extend`), que precisa de
+ * N meses arbitrários — `calcExpiry` só faz 1M ou 12M.
+ * Overflow (ex. 31 de janeiro + 1 mês) faz o Date normalizar para março,
+ * igual `calcExpiry` — comportamento preservado, não é regressão.
+ */
+export function addMonthsUtc(base: Date, months: number): Date {
+  if (!(base instanceof Date) || Number.isNaN(base.getTime())) {
+    throw new Error('addMonthsUtc: base inválida.');
+  }
+  if (!Number.isInteger(months) || months < 1 || months > 120) {
+    throw new Error('addMonthsUtc: months deve ser inteiro entre 1 e 120.');
+  }
+  return new Date(
+    Date.UTC(
+      base.getUTCFullYear(),
+      base.getUTCMonth() + months,
+      base.getUTCDate(),
+      base.getUTCHours(),
+      base.getUTCMinutes(),
+      base.getUTCSeconds(),
+      base.getUTCMilliseconds(),
+    ),
+  );
+}
+
+/**
  * Intervalo comercial (billing) → kind de licença. Erro em valor
  * desconhecido (fail-closed: nunca adivinhar vigência).
  * MONTH → monthly, YEAR → annual, ONE_TIME → lifetime.
@@ -137,6 +165,29 @@ export function kindForBillingInterval(v: string): LicenseKind {
   if (v === 'YEAR') return 'annual';
   if (v === 'MONTH') return 'monthly';
   throw new Error(`kindForBillingInterval: intervalo inválido (${String(v)}).`);
+}
+
+/**
+ * Status derivado SÓ do relógio, ignorando o lifecycle persistido:
+ * active (vigente ou vitalícia), grace (vencida dentro da janela de
+ * tolerância) ou expired (além da graça). `now` injetável p/ teste.
+ *
+ * Separado de `effectiveStatus` de propósito: o histórico de uma licença
+ * REVOGADA precisa mostrar a linha de emissão como "expirou/vigente"
+ * (relógio) e a linha da revogação como "revoked" (evento terminal) —
+ * se tudo herdasse do status atual, as duas linhas diriam a mesma coisa.
+ */
+export function clockStatus(
+  row: { expiresAt: Date | string | null; graceUntil: Date | string | null },
+  now: Date = new Date(),
+): 'active' | 'grace' | 'expired' {
+  const nowMs = now.getTime();
+  const exp = toTime(row.expiresAt);
+  if (exp === null) return 'active';
+  if (nowMs <= exp) return 'active';
+  const grace = toTime(row.graceUntil);
+  if (grace !== null && nowMs <= grace) return 'grace';
+  return 'expired';
 }
 
 /**
@@ -151,13 +202,7 @@ export function effectiveStatus(
   if (row.status === 'suspended' || row.status === 'revoked' || row.status === 'pending_payment') {
     return row.status;
   }
-  const nowMs = now.getTime();
-  const exp = toTime(row.expiresAt);
-  if (exp === null) return 'active';
-  if (nowMs <= exp) return 'active';
-  const grace = toTime(row.graceUntil);
-  if (grace !== null && nowMs <= grace) return 'grace';
-  return 'expired';
+  return clockStatus(row, now);
 }
 
 function toTime(v: Date | string | null): number | null {

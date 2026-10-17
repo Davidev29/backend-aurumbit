@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, Logger, Param, Post, Query, Req, ServiceUnavailableException, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { AdminStubGuard, LicenseReadGuard } from './admin.guard';
-import { IssueFromPaymentDto, IssueLicenseDto, IssueTrialDto, LicenseReasonDto, ListLicensesQueryDto, RenewLicenseDto, RevealLicenseDto } from './licenses.dto';
+import { IssueFromPaymentDto, IssueLicenseDto, IssueTrialDto, ExtendLicenseDto, LicenseReasonDto, ListLicensesQueryDto, RenewLicenseDto, RevealLicenseDto } from './licenses.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { LicensesService } from './licenses.service';
 import { RevealRateLimitGuard } from './reveal.guard';
@@ -71,6 +71,32 @@ export class LicensingController {
     return this.licenses.renewLicense(id, dto.kind, actorOf(req));
   }
 
+  /**
+   * Prorrogação IN-PLACE: estende a MESMA licença (preserva chave e
+   * vínculos de máquina) — o resgate da chave vencida sem trocar a chave
+   * do cliente. Diferente de `/renew`, que emite licença nova. Admin-only,
+   * motivo obrigatório, outbox `LicenseExtended` + trilha de auditoria.
+   */
+  @Post(':id/extend')
+  @UseGuards(AdminStubGuard)
+  async extend(@Param('id') id: string, @Body() dto: ExtendLicenseDto, @Req() req: any) {
+    const actor = actorOf(req);
+    const out = await this.licenses.extendLicense(id, dto.months, dto.reason, actor);
+    this.logger.log(
+      JSON.stringify({
+        event: 'license.extend',
+        licenseId: id,
+        months: dto.months,
+        actor,
+        reason: dto.reason,
+        previousExpiresAt: out.previousExpiresAt,
+        expiresAt: out.license.expiresAt,
+        at: new Date().toISOString(),
+      }),
+    );
+    return out;
+  }
+
   @Post(':id/suspend')
   @UseGuards(AdminStubGuard)
   suspend(@Param('id') id: string, @Body() dto: LicenseReasonDto, @Req() req: any) {
@@ -79,8 +105,10 @@ export class LicensingController {
 
   @Post(':id/resume')
   @UseGuards(AdminStubGuard)
-  resume(@Param('id') id: string, @Body() dto: LicenseReasonDto) {
-    return this.licenses.resumeLicense(id, dto.reason);
+  resume(@Param('id') id: string, @Body() dto: LicenseReasonDto, @Req() req: any) {
+    // `actor` vai p/ o payload do outbox `LicenseResumed` — sem ele a
+    // reativação não deixava rastro de quem reativou.
+    return this.licenses.resumeLicense(id, dto.reason, actorOf(req));
   }
 
   @Post(':id/revoke')
