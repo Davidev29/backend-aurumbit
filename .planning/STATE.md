@@ -48,3 +48,18 @@
   Pendente: T1 (fonte única do catálogo + drift gate), T2-T3 (provas/push),
   T4 (workspace + Docker pnpm/prune, dispara com tudo verde), T5 (lint api/workers,
   testes admin/portal, D8-8 test:e2e no CI — que hoje tem 18 falhas pré-existentes).
+- Correção 02, onda T1+T2/T3 executada em 2026-10-17 (commits `b52fc27` + docs;
+  log completo em `.planning/CORRECTION-EXECUTION-02-2026-10-17.md`): fonte única do
+  catálogo em `libs/contracts/src/products.catalog.json` + gerador
+  `tools/sync-platform-catalog.mjs` (`pnpm catalog:sync`) → 4 artefatos gerados
+  (contrato, borda da API, admin, portal) e `tools/build-tag-icons.py` lendo o mesmo
+  JSON — fim das 5 cópias à mão. Gate `pnpm catalog:check` no CI (job lint) reprova
+  drift (diff linha-a-linha), PNG faltando/órfão em `public/tags` e fonte inválida
+  (exit 2). Controles negativos 6/6 + caso "edita a fonte sem sync"; Python gera os 12
+  PNGs byte-idênticos. Semântica intacta (slugs/modos/rótulos idênticos; zero helper
+  removido). Typecheck adversarial detecta erro injetado nas 4 apps; portão local
+  42/42; api 664/664; contracts 5/5 (primeiro spec de lib). CI verde em `809aa24`
+  (9/9 jobs, `e2e-compose-efemero` 2m17s — T0-8 provado) e em `b52fc27` (onda T1).
+  Pendente: **D-5** (`libs/database` isento — decidir deletar/ligar), **E-1** (18
+  falhas pré-existentes em `test:e2e` do api — destravar antes do T5-3), T4 (Trilha B,
+  dispara com tudo verde) e T5.

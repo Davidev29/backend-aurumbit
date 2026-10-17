@@ -53,9 +53,13 @@ macOS, Linux, Web, Apple — usa-se o bitmap de marca, porque o nome da platafor
 é a informação e um ícone genérico (`Monitor` para Windows e macOS, `Cpu` para
 Linux) **confunde o usuário em vez de informá-lo**. Regras:
 
-- Fonte: `tools/build-tag-icons.py` gera `apps/{admin,portal}/public/tags/<id>.png`
-  (256px RGBA, id = o mesmo slug gravado em `products.platforms`). **Nunca editar
-  o PNG gerado** — mudar o asset de origem e rodar o script.
+- Catálogo (ids, rótulos, monocromia, arquivo de arte): **fonte única**
+  `libs/contracts/src/products.catalog.json` — `pnpm catalog:sync` deriva os tipos
+  do contrato/API/admin/portal e `tools/build-tag-icons.py` lê o MESMO JSON para
+  gerar `apps/{admin,portal}/public/tags/<id>.png` (256px RGBA, id = o mesmo slug
+  gravado em `products.platforms`). **Nunca editar o PNG gerado nem lista de
+  plataforma à mão**: editar o JSON e rodar `pnpm catalog:sync` (o CI reprova drift
+  e ícone órfão com `pnpm catalog:check`).
 - Apple é a única marca monocromática: tem variante `-dark` (invertida) porque a
   marca preta some em `--bg-0`. Os demais não têm variante.
 - Sempre **decorativo** (`alt=""`) com o rótulo pt-BR em texto ao lado: a

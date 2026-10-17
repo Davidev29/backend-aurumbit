@@ -141,7 +141,7 @@ controle negativo: remover "typecheck" de apps/portal/package.json → gates:che
 evidence:          saída literal dos 2 comandos + git status limpo
 rollback:          git checkout -- tools/ package.json
 depends_on:        —
-status:            ready
+status:            done (onda T0, commit 8b0aa61)
 ```
 
 #### T0-2 — `typecheck` real em `apps/api` (fecha N-B2 + D8-7)
@@ -161,7 +161,7 @@ rollback:          git checkout -- apps/api/package.json apps/api/tsconfig.typec
 depends_on:        —
 risco:             pode revelar erros reais pré-existentes em test/ (desconhecido). Timebox: 1 lote;
                    se surgir erro de negócio, vira item próprio e o relatório não esconde a contagem.
-status:            ready
+status:            done (onda T0, commit 8b0aa61)
 ```
 
 #### T0-3 — `typecheck` real em `apps/workers`
@@ -173,7 +173,7 @@ mudança:           "typecheck": "tsc --noEmit -p tsconfig.json" (o build já é
 verificação:       pnpm --filter @aurum-bit/workers typecheck → exit 0
 controle negativo: erro de tipo em src/main.ts → DEVE falhar → reverter
 rollback:          git checkout -- apps/workers/package.json
-status:            ready
+status:            done (onda T0, commit 8b0aa61)
 ```
 
 #### T0-4 — `typecheck` real em `apps/admin` e `apps/portal`
@@ -187,7 +187,7 @@ controle negativo: erro de tipo em apps/admin/lib/platforms.ts e apps/portal/lib
                    ambos DEVEM falhar → reverter
 evidence:          exit 0 + falhas provocadas + git status limpo (sem *.tsbuildinfo solto)
 rollback:          git checkout -- apps/admin/package.json apps/portal/package.json
-status:            ready
+status:            done (onda T0, commit 8b0aa61)
 ```
 
 #### T0-5 — CI passa a cobrar os gates reais
@@ -200,7 +200,7 @@ verificação:       pnpm gates:check local + `turbo run typecheck --dry=json` s
 evidence:          dry-run literal (12/12 com comando) + CI verde após push (T3-4)
 rollback:          git checkout -- .github/workflows/ci.yml
 depends_on:        T0-1..T0-4
-status:            ready
+status:            done (onda T0, commit 8b0aa61)
 ```
 
 #### T0-6 — Docs de CI atualizados
@@ -267,7 +267,7 @@ controle negativo: acrescentar id "beos" no JSON → typecheck do portal DEVE ac
 decisão embutida:  se o emit do JSON em dist/ (resolveJsonModule + declaration) criar atrito, inverter
                    para TS-fonte + JSON-gerado e registrar em §8 (D-2)
 rollback:          git checkout -- libs/contracts/src/
-status:            ready
+status:            done (onda T1, commit b52fc27)
 ```
 
 #### T1-2 — Gerador determinístico + gate de drift + checagem de assets
@@ -287,7 +287,7 @@ controle negativo: editar 1 label à mão num gerado → catalog:check DEVE falh
                    renomear um PNG de /tags → catalog:check DEVE falhar apontando o asset → reverter
 rollback:          git checkout -- tools/ package.json apps/*/…generated.ts
 depends_on:        T1-1
-status:            ready
+status:            done (onda T1, commit b52fc27)
 ```
 
 #### T1-3 — API consome o gerado (fim da cópia de `dto.ts`)
@@ -300,7 +300,7 @@ verificação:       pnpm --filter @aurum-bit/api typecheck && test → 60/664 �
 controle negativo: POST /v1/products com platforms:["plan9"] → 400 com a mesma mensagem de hoje
 rollback:          git checkout -- apps/api/src/modules/products/
 depends_on:        T1-2
-status:            ready
+status:            done (onda T1, commit b52fc27)
 ```
 
 #### T1-4 — Admin consome o gerado (id/label/src/darkSrc)
@@ -312,7 +312,7 @@ mudança:           PRODUCT_PLATFORM_IDS e PRODUCT_PLATFORMS vêm do gerado; hel
 verificação:       pnpm --filter @aurum/admin typecheck && build → verde
 controle negativo: platformLabel("desconhecida") → devolve o próprio id (comportamento atual preservado)
 depends_on:        T1-2
-status:            ready
+status:            done (onda T1, commit b52fc27)
 ```
 
 #### T1-5 — Portal consome o gerado (ids/labels/shortLabels/darkVariant)
@@ -326,7 +326,7 @@ mudança:           PLATFORM_IDS/PLATFORM_LABELS/PLATFORM_SHORT_LABELS/DARK_VARI
 verificação:       pnpm --filter @aurum/portal typecheck && build → verde
 controle negativo: normalizePlatforms(["windows","amiga",null]) → ["windows"]; normalizePlatforms("x") → []
 depends_on:        T1-2
-status:            ready
+status:            done (onda T1, commit b52fc27)
 ```
 
 #### T1-6 — Python lê o catálogo (fim da 5ª cópia)
@@ -339,7 +339,7 @@ mudança:           PLATFORMS/MONOCHROME saem do literal e passam a vir de
 verificação:       python tools/build-tag-icons.py → 12 PNGs inalterados (git status limpo em public/tags)
 controle negativo: apontar assetFile para arquivo inexistente no JSON → script DEVE sair com erro claro
 depends_on:        T1-1
-status:            ready
+status:            done (onda T1, commit b52fc27)
 ```
 
 #### T1-7 — Invariantes testados + docs
@@ -353,7 +353,7 @@ mudança:           vitest no contracts: ids únicos, minúsculos, label/shortLa
                    e o motivo de existirem gerados — C2/Docker), CI-VERDE.md (catalog:check no CI).
 verificação:       pnpm --filter @aurum-bit/contracts test → verde; pnpm catalog:check → verde
 controle negativo: remover um shortLabel no JSON → teste DEVE falhar
-status:            ready
+status:            done (onda T1, commit b52fc27; docs em CORRECTION-EXECUTION-02)
 ```
 
 ---
