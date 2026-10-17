@@ -7,6 +7,9 @@
 // - Publicação: `queue.add(type, envelope, { jobId: eventId })` — dedupe BullMQ.
 // - Marca `published = true` SÓ após enfileirar (crash antes = republica; o
 //   consumidor idempotente descarta o replay).
+// - Resiliência POR LINHA: `queue.add` que lança (jobId inválido, Redis fora,
+//   payload problemático) NÃO aborta o tick; a linha fica `published = false`
+//   (o próximo tick retenta; jobId=eventId → dedupe) e sai em `failedEventIds`.
 // - Purge 30d: `DELETE` SÓ de publicados — TODO job agendado (ver RUNBOOK
 //   billing §5; nunca purge de não-publicado).
 
@@ -29,11 +32,7 @@ export interface RelaySqlRunner {
 }
 
 export interface RelayQueue {
-  add(
-    type: string,
-    envelope: Record<string, unknown>,
-    opts: { jobId: string },
-  ): Promise<unknown>;
+  add(type: string, envelope: Record<string, unknown>, opts: { jobId: string }): Promise<unknown>;
 }
 
 export const OUTBOX_RELAY_BATCH = 100;
@@ -90,23 +89,49 @@ export function relayJobId(eventId: string): string {
   return eventId;
 }
 
+export interface OutboxRelayResult {
+  claimed: number;
+  published: number;
+  eventIds: string[];
+  /**
+   * eventIds que falharam no `queue.add` deste tick (ficam `published = false`
+   * p/ o próximo tick). Presente SÓ quando há falha, p/ preservar o shape do
+   * caminho de sucesso (consumidores comparam o objeto exato — ex.
+   * `billing-transitions.spec.ts`).
+   */
+  failedEventIds?: string[];
+}
+
 export async function relayOutboxBatch(
   db: RelaySqlRunner,
   queue: RelayQueue,
   opts: { table?: string; limit?: number } = {},
-): Promise<{ claimed: number; published: number; eventIds: string[] }> {
+): Promise<OutboxRelayResult> {
   const table = opts.table ?? OUTBOX_RELAY_TABLE;
   const limit = opts.limit ?? OUTBOX_RELAY_BATCH;
   const { rows } = await db.query(buildClaimBatchSql(table, limit));
   const claimed = rows.length;
   const eventIds: string[] = [];
+  const failedEventIds: string[] = [];
   for (const r of rows) {
     const row = r as unknown as OutboxClaimRow;
-    await queue.add(String(row.type), envelopeOf(row), { jobId: relayJobId(String(row.eventId)) });
-    eventIds.push(String(row.eventId));
+    const eventId = String(row.eventId);
+    try {
+      await queue.add(String(row.type), envelopeOf(row), { jobId: relayJobId(eventId) });
+      eventIds.push(eventId);
+    } catch {
+      // Linha ruim não aborta as linhas/domínios seguintes nem é marcada como
+      // publicada: fica p/ o próximo tick (jobId=eventId → dedupe BullMQ).
+      failedEventIds.push(eventId);
+    }
   }
   if (eventIds.length > 0) {
     await db.query(buildMarkPublishedSql(table), [eventIds]);
   }
-  return { claimed, published: eventIds.length, eventIds };
+  return {
+    claimed,
+    published: eventIds.length,
+    eventIds,
+    ...(failedEventIds.length > 0 ? { failedEventIds } : {}),
+  };
 }

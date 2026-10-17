@@ -2,7 +2,9 @@
 // O SQL canônico vive na API (`apps/api/src/common/outbox/outbox-relay.ts`);
 // este módulo duplica SÓ os builders mínimos para o ticker não importar código
 // da API (pacotes separados). Divergência intencional: nenhuma — manter os
-// dois em sincronia (claim 100 + `jobId = eventId` + purge 30d TODO job).
+// dois em sincronia (claim 100 + `jobId = eventId` + purge 30d TODO job +
+// resiliência POR LINHA: `queue.add` que lança fica `published = false`, NÃO
+// aborta linhas/domínios seguintes e sai em `failedEventIds`).
 // I/O (Pool PG por domínio + Queue BullMQ) é injetado: testável sem PG/Redis.
 
 export const OUTBOX_RELAY_BATCH = 100;
@@ -63,14 +65,27 @@ export interface RelayDomain {
   table?: string;
 }
 
+export interface OutboxRelayTickResult {
+  domains: number;
+  claimed: number;
+  published: number;
+  /**
+   * eventIds que falharam no `queue.add` deste tick (ficam `published = false`
+   * p/ o próximo tick). Presente SÓ quando há falha, p/ preservar o shape do
+   * caminho de sucesso (mesmo contrato do lado API).
+   */
+  failedEventIds?: string[];
+}
+
 /** Tick do relay: drena cada domínio (claim → publica jobId=eventId → marca). */
 export async function runOutboxRelayTick(
   domains: RelayDomain[],
   opts: { limit?: number } = {},
-): Promise<{ domains: number; claimed: number; published: number }> {
+): Promise<OutboxRelayTickResult> {
   const limit = opts.limit ?? OUTBOX_RELAY_BATCH;
   let claimed = 0;
   let published = 0;
+  const failedEventIds: string[] = [];
   for (const d of domains) {
     const table = d.table ?? 'outbox_events';
     const { rows } = await d.db.query(buildClaimBatchSql(table, limit));
@@ -78,20 +93,36 @@ export async function runOutboxRelayTick(
     const ids: string[] = [];
     for (const r of rows) {
       const row = r as unknown as RelayClaimRow;
-      // jobId = eventId (dedupe BullMQ, PROJECT.md §5).
-      await d.queue.add(String(row.type), {
-        eventId: row.eventId,
-        topic: row.type,
-        version: 1,
-        occurredAt: row.occurredAt,
-        payload: row.payload ?? {},
-      }, { jobId: String(row.eventId) });
-      ids.push(String(row.eventId));
+      const eventId = String(row.eventId);
+      try {
+        // jobId = eventId (dedupe BullMQ, PROJECT.md §5).
+        await d.queue.add(
+          String(row.type),
+          {
+            eventId: row.eventId,
+            topic: row.type,
+            version: 1,
+            occurredAt: row.occurredAt,
+            payload: row.payload ?? {},
+          },
+          { jobId: eventId },
+        );
+        ids.push(eventId);
+      } catch {
+        // Linha ruim não aborta as linhas/domínios seguintes nem é marcada como
+        // publicada: fica p/ o próximo tick (jobId=eventId → dedupe BullMQ).
+        failedEventIds.push(eventId);
+      }
     }
     if (ids.length > 0) {
       await d.db.query(buildMarkPublishedSql(table), [ids]);
       published += ids.length;
     }
   }
-  return { domains: domains.length, claimed, published };
+  return {
+    domains: domains.length,
+    claimed,
+    published,
+    ...(failedEventIds.length > 0 ? { failedEventIds } : {}),
+  };
 }
