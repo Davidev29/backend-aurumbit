@@ -29,6 +29,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: gates:check (cobertura de tarefas por workspace)
+        run: pnpm gates:check
       - run: pnpm turbo run lint --continue
 
   typecheck:
