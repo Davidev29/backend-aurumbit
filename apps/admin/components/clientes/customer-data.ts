@@ -324,11 +324,29 @@ export function getCustomerData(customerId: string): CustomerData | null {
 
 export type CustomerStatusFilter = "all" | "active" | "blocked";
 
-/** Linha enriquecida da tabela (produtos derivados de licenças/contratos). */
+/**
+ * Linha da tabela de clientes.
+ *
+ * `stage` é o **funil comercial** (persistido no backend, `CustomerStatus`):
+ * nasce `PROSPECT` no cadastro e vira `ACTIVE` (Cliente) na ativação da
+ * conta, sem exigir compra. Já `status` ( herdado de `CustomerDetail`) é o
+ * **acesso** (licença ativa/bloqueada) — eixos distintos, ambos exibidos.
+ */
 export interface CustomerRow extends CustomerDetail {
   /** Nomes de produto exibíveis (ex.: "Aurum Pro Mensal"). */
   products: string[];
+  /** Funil comercial; ausente nos mocks antigos → a tabela trata como PROSPECT. */
+  stage?: import("@/lib/customers").CustomerStageFilter;
+  /** `auth.email_verified_at` preenchido. */
+  emailVerified?: boolean;
+  /** Última mudança do estágio (derivada de `createdAt` nos mocks). */
+  stageChangedAt?: string;
+  /** `true` quando a linha veio do stub de demonstração. */
+  stub?: boolean;
 }
+
+/** Linha do funil vinda do BFF (`/api/customers`) — mesmo contrato da tabela. */
+export type FunnelCustomerRow = import("@/lib/customers").CustomerRow;
 
 export interface CustomerListParams {
   q?: string;

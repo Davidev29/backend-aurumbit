@@ -11,15 +11,18 @@ import { ErrorState } from "@/components/feedback/ErrorState";
 import { useCan } from "@/lib/auth/permissions";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import type { Page } from "@/lib/types";
+import { fetchStageCounts, listCustomerStages } from "@/lib/customers";
+import type { CustomerStageFilter, CustomerSummaryCounts } from "@/lib/customers";
 import {
   listAllCustomerEmails,
   listCustomerProducts,
-  listCustomers,
   setCustomerBlocked,
   type CustomerRow,
   type CustomerStatusFilter,
+  type FunnelCustomerRow,
 } from "@/components/clientes/customer-data";
 import { CustomerFilters } from "@/components/clientes/CustomerFilters";
+import { CustomerFunnel } from "@/components/clientes/CustomerFunnel";
 import { CustomerTable } from "@/components/clientes/CustomerTable";
 import { CustomerDetailModal } from "@/components/clientes/CustomerDetailModal";
 import { BlockCustomerDialog } from "@/components/clientes/BlockCustomerDialog";
@@ -31,8 +34,11 @@ const PAGE_LIMIT = 6;
  * Clientes — listagem gerenciável com filtros (nome/e-mail, produto, status)
  * e paginação por cursor (DS §9: Anterior/Próxima, nunca numerada).
  * Detalhe em modal `xl`; gestão inline (bloquear/liberar) e completa (modal).
- * TODO(backend pronto): trocar `listCustomers` por `apiGet("/v1/customers…")`
- * + `POST /v1/customers` p/ o pré-cadastro (hoje em sessão).
+ *
+ * Funil comercial no topo: quem se cadastrou aparece como **Prospect** assim
+ * que envia o formulário; ao ativar a conta (confirmar o e-mail) vira
+ * **Cliente** — mesmo sem ter comprado. A lista vem do BFF
+ * `/api/customers` → Nest `/v1/admin/customers` (projeção real do funil).
  */
 export default function ClientesPage() {
   const canCreate = useCan("customer.read");
@@ -41,9 +47,18 @@ export default function ClientesPage() {
   const debounced = useDebouncedValue(query, 300);
   const [product, setProduct] = useState("");
   const [status, setStatus] = useState<CustomerStatusFilter>("all");
+  /** Estágio do funil selecionado nos cards (null = todos). */
+  const [stage, setStage] = useState<CustomerStageFilter | null>(null);
+  const [counts, setCounts] = useState<CustomerSummaryCounts>({
+    PROSPECT: 0,
+    PENDING_PAYMENT: 0,
+    ACTIVE: 0,
+    SUSPENDED: 0,
+    CANCELLED: 0,
+  });
   const [history, setHistory] = useState<Array<string | null>>([null]);
   const [pageIdx, setPageIdx] = useState(0);
-  const [page, setPage] = useState<Page<CustomerRow> | null>(null);
+  const [page, setPage] = useState<Page<FunnelCustomerRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
@@ -60,7 +75,19 @@ export default function ClientesPage() {
   const products = useMemo(() => listCustomerProducts(), [rev]);
   const takenEmails = useMemo(() => listAllCustomerEmails(), [rev, page, preOpen]);
 
-  const hasActiveFilters = query !== "" || product !== "" || status !== "all";
+  const hasActiveFilters = query !== "" || product !== "" || status !== "all" || stage !== null;
+
+  // Contagem do funil: sincroniza junto com a lista (um cadastro novo muda os
+  // cards) e nunca bloqueia a tela — falha devolve zeros.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchStageCounts().then((c) => {
+      if (!cancelled) setCounts(c);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [nonce, rev]);
 
   function resetPaging() {
     setHistory([null]);
@@ -71,6 +98,7 @@ export default function ClientesPage() {
     setQuery("");
     setProduct("");
     setStatus("all");
+    setStage(null);
     resetPaging();
   }
 
@@ -84,20 +112,27 @@ export default function ClientesPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    // Camada tolerante a sync/async: `Promise.resolve` aceita ambos os moldes
-    // (stub síncrono hoje, `apiGet` assíncrono no backend real).
-    Promise.resolve()
-      .then(() =>
-        listCustomers({
-          q: debounced,
-          product: product || null,
-          status,
-          cursor,
-          limit: PAGE_LIMIT,
-        }),
-      )
+    // Fonte real: BFF `/api/customers` → funil persistido no backend.
+    // `status` (acesso: ativos/bloqueados) e `product` ainda são filtros de
+    // cliente local (licenças/contratos), então aplicamos depois da resposta.
+    listCustomerStages({
+      q: debounced,
+      stage,
+      cursor,
+      limit: PAGE_LIMIT,
+    })
       .then((p) => {
-        if (!cancelled) setPage(p);
+        if (cancelled) return;
+        const rows = p.data.filter((c) => {
+          if (status !== "all") {
+            const blocked = c.stage === "SUSPENDED";
+            if (status === "blocked" && !blocked) return false;
+            if (status === "active" && blocked) return false;
+          }
+          if (product && !(c.products ?? []).includes(product)) return false;
+          return true;
+        });
+        setPage({ data: rows, meta: p.meta });
       })
       .catch((err) => {
         if (!cancelled) {
@@ -111,7 +146,7 @@ export default function ClientesPage() {
     return () => {
       cancelled = true;
     };
-  }, [debounced, product, status, cursor, nonce, rev]);
+  }, [debounced, product, status, stage, cursor, nonce, rev]);
 
   const rows = page?.data ?? [];
 
@@ -151,7 +186,8 @@ export default function ClientesPage() {
         <div>
           <h1 className="m-0 text-title-page text-text1">Clientes</h1>
           <p className="m-0 mt-1 text-callout text-text2">
-            Busque por nome, filtre por produto e status, gerencie acesso sem sair da lista.
+            Todo cadastro aparece como prospect e vira cliente ao ativar a conta, mesmo sem
+            compra. Busque por nome, filtre por produto e gerencie acesso sem sair da lista.
           </p>
         </div>
         <Button
@@ -206,6 +242,15 @@ export default function ClientesPage() {
         </div>
       )}
 
+      <CustomerFunnel
+        counts={counts}
+        selected={stage}
+        onSelect={(next) => {
+          setStage(next);
+          resetPaging();
+        }}
+      />
+
       <CustomerFilters
         query={query}
         onQueryChange={(v) => {
@@ -233,10 +278,14 @@ export default function ClientesPage() {
         <ErrorState message={error} onRetry={() => setNonce((n) => n + 1)} />
       ) : !page || rows.length === 0 ? (
         <EmptyState
-          title="Nenhum cliente encontrado"
+          title={
+            stage === "PROSPECT"
+              ? "Nenhum prospect aguardando confirmação"
+              : "Nenhum cliente encontrado"
+          }
           message={
             hasActiveFilters
-              ? "Ajuste a busca, o produto ou o status — ou limpe os filtros."
+              ? "Ajuste a busca, o produto, o estágio ou o status — ou limpe os filtros."
               : "Ajuste a busca ou pré-cadastre um novo cliente."
           }
           action={
@@ -251,6 +300,7 @@ export default function ClientesPage() {
         <>
           <p className="mb-2 text-callout text-text2" aria-live="polite">
             Exibindo {rows.length} {rows.length === 1 ? "cliente" : "clientes"} nesta página
+            {stage !== null && <> · {stage === "PROSPECT" ? "prospects" : "estágio do funil"}</>}
             {product !== "" && <> · produto {product}</>}
             {status !== "all" && <> · {status === "active" ? "ativos" : "bloqueados"}</>}.
           </p>

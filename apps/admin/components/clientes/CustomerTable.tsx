@@ -4,13 +4,21 @@ import { Ban, CircleCheck, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { TR, Table, Td, Th } from "@/components/ui/table";
-import type { CustomerRow } from "./customer-data";
+import { CUSTOMER_STAGE_META, stageAgeLabel } from "@/lib/customers";
+import type { CustomerStageFilter } from "@/lib/customers";
+import type { CustomerRow, FunnelCustomerRow } from "./customer-data";
+import { STAGE_ICONS } from "./CustomerFunnel";
 
 /**
  * Tabela enxuta de clientes (DS §9: sem zebra, hover sutil).
- * 4 colunas: cliente (avatar + nome + e-mail), status, licenças e ações
- * em botões-ícone discretos. Produto não é coluna (escala p/ N produtos) —
+ * Colunas: cliente (avatar + nome + e-mail), situação no funil (prospect ou
+ * cliente), acesso (licença ativa/bloqueada), licenças e ações em
+ * botões-ícone discretos. Produto não é coluna (escala p/ N produtos) —
  * filtra-se por produto na barra de filtros; o vínculo vive no modal.
+ *
+ * `stage` (funil comercial) e `status` (acesso/licença) são eixos diferentes
+ * e ficam em colunas diferentes de propósito: um prospect ainda não tem
+ * licença para bloquear, e um cliente pode ter o acesso suspenso.
  */
 export function CustomerTable({
   rows,
@@ -19,10 +27,11 @@ export function CustomerTable({
   onToggleBlock,
   canToggleBlock,
 }: {
-  rows: CustomerRow[];
+  /** Aceita a row do funil (BFF) e a row legada de `customer-data`. */
+  rows: Array<CustomerRow | FunnelCustomerRow>;
   selectedId: string | null;
   onOpen: (id: string) => void;
-  onToggleBlock: (row: CustomerRow) => void;
+  onToggleBlock: (row: CustomerRow | FunnelCustomerRow) => void;
   canToggleBlock: boolean;
 }) {
   return (
@@ -31,7 +40,8 @@ export function CustomerTable({
       head={
         <>
           <Th>Cliente</Th>
-          <Th>Status</Th>
+          <Th>Situação</Th>
+          <Th>Acesso</Th>
           <Th numeric>Licenças</Th>
           <Th className="text-right">Ações</Th>
         </>
@@ -40,6 +50,10 @@ export function CustomerTable({
       {rows.map((c) => {
         const blocked = c.status === "blocked";
         const initial = c.name.trim().charAt(0).toUpperCase() || "?";
+        const stage: CustomerStageFilter = c.stage ?? "PROSPECT";
+        const stageMeta = CUSTOMER_STAGE_META[stage];
+        const StageIcon = STAGE_ICONS[stage];
+        const age = stageAgeLabel(c.stageChangedAt ?? c.createdAt);
         return (
           <TR key={c.id} selected={selectedId === c.id}>
             <Td>
@@ -65,6 +79,17 @@ export function CustomerTable({
                   </span>
                 </span>
               </span>
+            </Td>
+            <Td>
+              {/* Funil comercial (prospect → cliente) */}
+              <Badge tone={stageMeta.tone} state={stageMeta.label}>
+                <StageIcon size={14} strokeWidth={1.75} aria-hidden="true" />
+                {stageMeta.label}
+                {age ? ` · ${age}` : ""}
+              </Badge>
+              {!c.emailVerified && (
+                <span className="mt-1 block text-callout text-text3">E-mail não confirmado</span>
+              )}
             </Td>
             <Td>
               {blocked ? (

@@ -10,7 +10,8 @@ import type { CustomerStatusFilter } from "./customer-data";
  * Barra de filtros da seção de clientes (DS §9: filtros resetam a paginação).
  * - Busca por nome/e-mail (debounce de 300ms na página).
  * - Produto (nomes do catálogo + uso real).
- * - Status (segmentado Todos/Ativos/Bloqueados).
+ * - Acesso (segmentado Todos/Ativos/Bloqueados) — eixo de LICENÇA, distinto
+ *   do funil prospect/cliente, que fica nos cards acima.
  */
 export function CustomerFilters({
   query,
@@ -70,7 +71,7 @@ export function CustomerFilters({
         </div>
         <div className="min-w-[12rem] basis-56">
           <span className="mb-1 block font-semibold text-headline text-text1" id="filtro-status-label">
-            Status
+            Acesso
           </span>
           <Segmented<CustomerStatusFilter>
             options={[
@@ -80,16 +81,16 @@ export function CustomerFilters({
             ]}
             value={status}
             onChange={onStatusChange}
-            label="Filtrar por status"
+            label="Filtrar por situação de acesso"
           />
         </div>
         {hasActiveFilters && (
-          <div className="pb-4">
+          <div className="pb-1">
             <Button
               type="button"
               variant="secondary"
               onClick={onClear}
-              title="Limpar busca, produto e status"
+              title="Limpar busca, produto e estágio"
             >
               <SearchX size={16} strokeWidth={1.75} aria-hidden="true" />
               Limpar
