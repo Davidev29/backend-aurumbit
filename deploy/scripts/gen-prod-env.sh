@@ -194,6 +194,8 @@ ASAAS_WEBHOOK_SECRET=TROCAR_ASAAS_WEBHOOK_SECRET_PROD
 
 RESEND_API_KEY=TROCAR_RESEND_API_KEY_PROD_DO_COFRE
 RESEND_FROM=no-reply@aurumbit.com
+# ATENÇÃO: RESEND_* não envia nada por si só hoje (relay do outbox stub em
+# apps/workers) — ver docs/RUNBOOK-email.md antes de anunciar transacional.
 
 NEXT_PUBLIC_API_URL=https://api.aurumbit.com
 NEXT_PUBLIC_SITE_URL=https://aurumbit.com
