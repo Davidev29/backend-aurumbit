@@ -61,3 +61,16 @@ export const apiGet = <T>(path: string, init?: RequestInit): Promise<T> =>
 
 export const apiPost = <T>(path: string, body?: unknown, init?: RequestInit): Promise<T> =>
   apiFetch<T>(path, { ...init, method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+
+/**
+ * `PATCH` parcial e `PUT` de substituição total.
+ *
+ * O corpo é serializado sempre (inclusive `{}`) para o BFF/Nest aplicarem a
+ * regra "nada a alterar"/"faltam campos" — enviar sem corpo transformaria o
+ * erro em 400 genérico de parser.
+ */
+export const apiPatch = <T>(path: string, body?: unknown, init?: RequestInit): Promise<T> =>
+  apiFetch<T>(path, { ...init, method: "PATCH", body: JSON.stringify(body ?? {}) });
+
+export const apiPut = <T>(path: string, body?: unknown, init?: RequestInit): Promise<T> =>
+  apiFetch<T>(path, { ...init, method: "PUT", body: JSON.stringify(body ?? {}) });

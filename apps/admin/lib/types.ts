@@ -7,6 +7,8 @@
  * campos desconhecidos (forward-compatible, PROJECT/REQUIREMENTS).
  */
 
+import type { ProductDeliveryMode, ProductPlatformId } from "./platforms";
+
 export interface ApiError {
   code: string;
   message: string;
@@ -442,6 +444,14 @@ export interface ProductView {
   description: string | null;
   status: ProductStatus;
   machinesAllowed: number;
+  /**
+   * Slugs do catálogo canônico (`lib/platforms.ts`), na ordem canônica.
+   * O banco tem `NOT NULL DEFAULT '{}'` — `[]` = produto legado sem
+   * plataforma declarada (a UI trata como "não informado", não como erro).
+   */
+  platforms?: ProductPlatformId[];
+  /** `OFFLINE` (default do banco) | `HYBRID`. */
+  deliveryMode?: ProductDeliveryMode;
   plans: PlanView[];
   gallery: ProductImage[];
   createdAt: string;
@@ -456,17 +466,124 @@ export interface ProductView {
 export interface LicenseHistoryEntry {
   licenseId: string;
   keyMasked: string;
-  status: "active" | "revoked" | "expired";
+  /**
+   * Estado EFETIVO da licença no instante do registro — DERIVADO DO RELÓGIO
+   * no backend (`effectiveStatus`), nunca do tipo do evento. É por isso que
+   * uma emissão de 2024 aparece como `expired`: passou o prazo, e o fato
+   * histórico segue imutável.
+   *
+   * Antes declarado `"active" | "revoked" | "expired"`, o que fazia o
+   * `historyBadge` cair no fallback cru para `grace`/`suspended`/
+   * `pending_payment` — a lista ficava com texto em vez de badge.
+   */
+  status: LicenseEffectiveStatus | "replaced" | (string & {});
   reason: string | null;
   endedAt: string | null;
   replacedBy: string | null;
   /** monthly | annual | lifetime | trial (Nest `LicenseKind`). */
   kind?: string | null;
-  /** ISO ou null (lifetime / sem expiração). */
+  /** ISO-8601 COM HORA ou null (lifetime / sem expiração). */
   expiresAt?: string | null;
   /** CUSTOMER | ORGANIZATION | PROMO. */
   ownerType?: string | null;
   ownerLabel?: string | null;
+  /* --- Campos novos do `GET /v1/licenses/:id/history` (Lane B) --------- */
+  /** Início da vigência (ISO-8601) — a linha do tempo começa aqui. */
+  startsAt?: string | null;
+  /** Fim da tolerância (`expiresAt + 3d`) — ISO-8601. */
+  graceUntil?: string | null;
+  /** `productId` gravado na emissão (= code do produto, cross-schema). */
+  productId?: string | null;
+  /** Status efetivo ATUAL da licença (derivado do relógio agora). */
+  currentStatus?: LicenseEffectiveStatus | (string & {}) | null;
+  /** Lifecycle CRU persistido (active|suspended|revoked|pending_payment). */
+  rawStatus?: string | null;
+  /** `true` quando o relógio mudou o estado (ex.: 'active' cru → 'expired'). */
+  derivedFromClock?: boolean;
+  /** Tipo do evento do outbox que originou a linha (LicenseIssued, …). */
+  eventType?: string | null;
+  /** Quando o evento aconteceu (ISO-8601) — ordena a trilha. */
+  occurredAt?: string | null;
+  /** `true` na entrada mais recente (linha do tempo corrente). */
+  current?: boolean;
+}
+
+/**
+ * Status EFETIVOS aceitos no filtro de `GET /v1/products/:code/licenses`
+ * (`LICENSE_EFFECTIVE_STATUSES` do Nest). `grace`/`expired` são DERIVADOS do
+ * relógio — não existem como coluna.
+ */
+export type LicenseEffectiveStatus =
+  | "pending_payment"
+  | "active"
+  | "grace"
+  | "suspended"
+  | "expired"
+  | "revoked";
+
+/**
+ * Licença mascarada como o backend devolve em `GET /v1/products/:code/licenses`
+ * (Nest `MaskedLicense`): `Omit<LicenseRow,'key_hash'|'key_enc'|'status'>`
+ * + `status` efetivo + `keyMasked`. `key_hash`/`key_enc` NUNCA chegam aqui.
+ */
+export interface MaskedProductLicense {
+  id: string;
+  ownerType: string;
+  ownerId: string;
+  ownerLabel: string | null;
+  /** Code do produto gravado na emissão (referência cross-schema). */
+  productId: string;
+  planId: string | null;
+  contractItemId: string | null;
+  /** monthly | annual | lifetime | trial. */
+  kind: string;
+  /** Status EFETIVO (derivado do relógio): grace/expired já vêm resolvidos. */
+  status: LicenseEffectiveStatus | (string & {});
+  keyMasked: string;
+  key_prefix: string | null;
+  key_last4: string | null;
+  /** Invalida JWTs/offline-tokens — só a revogação incrementa. */
+  tokenVersion: number;
+  /** Limite de máquinas desta licença (o que o `maxDevices` omiteu antes). */
+  maxDevices: number | null;
+  issuedAt: string | null;
+  startsAt: string | null;
+  /** ISO-8601 COM HORA — a UI mostra a hora, não só o dia. */
+  expiresAt: string | null;
+  graceUntil: string | null;
+  features: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Página de `GET /v1/products/:code/licenses` (envelope do Nest). */
+export interface ProductLicensesPage {
+  items: MaskedProductLicense[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  /**
+   * `stub` = `API_INTERNAL_URL` ausente → dados SINTÉTICOS (`lib/mocks.ts`).
+   * A UI mostra aviso quando vê isto (A-MOCK-001: mock nunca finge ser real).
+   * `proxy` = resposta real do Nest.
+   */
+  mode?: "proxy" | "stub";
+  /** Só no stub: texto de por que os dados não são reais. */
+  notice?: string;
+}
+
+/** Prorrogação in-place (`POST /v1/licenses/:id/extend`). Preserva a chave. */
+export interface ExtendLicenseRequest {
+  /** 1..12 meses-calendário UTC. */
+  months: number;
+  /** >= 10 caracteres (auditado). */
+  reason: string;
+}
+
+/** Motivo auditado de `suspend`/`resume` (`LicenseReasonDto`: >= 10 chars). */
+export interface LicenseReasonRequest {
+  reason: string;
 }
 
 /** Emissão de licença de produto (BFF → Nest `POST /v1/licenses` issue). */
@@ -492,17 +609,84 @@ export interface RenewReplaceRequest {
   confirmacao: true;
 }
 
+/**
+ * Campos que o PATCH/PUT de produto aceitam.
+ *
+ * `code` e `status` NÃO existem aqui de propósito (imutáveis: renomear o code
+ * deixa órfãs as licenças emitidas; arquivar tem endpoint próprio) e preço
+ * também (catálogo imutável por linha). Quem tentar manda 422 com o motivo.
+ */
+export interface EditableProductFields {
+  name?: string;
+  /** lower-kebab, único (URL pública/SEO). Trocar quebra links já publicados. */
+  slug?: string;
+  /** `null` limpa a descrição (vazio ≠ ausente: ausente = preserva no PATCH). */
+  description?: string | null;
+  machinesAllowed?: number;
+  platforms?: ProductPlatformId[];
+  deliveryMode?: ProductDeliveryMode;
+}
+
+/** `PATCH`: parcial — só o que veio muda; o resto é preservado. */
+export type UpdateProductRequest = EditableProductFields;
+
+/**
+ * `PUT`: substituição TOTAL — todos os campos obrigatórios. O que vier
+ * `null`/vazio ZERA de propósito (é a diferença em relação ao PATCH).
+ */
+export interface ReplaceProductRequest {
+  name: string;
+  slug: string;
+  description: string | null;
+  machinesAllowed: number;
+  platforms: ProductPlatformId[];
+  deliveryMode: ProductDeliveryMode;
+}
+
+/**
+ * Resposta de `PATCH|PUT /api/products/:code`: o produto já normalizado no
+ * MESMO shape do `GET /api/products/:code` (com `plans` e `gallery`), para a
+ * UI atualizar a visão sem refazer fetch.
+ *
+ * `mode: "stub"` = `API_INTERNAL_URL` ausente: a alteração ficou só na memória
+ * da sessão (A-MOCK-001 — a UI mostra o aviso, não finge que gravou no banco).
+ */
+export type ProductWriteResponse = ProductView & {
+  mode?: "proxy" | "stub";
+  notice?: string;
+};
+
 export interface CreateProductRequest {
   name: string;
   code?: string;
   slug?: string;
   description?: string;
+  /** Limite por LICENÇA (não por usuário): 1..100. */
   machinesAllowed: number;
+  /**
+   * Slugs do catálogo canônico, >= 1 (ver decisão no diálogo de criação).
+   * O banco aceita `{}` (default) p/ produtos legados, mas o admin exige
+   * escolha — produto sem plataforma não é filtrável nem publicável.
+   */
+  platforms: ProductPlatformId[];
+  /** `OFFLINE` (default) | `HYBRID`. */
+  deliveryMode: ProductDeliveryMode;
   // `null` ou ausente (`undefined`) = sem linha de catálogo p/ o intervalo.
   monthlyPriceCents: number | null | undefined;
   annualPriceCents: number | null | undefined;
   gallery: Array<{ name: string; size: number }>;
 }
+
+/**
+ * Resposta de `POST /api/products`. O BFF devolve o produto criado + o que
+ * deu certo/falha nas linhas de catálogo: `plans` criaram, `planWarnings`
+ * falharam. A UI tem que reportar os dois (silenciar `planWarnings` faz a tela
+ * dizer "criado" para um produto que não tem plano).
+ */
+export type CreateProductResponse = ProductView & {
+  plans?: Array<PlanView>;
+  planWarnings?: Array<{ interval?: string; code?: string; message?: string }>;
+};
 
 /* ------------------------------------------------------------------ */
 /* Perfil do operador (área "Meu perfil" — foto + dados + documentos).  */

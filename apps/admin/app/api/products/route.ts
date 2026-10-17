@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { upstreamAuthHeaders, upstreamAuthJsonHeaders } from "@/lib/api/upstream";
 import { mockCreateProduct, mockProductPage } from "@/lib/mocks";
+import {
+  PRODUCT_DELIVERY_MODES,
+  PRODUCT_PLATFORM_IDS,
+  normalizePlatformIds,
+  type ProductDeliveryMode,
+} from "@/lib/platforms";
 import type { ProductView } from "@/lib/types";
 
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL;
@@ -24,6 +30,13 @@ function upstreamUnavailable(): NextResponse {
     { code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível. Tente novamente." },
     { status: 502 },
   );
+}
+
+/** `delivery_mode` do PG: só `OFFLINE`/`HYBRID` são válidos; o resto cai no default. */
+function normalizeDeliveryMode(value: unknown): ProductDeliveryMode {
+  return (PRODUCT_DELIVERY_MODES as readonly string[]).includes(String(value))
+    ? (value as ProductDeliveryMode)
+    : "OFFLINE";
 }
 
 /**
@@ -97,6 +110,12 @@ export async function GET(req: NextRequest) {
             description: typeof r.description === "string" ? r.description : null,
             status: st,
             machinesAllowed: typeof r.machinesAllowed === "number" ? r.machinesAllowed : 3,
+            // `platforms`/`deliveryMode` vêm do SELECT do Nest (Lane B). O
+            // banco tem `NOT NULL DEFAULT '{}'`/`'OFFLINE'`, então a ausência
+            // aqui é só `forward-compat` — normaliza p/ nunca vazar id fora
+            // do catálogo (a landpage só conhece os 5 slugs).
+            platforms: normalizePlatformIds(Array.isArray(r.platforms) ? (r.platforms as string[]) : []),
+            deliveryMode: normalizeDeliveryMode(r.deliveryMode),
             plans: byProduct.get(id) ?? [],
             gallery: [],
             createdAt: typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString(),
@@ -116,10 +135,15 @@ export async function GET(req: NextRequest) {
 
 /**
  * BFF `POST /api/products` → Nest `POST /v1/products` (exige `product.manage`).
- * Valida nome ≥ 3, machinesAllowed 1..100, preços ≥ 0; code único → 409 CONFLICT.
- * TODO(backend Fase 7): estender o catálogo real com machinesAllowed/planos/galeria
- * (o Nest atual só persiste code/name/slug/description — o BFF deriva code/slug
- * quando omitidos e repassa o corpo integral p/ forward-compat).
+ * Valida nome ≥ 3, machinesAllowed 1..100, preços ≥ 0, platforms (>= 1 slug do
+ * catálogo), deliveryMode (OFFLINE|HYBRID); code único → 409 CONFLICT.
+ *
+ * `platforms`/`deliveryMode` SÃO repassados (Lane B do backend os persiste em
+ * `products.platforms` / `products.delivery_mode`). Sem este repasse o Nest
+ * receberia o DTO sem eles e a UI prometeria um dado que não foi gravado.
+ *
+ * `ValidationPipe` do Nest é fail-closed (`forbidNonWhitelisted`), então aqui
+ * só entram campos declarados no `CreateProductDto` — nada de `tags`/extras.
  */
 export async function POST(req: NextRequest) {
   const session = req.cookies.get("aurum_session")?.value ?? "";
@@ -130,6 +154,8 @@ export async function POST(req: NextRequest) {
     slug?: unknown;
     description?: unknown;
     machinesAllowed?: unknown;
+    platforms?: unknown;
+    deliveryMode?: unknown;
     monthlyPriceCents?: unknown;
     annualPriceCents?: unknown;
     gallery?: unknown;
@@ -170,6 +196,31 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+  // Plataformas: >= 1 slug do catálogo, fail-closed MESMO que o Nest
+  // (`@IsIn(PLATFORM_IDS, {each:true})`). O banco aceita `{}` (default) p/
+  // não quebrar produto legado, mas criar produto SEM plataforma declarada é
+  // erro de negócio: a landpage não consegue filtrar/mostrar nada. Mensagem
+  // aqui é pt-BR (o Nest devolveria o array de `message` do class-validator).
+  if (!Array.isArray(body.platforms) || body.platforms.length === 0) {
+    return NextResponse.json(
+      { code: "UNPROCESSABLE", message: "Escolha ao menos uma plataforma." },
+      { status: 422 },
+    );
+  }
+  const unknownPlatform = body.platforms.find(
+    (p) => typeof p !== "string" || !(PRODUCT_PLATFORM_IDS as readonly string[]).includes(p),
+  );
+  if (unknownPlatform !== undefined) {
+    return NextResponse.json(
+      {
+        code: "UNPROCESSABLE",
+        message: `Plataforma inválida: ${String(unknownPlatform)}. Use ${PRODUCT_PLATFORM_IDS.join(", ")}.`,
+      },
+      { status: 422 },
+    );
+  }
+  const platforms = normalizePlatformIds(body.platforms as string[]);
+  const deliveryMode = normalizeDeliveryMode(body.deliveryMode);
 
   if (API_INTERNAL_URL) {
     // Real: cria o produto e, em seguida, as linhas de plano (mensal/anual).
@@ -201,6 +252,10 @@ export async function POST(req: NextRequest) {
           slug,
           ...(typeof body.description === "string" ? { description: body.description } : {}),
           machinesAllowed: body.machinesAllowed,
+          // Slugs do catálogo canônico (dedup + ordem canônica: o service
+          // também normaliza, mas mandar já normalizado evita divergência).
+          platforms,
+          deliveryMode,
         }),
       });
       const createdData = await created.json().catch(() => ({}));
@@ -256,6 +311,8 @@ export async function POST(req: NextRequest) {
       slug: typeof body.slug === "string" ? body.slug : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       machinesAllowed: body.machinesAllowed as number,
+      platforms,
+      deliveryMode,
       monthlyPriceCents: (body.monthlyPriceCents as number | null | undefined) ?? null,
       annualPriceCents: (body.annualPriceCents as number | null | undefined) ?? null,
       gallery: Array.isArray(body.gallery)

@@ -12,6 +12,7 @@ import type {
   IssueProductLicenseRequest,
   LicenseHistoryEntry,
   LicenseView,
+  MaskedProductLicense,
   MeResponse,
   Organization,
   Page,
@@ -23,6 +24,7 @@ import type {
   PlanView,
   ProductActiveClient,
   ProductImage,
+  ProductLicensesPage,
   ProductStatus,
   ProductView,
   ProjectionPoint,
@@ -34,6 +36,8 @@ import type {
   TransactionKind,
   TransactionView,
 } from "./types";
+import type { ProductDeliveryMode, ProductPlatformId } from "./platforms";
+import { normalizePlatformIds } from "./platforms";
 
 /**
  * Mocks da Fase 2 — backend pode não estar pronto.
@@ -1213,6 +1217,8 @@ export const MOCK_PRODUCTS: ProductView[] = [
     description: "Plano Pro com licenças offline.",
     status: "ACTIVE",
     machinesAllowed: 3,
+    platforms: ["windows", "macos", "web"],
+    deliveryMode: "HYBRID",
     plans: [
       { id: "plan-aurum-pro-month", productId: "prd-aurum-pro", name: "Aurum Pro Mensal", billingInterval: "MONTH", priceCents: 14990, currency: "BRL", status: "ATIVO", validFrom: "2026-09-01T12:00:00.000Z", validTo: null, supersededBy: null },
       { id: "plan-aurum-pro-year", productId: "prd-aurum-pro", name: "Aurum Pro Anual", billingInterval: "YEAR", priceCents: 119900, currency: "BRL", status: "ATIVO", validFrom: "2026-09-01T12:00:00.000Z", validTo: null, supersededBy: null },
@@ -1228,6 +1234,8 @@ export const MOCK_PRODUCTS: ProductView[] = [
     description: null,
     status: "ACTIVE",
     machinesAllowed: 1,
+    platforms: ["windows", "linux"],
+    deliveryMode: "OFFLINE",
     plans: [
       { id: "plan-aurum-base-year", productId: "prd-aurum-base", name: "Aurum Base Anual", billingInterval: "YEAR", priceCents: 119900, currency: "BRL", status: "ATIVO", validFrom: "2026-09-15T12:00:00.000Z", validTo: null, supersededBy: null },
     ],
@@ -1274,6 +1282,10 @@ export function mockCreateProduct(req: CreateProductRequest): ProductView {
   const ts = Date.now();
   const base = slugifyBase(req.name);
   const suffix = ts.toString(36).slice(-4);
+  // Plataformas/entrega são gravadas no stub também: sem elas o produto
+  // criado em sessão voltaria sem o dado que a tela acabou de coletar.
+  const platforms = normalizePlatformIds(req.platforms ?? []);
+  const deliveryMode = req.deliveryMode === "HYBRID" ? "HYBRID" : "OFFLINE";
   const code = (req.code?.trim() || `${base}-${suffix}`).toLowerCase();
   const slug = (req.slug?.trim() || `${base}-${suffix}`).toLowerCase();
   const existing = allProducts();
@@ -1328,6 +1340,8 @@ export function mockCreateProduct(req: CreateProductRequest): ProductView {
     description: req.description ?? null,
     status: "DRAFT",
     machinesAllowed: req.machinesAllowed,
+    platforms,
+    deliveryMode,
     plans,
     gallery,
     createdAt,
@@ -1349,6 +1363,57 @@ export function mockArchiveProduct(code: string): ProductView | null {
     if (idx >= 0) MOCK_PRODUCTS[idx] = archived;
   }
   return archived;
+}
+
+/** Campos que o PATCH/PUT pode mexer (mesma lista branca do backend). */
+export type EditableProductFields = {
+  name?: string;
+  slug?: string;
+  description?: string | null;
+  machinesAllowed?: number;
+  platforms?: ProductPlatformId[];
+  deliveryMode?: ProductDeliveryMode;
+};
+
+/**
+ * `PATCH`/`PUT` de produto no stub.
+ *
+ * O stub é mutável SÓ em memória, mas as REGRAS são as do backend: slug em
+ * colisão com outro produto é 409 e code inexistente é 404. Aceitar no stub o
+ * que o Nest recusa ensinaria o operador a regra errada.
+ *
+ * `replace = true` (PUT) substitui o recurso inteiro: campo ausente na
+ * entrada cai no default/vazio do banco — é a diferença em relação ao PATCH,
+ * que só toca o que veio.
+ */
+export function mockWriteProduct(
+  code: string,
+  patch: EditableProductFields,
+  replace: boolean,
+): { outcome: "ok"; product: ProductView } | { outcome: "not-found" } | { outcome: "conflict"; message: string } {
+  const idxCreated = MOCK_PRODUCTS_CREATED.findIndex((p) => p.code === code);
+  const idxSeed = MOCK_PRODUCTS.findIndex((p) => p.code === code);
+  const found = idxCreated >= 0 ? MOCK_PRODUCTS_CREATED[idxCreated] : MOCK_PRODUCTS[idxSeed];
+  if (!found) return { outcome: "not-found" };
+
+  const nextSlug = patch.slug ?? (replace ? "" : found.slug);
+  if (allProducts().some((p) => p.code !== code && p.slug === nextSlug)) {
+    return { outcome: "conflict", message: `slug "${nextSlug}" já está em uso por outro produto` };
+  }
+
+  const next: ProductView = {
+    ...found,
+    name: patch.name ?? (replace ? found.name : found.name),
+    slug: nextSlug,
+    description: patch.description === undefined ? (replace ? null : found.description) : patch.description,
+    machinesAllowed: patch.machinesAllowed ?? (replace ? 3 : found.machinesAllowed),
+    platforms: patch.platforms ?? (replace ? [] : (found.platforms ?? [])),
+    deliveryMode: patch.deliveryMode ?? (replace ? "OFFLINE" : (found.deliveryMode ?? "OFFLINE")),
+  };
+
+  if (idxCreated >= 0) MOCK_PRODUCTS_CREATED[idxCreated] = next;
+  else if (idxSeed >= 0) MOCK_PRODUCTS[idxSeed] = next;
+  return { outcome: "ok", product: next };
 }
 
 /** Emite licença mascarada (chave NUNCA em plaintext no stub). */
@@ -1536,4 +1601,139 @@ export function mockProductActiveClients(productCode: string): ProductActiveClie
     }
   }
   return Array.from(byCustomer.values()).filter((e) => e.active > 0 || e.grace > 0);
+}
+
+/**
+ * Estado ATUAL das chaves do produto (espelha `MaskedLicense` do Nest em
+ * `GET /v1/products/:code/licenses`).
+ *
+ * Propositalmente inclui os 5 estados que o operador precisa distinguir
+ * (active/grace/expired/suspended/revoked) + vitalícia — senão o filtro por
+ * estado da aba "Licenças" apareceria vazio e ninguém veria a regra em
+ * stub. `key_hash`/`key_enc` não existem (chave NUNCA em plaintext).
+ *
+ * Datas RELATIVAS ao agora (`daysFromNow`) para o demo não envelhecer: uma
+ * "expirada" de 2024 continuaria expirada, mas uma "em graça" de 2026 vira
+ * ativa quando o relógio passa — que é justamente a derivação do backend.
+ */
+export function mockProductLicenses(
+  productCode: string,
+  opts: { limit?: number; offset?: number; status?: string } = {},
+): ProductLicensesPage {
+  const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 50), 1), 200);
+  const offset = Math.max(Math.trunc(opts.offset ?? 0), 0);
+  const status = opts.status || null;
+
+  const all: MaskedProductLicense[] = [];
+  for (const [customerId, list] of Object.entries(LICENSES)) {
+    for (const lic of list) {
+      if (lic.productId !== productCode) continue;
+      const owner = CUSTOMERS.find((c) => c.id === customerId);
+      all.push({
+        id: lic.id,
+        // `LicenseOrigin` (BONUS|CONTRACT|SUBSCRIPTION|LICENSE) é a origem do
+        // ENTITLEMENT, não o `ownerType` (CUSTOMER|ORGANIZATION|PROMO). O
+        // fixture `LICENSES` é indexado por cliente → todos os titulares são
+        // CUSTOMER; as linhas sintéticas abaixo é que cobrem PROMO/PROMO.
+        ownerType: "CUSTOMER",
+        ownerId: customerId,
+        ownerLabel: owner?.name ?? customerId,
+        productId: lic.productId,
+        planId: null,
+        contractItemId: null,
+        kind: lic.origin === "SUBSCRIPTION" ? "monthly" : "annual",
+        status: lic.status,
+        keyMasked: lic.keyMasked,
+        key_prefix: lic.keyPrefix,
+        key_last4: lic.keyLast4,
+        tokenVersion: 1,
+        maxDevices: lic.machinesAllowed,
+        issuedAt: lic.startsAt,
+        startsAt: lic.startsAt,
+        expiresAt: lic.expiresAt,
+        graceUntil: lic.graceUntil ?? null,
+        features: [],
+        createdAt: lic.startsAt,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+  // Linhas sintéticas extras para exercitar os estados que o fixture fixo não
+  // cobre (o filtro por estado e as regras de ação por status existem por causa
+  // delas). `daysFromNow` negativo = já passou.
+  const extras: Array<
+    Partial<MaskedProductLicense> & { status: string; expiresInDays: number | null }
+  > = [
+    {
+      status: "expired",
+      kind: "annual",
+      key_last4: "XX01",
+      maxDevices: 5,
+      expiresInDays: -40,
+    },
+    {
+      status: "suspended",
+      kind: "annual",
+      key_last4: "XX02",
+      maxDevices: 3,
+      expiresInDays: 120,
+    },
+    {
+      status: "revoked",
+      kind: "monthly",
+      key_last4: "XX03",
+      maxDevices: 3,
+      expiresInDays: 60,
+    },
+    {
+      status: "active",
+      kind: "lifetime",
+      key_last4: "XX04",
+      maxDevices: 10,
+      expiresInDays: null,
+    },
+  ];
+  for (const e of extras) {
+    const id = `lic-stub-${productCode}-${e.key_last4}`;
+    const starts = new Date(Date.now() - 200 * 86_400_000).toISOString();
+    const expires =
+      e.expiresInDays === null || e.expiresInDays === undefined
+        ? null
+        : new Date(Date.now() + e.expiresInDays * 86_400_000).toISOString();
+    all.push({
+      id,
+      ownerType: "CUSTOMER",
+      ownerId: "cus-001",
+      ownerLabel: CUSTOMERS[0]?.name ?? "cus-001",
+      productId: productCode,
+      planId: null,
+      contractItemId: null,
+      kind: e.kind ?? "annual",
+      status: e.status,
+      keyMasked: `AURUM-••••-••••-${e.key_last4}`,
+      key_prefix: "AURU",
+      key_last4: e.key_last4 ?? null,
+      tokenVersion: e.status === "revoked" ? 2 : 1,
+      maxDevices: e.maxDevices ?? 3,
+      issuedAt: starts,
+      startsAt: starts,
+      expiresAt: expires,
+      graceUntil: expires ? new Date(new Date(expires).getTime() + 3 * 86_400_000).toISOString() : null,
+      features: [],
+      createdAt: starts,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  // Filtro no stub espelha o `statusSqlPredicate` upstream: `grace`/`expired`
+  // são DERIVADOS do relógio, então o status gravado já vem resolvido aqui.
+  const filtered = status ? all.filter((l) => String(l.status) === status) : all;
+  const items = filtered.slice(offset, offset + limit);
+  return {
+    items,
+    total: filtered.length,
+    limit,
+    offset,
+    hasMore: offset + items.length < filtered.length,
+  };
 }

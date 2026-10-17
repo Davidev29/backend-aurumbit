@@ -1,16 +1,22 @@
-import { apiGet, apiPost } from "./api/client";
+import { apiGet, apiPatch, apiPost, apiPut } from "./api/client";
 import type {
   ArchiveProductRequest,
   CreateProductRequest,
+  CreateProductResponse,
   IssueProductLicenseRequest,
+  LicenseEffectiveStatus,
   LicenseHistoryEntry,
   Page,
   PlanPriceChangeRequest,
   PlanPriceChangeResult,
   ProductActiveClient,
   ProductImage,
+  ProductLicensesPage,
   ProductView,
+  ProductWriteResponse,
   RenewReplaceRequest,
+  ReplaceProductRequest,
+  UpdateProductRequest,
 } from "./types";
 
 /**
@@ -48,8 +54,46 @@ export function getProduct(code: string): Promise<ProductView> {
   return apiGet<ProductView>(`/api/products/${encodeURIComponent(code)}`);
 }
 
-export function createProduct(req: CreateProductRequest): Promise<ProductView> {
-  return apiPost<ProductView>("/api/products", req, { headers: idempotencyHeaders() });
+/**
+ * Criação de produto. O retorno inclui `plans`/`planWarnings` do BFF: quando
+ * `planWarnings` vem preenchido, o produto EXISTE mas algum preço não virou
+ * linha de catálogo — a UI precisa mostrar isso, senão mente "criado com
+ * mensal R$ X" para um produto sem plano mensal.
+ */
+export function createProduct(req: CreateProductRequest): Promise<CreateProductResponse> {
+  return apiPost<CreateProductResponse>("/api/products", req, { headers: idempotencyHeaders() });
+}
+
+/**
+ * Atualização PARCIAL do produto (`PATCH /api/products/:code`).
+ *
+ * Só os campos enviados mudam; ausente = preservado (inclusive
+ * `description`, que só é limpa quando vem `null` explícito). Idempotente.
+ * `Idempotency-Key` segue o padrão dos outros POSTs (PROJECT §5).
+ *
+ * Erros que a UI trata por status: 409 = slug já em uso por outro produto;
+ * 422 = campo proibido (code/status/preço) ou valor fora de faixa.
+ */
+export function patchProduct(
+  code: string,
+  req: UpdateProductRequest,
+): Promise<ProductWriteResponse> {
+  return apiPatch<ProductWriteResponse>(`/api/products/${encodeURIComponent(code)}`, req, {
+    headers: idempotencyHeaders(),
+  });
+}
+
+/**
+ * Substituição TOTAL (`PUT /api/products/:code`): todos os campos são
+ * enviados e o que vier vazio/`null` ZERA de propósito. 422 se faltar campo.
+ */
+export function putProduct(
+  code: string,
+  req: ReplaceProductRequest,
+): Promise<ProductWriteResponse> {
+  return apiPut<ProductWriteResponse>(`/api/products/${encodeURIComponent(code)}`, req, {
+    headers: idempotencyHeaders(),
+  });
 }
 
 /** Arquivamento exige confirmação explícita na UI (DestructiveForm); responde com `auditId`. */
@@ -85,10 +129,21 @@ export function renewReplaceLicense(
 /**
  * Histórico de substituições (array direto do BFF; aceita `Page` p/
  * forward-compat com o backend paginado futuro).
+ *
+ * `scope: "product"` diz ao BFF que `ref` é um PRODUCT CODE: ele vai direto
+ * ao fan-out das licenças do produto em vez de sondar `ref` como licenseId e
+ * depender de um 404 do upstream para descobrir que errou (ida-e-volta inútil
+ * em toda abertura da aba + log de erro falso).
  */
-export function listLicenseHistory(ref: string): Promise<LicenseHistoryEntry[] | Page<LicenseHistoryEntry>> {
+export function listLicenseHistory(
+  ref: string,
+  opts: { scope?: "license" | "product"; limit?: number } = {},
+): Promise<LicenseHistoryEntry[] | Page<LicenseHistoryEntry>> {
   return apiGet<LicenseHistoryEntry[] | Page<LicenseHistoryEntry>>(
-    `/api/licenses/${encodeURIComponent(ref)}/history`,
+    `/api/licenses/${encodeURIComponent(ref)}/history${toQuery({
+      scope: opts.scope === "product" ? "product" : undefined,
+      limit: opts.limit !== undefined ? String(opts.limit) : undefined,
+    })}`,
   );
 }
 
@@ -111,6 +166,30 @@ export function changePlanPrice(
 /** Clientes com licenças ativas/em graça do produto (agregado por `productId`). */
 export function getProductActiveClients(code: string): Promise<ProductActiveClient[]> {
   return apiGet<ProductActiveClient[]>(`/api/products/${encodeURIComponent(code)}/clients`);
+}
+
+/**
+ * Estado ATUAL das chaves do produto (`GET /v1/products/:code/licenses`).
+ *
+ * Diferente de `listLicenseHistory`: aqui `status` é o efetivo AGORA, derivado
+ * do relógio (`grace`/`expired` já resolvidos). É esta leitura que impede chave
+ * vencida de aparecer como "Ativa".
+ *
+ * O filtro de `status` é enviado ao servidor (o upstream filtra NO SQL), mas a
+ * UI também filtra a página no cliente p/ manter a contagem por estado visível
+ * sem trocar a página.
+ */
+export function listProductLicenses(
+  code: string,
+  opts: { limit?: number; offset?: number; status?: LicenseEffectiveStatus | null } = {},
+): Promise<ProductLicensesPage> {
+  return apiGet<ProductLicensesPage>(
+    `/api/products/${encodeURIComponent(code)}/licenses${toQuery({
+      limit: opts.limit !== undefined ? String(opts.limit) : undefined,
+      offset: opts.offset !== undefined ? String(opts.offset) : undefined,
+      status: opts.status ?? undefined,
+    })}`,
+  );
 }
 
 import type { ProductImage as ProductImageType } from "./types";

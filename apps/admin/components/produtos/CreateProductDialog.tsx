@@ -9,6 +9,14 @@ import { RequirePerm } from "@/lib/auth/permissions";
 import { useToast } from "@/lib/toast";
 import { createProduct, getProduct, uploadProductImage } from "@/lib/products";
 import type { ProductImage, ProductView } from "@/lib/types";
+import {
+  deliveryModeLabel,
+  normalizePlatformIds,
+  platformLabel,
+  type ProductDeliveryMode,
+  type ProductPlatformId,
+} from "@/lib/platforms";
+import { DeliveryModeRadio, PlatformPicker } from "./PlatformPicker";
 import { cn } from "@/lib/cn";
 
 /** "149,90" / "149.90" → centavos; `null` = vazio ou inválido (ver `empty`). */
@@ -56,13 +64,14 @@ interface PendingImage {
 }
 
 /** Indicador compacto de etapa (sem scroll, sem dependência nova). */
-function Stepper({ step }: { step: 1 | 2 }) {
+function Stepper({ step }: { step: 1 | 2 | 3 }) {
   const items = [
     { n: 1, label: "Básico" },
     { n: 2, label: "Preços e galeria" },
+    { n: 3, label: "Plataformas" },
   ] as const;
   return (
-    <ol aria-label="Etapas da criação" className="m-0 mb-3 flex items-center gap-2 p-0 list-none">
+    <ol aria-label="Etapas da criação" className="m-0 mb-3 flex flex-wrap items-center gap-2 p-0 list-none">
       {items.map((it, i) => {
         const active = step === it.n;
         const done = step > it.n;
@@ -84,17 +93,26 @@ function Stepper({ step }: { step: 1 | 2 }) {
           </li>
         );
       })}
-      <li className="ml-auto text-callout text-text2">Etapa {step} de 2</li>
+      <li className="ml-auto text-callout text-text2">Etapa {step} de 3</li>
     </ol>
   );
 }
 
 /**
- * Criação de produto em assistente de 2 etapas (Dialog glass md).
+ * Criação de produto em assistente de 3 etapas (Dialog glass md).
  * Resolve o scroll vertical excessivo do molde anterior (8 campos empilhados):
  * etapa 1 só identidade (nome/slug/código/descrição/máquinas),
- * etapa 2 só comercial (preços + galeria + resumo). Nenhuma etapa rola em
+ * etapa 2 só comercial (preços + galeria + resumo),
+ * etapa 3 só entrega (plataformas + modo de entrega). Nenhuma etapa rola em
  * viewport comum — o painel fica compacto e elegante.
+ *
+ * POR QUE 3 ETAPAS E NÃO UM BLOCO NA ETAPA 1: a invariante do arquivo é
+ * "nenhuma etapa rola". O seletor de plataformas (5 tiles de 44px em grade) +
+ * o radio de entrega somam ~245px de altura. A etapa 1 já usa ~425px e o
+ * painel abre em `pt-[15vh]` com `max-h-[85vh]`: adicionar ali faria a etapa
+ * 1 rolarem em qualquer laptop 13" — trocando um scroll por outro. Etapa
+ * própria preserva a invariante e dá à escolha o foco que ela merece (o
+ * usuário pediu explicitamente por ela).
  */
 export function CreateProductDialog({
   taken,
@@ -106,7 +124,7 @@ export function CreateProductDialog({
   onClose: () => void;
   onDone: (product: ProductView) => void;
 }) {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [slug, setSlug] = useState("");
@@ -116,6 +134,11 @@ export function CreateProductDialog({
   const [machinesRaw, setMachinesRaw] = useState("3");
   const [monthlyRaw, setMonthlyRaw] = useState("");
   const [annualRaw, setAnnualRaw] = useState("");
+  /** Ordem de clique, não canônica — `platforms` abaixo já normaliza. */
+  const [picked, setPicked] = useState<ProductPlatformId[]>([]);
+  const [deliveryMode, setDeliveryMode] = useState<ProductDeliveryMode>("OFFLINE");
+  /** Só mostra o erro de plataforma depois que o operador tentou sair da etapa. */
+  const [platformTouched, setPlatformTouched] = useState(false);
   const [gallery, setGallery] = useState<PendingImage[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,8 +159,25 @@ export function CreateProductDialog({
   const hasPrice = monthly.cents !== null || annual.cents !== null;
   const descLen = description.trim().length;
   const descValid = descLen <= MAX_DESC;
+  /**
+   * Plataformas: >= 1 é OBRIGATÓRIO na criação (decisão de negócio, não
+   *atinge limitação do banco).
+   *
+   * O banco tem `platforms TEXT[] NOT NULL DEFAULT '{}'` e o Nest aceita
+   * array vazio (`@IsOptional()`, sem `@ArrayMinSize`) — mas `{}` significa
+   * "ainda não declarado", um estado aceitável só para produto LEGADO
+   * (criado antes desta coluna). Produto novo sem plataforma é falso: não dá
+   * p/ a landpage filtrar, nem p/ o cliente entender o que está comprando.
+   * Exigir aqui mantém o default do banco intacto para o legado e impede que
+   * o operador crie buraco novo. O BFF repete a trava (422) — a UI não é a
+   * única linha, porque `POST /api/products` tem outros consumidores
+   * possíveis.
+   */
+  const platforms = normalizePlatformIds(picked);
+  const platformsValid = platforms.length > 0;
   const step1Valid = nameValid && slugValid && codeValid && !codeTaken && !slugTaken && machinesValid && descValid;
-  const valid = step1Valid && monthlyOk && annualOk && hasPrice;
+  const step3Valid = platformsValid;
+  const valid = step1Valid && monthlyOk && annualOk && hasPrice && step3Valid;
 
   function handleNameChange(v: string) {
     setName(v);
@@ -198,6 +238,10 @@ export function CreateProductDialog({
         slug: slug.trim(),
         description: description.trim(),
         machinesAllowed: machines,
+        // Dedup + ordem canônica do catálogo (o backend também normaliza;
+        // mandar já normalizado evita a tela mostrar outra ordem do gravado).
+        platforms,
+        deliveryMode,
         monthlyPriceCents: monthly.cents ?? undefined,
         annualPriceCents: annual.cents ?? undefined,
         // Metadados seguem p/ compat com o stub; bytes sobem em seguida.
@@ -217,6 +261,20 @@ export function CreateProductDialog({
       const fresh =
         gallery.length > 0 ? await getProduct(product.code).catch(() => product) : product;
       onDone(fresh);
+      // `planWarnings` = o produto EXISTE, mas um preço não virou linha de
+      // catálogo (o upstream do plano falhou). Sem reportar, a tela diria
+      // "criado com R$ 149,90/mês" para um produto que não vende mensal —
+      // exatamente a mentira que o usuário reclamou no histórico de licenças.
+      const planWarnings = Array.isArray(product.planWarnings) ? product.planWarnings : [];
+      if (planWarnings.length > 0) {
+        const ciclos = planWarnings
+          .map((w) => (w.interval === "YEAR" ? "anual" : w.interval === "MONTH" ? "mensal" : "um ciclo"))
+          .join(", ");
+        const msg = `Produto criado, mas ${failures.length > 0 ? `${failures.length} imagem(ns) não subiram e ` : ""}a linha de preço ${ciclos} não foi criada. Reenvie o preço pela aba Planos.`;
+        setError(msg);
+        notify("warn", "Criação parcial", msg);
+        return;
+      }
       if (failures.length > 0) {
         // Sem onClose: o erro fica visível p/ reenvio pela aba Galeria.
         const msg = `Produto criado, mas ${failures.length} imagem(ns) não subiram (${failures.slice(0, 3).join(", ")}${failures.length > 3 ? "…" : ""}). Reenvie pela aba Galeria.`;
@@ -234,6 +292,11 @@ export function CreateProductDialog({
     }
   }
 
+  function togglePlatform(id: ProductPlatformId) {
+    setPlatformTouched(true);
+    setPicked((list) => (list.includes(id) ? list.filter((p) => p !== id) : [...list, id]));
+  }
+
   const pricePreview =
     monthly.cents !== null || annual.cents !== null
       ? [
@@ -249,7 +312,8 @@ export function CreateProductDialog({
       <RequirePerm perm="product.manage">
         <Stepper step={step} />
         <p className="mt-0 mb-3 text-callout text-text2">
-          Licenças offline · ativação por chave · 3 dias de tolerância.
+          Ativação por chave · 3 dias de tolerância · entrega{" "}
+          {deliveryMode === "HYBRID" ? "híbrida (online + offline)" : "offline"}.
         </p>
         <form onSubmit={handleSubmit}>
           {step === 1 && (
@@ -325,7 +389,11 @@ export function CreateProductDialog({
                 />
               </Field>
               <div className="max-w-[12rem]">
-                <Field label="Máquinas / licença" htmlFor="prod-machines" hint="1 a 100.">
+                <Field
+                  label="Máquinas / licença"
+                  htmlFor="prod-machines"
+                  hint="Limite por chave emitida (1 a 100). É este número que a licença vale — não por usuário nem por pedido."
+                >
                   <Input
                     id="prod-machines"
                     mono
@@ -337,6 +405,7 @@ export function CreateProductDialog({
                     value={machinesRaw}
                     onChange={(e) => setMachinesRaw(e.target.value)}
                     disabled={pending}
+                    aria-invalid={!machinesValid}
                   />
                 </Field>
               </div>
@@ -443,6 +512,61 @@ export function CreateProductDialog({
             </div>
           )}
 
+          {step === 3 && (
+            <div>
+              <p
+                id="prod-platforms-label"
+                className="mb-1 block font-semibold text-headline text-text1"
+              >
+                Onde este produto roda?{" "}
+                <span className="font-normal text-callout text-text2">pode marcar mais de uma.</span>
+              </p>
+              <p id="prod-platforms-hint" className="mt-0 text-callout text-text2">
+                Usado na landpage e no filtro de compatibilidade. Vira a coluna
+                platforms do produto.
+              </p>
+              <div className="mt-2">
+                <PlatformPicker
+                  selected={picked}
+                  onToggle={togglePlatform}
+                  disabled={pending}
+                  invalid={platformTouched && !platformsValid}
+                  describedBy="prod-platforms-hint"
+                />
+              </div>
+              {!platformsValid && platformTouched && (
+                <p
+                  className="mt-1 mb-3 text-callout text-danger dark:text-[#ff9a9e]"
+                  role="alert"
+                >
+                  Escolha ao menos uma plataforma.
+                </p>
+              )}
+              <p id="prod-delivery-label" className="mb-1 mt-4 block font-semibold text-headline text-text1">
+                Como a licença é entregue?
+              </p>
+              <DeliveryModeRadio
+                name="prod-delivery-mode"
+                value={deliveryMode}
+                onChange={setDeliveryMode}
+                disabled={pending}
+              />
+              <div className="mt-3 rounded-base border border-line1 bg-bg2 px-3 py-2">
+                <p className="m-0 text-callout text-text2">
+                  <span className="font-semibold text-text1">Resumo:</span>{" "}
+                  <span className="font-mono tnum text-[0.85em]">{code || "—"}</span> ·{" "}
+                  {machinesRaw} máq./licença ·{" "}
+                  {platforms.length > 0
+                    ? platforms.map(platformLabel).join(" · ")
+                    : "sem plataforma"}
+                  {" · "}
+                  {deliveryModeLabel(deliveryMode)}
+                  {pricePreview !== "Sem preço ainda" ? ` · ${pricePreview}` : ""}
+                </p>
+              </div>
+            </div>
+          )}
+
           {error && (
             <p className="flex items-center gap-2 text-callout text-danger dark:text-[#ff9a9e]">
               <TriangleAlert size={15} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
@@ -464,9 +588,9 @@ export function CreateProductDialog({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setStep(1)}
+                onClick={() => setStep(step === 3 ? 2 : 1)}
                 disabled={pending}
-                title={pending ? "Aguarde…" : "Voltar à etapa básica"}
+                title={pending ? "Aguarde…" : step === 3 ? "Voltar para preços e galeria" : "Voltar à etapa básica"}
               >
                 <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
                 Voltar
@@ -483,6 +607,20 @@ export function CreateProductDialog({
                 Continuar
                 <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />
               </Button>
+            ) : step === 2 ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  setPlatformTouched(true);
+                  setStep(3);
+                }}
+                disabled={pending}
+                title={pending ? "Aguarde…" : "Continuar para plataformas e entrega"}
+              >
+                Continuar
+                <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />
+              </Button>
             ) : (
               <Button
                 type="submit"
@@ -490,7 +628,15 @@ export function CreateProductDialog({
                 loading={pending}
                 loadingLabel="Criando…"
                 disabled={!valid || pending}
-                title={pending ? "Criando…" : !valid ? "Preencha ao menos um preço válido" : "Criar produto"}
+                title={
+                  pending
+                    ? "Criando…"
+                    : !valid
+                      ? !platformsValid
+                        ? "Escolha ao menos uma plataforma"
+                        : "Preencha ao menos um preço válido"
+                      : "Criar produto"
+                }
               >
                 Criar produto
               </Button>
