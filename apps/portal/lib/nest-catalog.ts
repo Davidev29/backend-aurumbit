@@ -1,4 +1,5 @@
 import type { BillingInterval, PlanView, ProductView } from "@/types";
+import { normalizeDeliveryMode, normalizePlatforms } from "@/lib/platforms";
 
 const BILLING: BillingInterval[] = ["MONTH", "YEAR", "ONE_TIME"];
 
@@ -51,6 +52,14 @@ interface NestProduct {
   images?: NestMediaRow[];
   videos?: NestMediaRow[];
   media?: NestMediaRow[];
+  /**
+   * `products.platforms TEXT[]` — declarado como `unknown` de propósito:
+   * o front pode receber cache velho ou API anterior ao campo, e o
+   * normalizador decide (`[]` / descarte de slug desconhecido).
+   */
+  platforms?: unknown;
+  /** `products.delivery_mode` (`OFFLINE` | `HYBRID`). Mesmo raciocínio acima. */
+  deliveryMode?: unknown;
   createdAt?: string;
 }
 
@@ -170,6 +179,10 @@ export function mapNestProducts(
       plans: plansByCode.get(r.code) ?? [],
       gallery,
       category: r.category,
+      // Sempre presente e já validado: `[]` quando o backend não declara
+      // (a UI mostra "não informado"), nunca `undefined` quebrando `.map`.
+      platforms: normalizePlatforms(r.platforms),
+      deliveryMode: normalizeDeliveryMode(r.deliveryMode),
       createdAt: r.createdAt ?? new Date().toISOString(),
     };
   });

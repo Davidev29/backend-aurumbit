@@ -5,6 +5,8 @@ import Image from "next/image";
 import { ChevronRight, Cpu, Check } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui";
+import { PlatformBadges } from "./PlatformBadges";
+import { deliveryModeLabel, normalizeDeliveryMode } from "@/lib/platforms";
 import type { ProductView } from "@/types";
 
 interface ProductCardProps {
@@ -102,18 +104,27 @@ export function ProductCard({ product, onClick, variant = "default" }: ProductCa
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); }}}
       aria-label={`${product.name} — ver planos`}
     >
-      {/* Linha de contexto: categoria + máquinas + offline */}
+      {/* Linha de contexto: categoria + máquinas + modo de entrega.
+          O "·" só aparece entre itens realmente renderizados (antes saía um
+          separador órfão quando o produto não tinha categoria). */}
       <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text2">
         {product.category && (
-          <span className="font-semibold text-accent">{product.category}</span>
+          <>
+            <span className="font-semibold text-accent">{product.category}</span>
+            <span aria-hidden="true" className="text-text3">·</span>
+          </>
         )}
-        <span aria-hidden="true" className="text-text3">·</span>
         <span className="tabular-nums">
           {product.machinesAllowed}{product.code === "aurum-enterprise" ? "+" : ""} {product.machinesAllowed === 1 ? "computador" : "computadores"}
         </span>
         <span aria-hidden="true" className="text-text3">·</span>
-        <span>100% offline</span>
+        <span>{deliveryModeLabel(normalizeDeliveryMode(product.deliveryMode))}</span>
       </div>
+
+      {/* Plataformas reais do produto (`products.platforms`). Vazio = calado:
+          no card, "não informado" viraria ruído em toda a grade da vitrine —
+          o aviso honesto fica no modal, que é a visão de detalhe. */}
+      <PlatformBadges platforms={product.platforms} labels="short" className="mb-2" />
 
       {/* Título + descrição em 1 linha */}
       <h3 className="font-display text-headline font-bold text-text1">

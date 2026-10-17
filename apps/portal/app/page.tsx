@@ -6,6 +6,7 @@ import { AuthModalWrapper } from "@/components/auth/AuthModalWrapper";
 import { ChatWidget } from "@/components/support/ChatWidget";
 import { LoginParamOpener } from "@/components/auth/LoginParamOpener";
 import { mockCatalogPage } from "@/lib/mocks";
+import { joinPtBr, normalizePlatforms, operatingSystemsFrom, platformLabel } from "@/lib/platforms";
 
 export const revalidate = 60;
 
@@ -42,8 +43,10 @@ const FAQS = [
   },
   {
     question: "Roda no meu computador?",
-    answer:
-      "Sim, se for Windows ou macOS. Cada plano libera um número de computadores: 1 no Base, 3 no Pro e 50 ou mais no Enterprise.",
+    // Resposta escrita no corpo da página a partir de `products.platforms`
+    // (union do catálogo) — ver `sitePlatforms`. Sem dado declarado, a própria
+    // resposta diz que não sabemos, em vez de prometer SO fixo.
+    answer: "",
   },
   {
     question: "Se eu trocar de computador, perco a chave?",
@@ -57,6 +60,16 @@ export default async function LandingPage() {
   // Sem `API_INTERNAL_URL` usa o catálogo stub (mesma fonte do BFF).
   const products = mockCatalogPage("", null).data;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://aurumbit.com";
+
+  // Resumo honesto do que o site suporta (union dos produtos), usado no FAQ.
+  // Vazio = não temos dado; a resposta do FAQ diz isso explicitamente.
+  const sitePlatforms = normalizePlatforms(
+    products.flatMap((p) => normalizePlatforms(p.platforms))
+  );
+  const platformsFaqAnswer =
+    sitePlatforms.length > 0
+      ? `Sim, em ${joinPtBr(sitePlatforms.map(platformLabel))}. Cada plano libera um número de computadores: 1 no Base, 3 no Pro e 50 ou mais no Enterprise.`
+      : "Cada produto informa as plataformas suportadas na vitrine. Se a sua não aparecer, fale com a gente em português: contato@aurumbit.com.";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -77,20 +90,32 @@ export default async function LandingPage() {
         publisher: { "@id": `${siteUrl}/#organizacao` },
       },
       ...products.map((p) => {
-        const minCents = Math.min(...p.plans.map((plan) => plan.priceCents));
+        const minCents = p.plans.length > 0
+          ? Math.min(...p.plans.map((plan) => plan.priceCents))
+          : null;
+        // `operatingSystem` deixou de ser fixo ("Windows, macOS"): vem das
+        // plataformas REAIS do produto. Sem dado → o campo é OMITIDO em vez
+        // de inventar (um rich-result com SO errado custa mais que sem SO).
+        // Mesma regra para `offers`: `Math.min()` de lista vazia daria
+        // `Infinity` e publicaria `price: "Infinity"`.
+        const operatingSystem = operatingSystemsFrom(p.platforms);
         return {
           "@type": "SoftwareApplication",
           name: p.name,
           url: `${siteUrl}/#produtos`,
           applicationCategory: "BusinessApplication",
-          operatingSystem: "Windows, macOS",
+          ...(operatingSystem ? { operatingSystem } : {}),
           inLanguage: "pt-BR",
-          offers: {
-            "@type": "Offer",
-            priceCurrency: "BRL",
-            price: (minCents / 100).toFixed(2),
-            availability: "https://schema.org/InStock",
-          },
+          ...(minCents !== null
+            ? {
+                offers: {
+                  "@type": "Offer",
+                  priceCurrency: "BRL",
+                  price: (minCents / 100).toFixed(2),
+                  availability: "https://schema.org/InStock",
+                },
+              }
+            : {}),
         };
       }),
       {
@@ -98,7 +123,10 @@ export default async function LandingPage() {
         mainEntity: FAQS.map((faq) => ({
           "@type": "Question",
           name: faq.question,
-          acceptedAnswer: { "@type": "Answer", text: faq.answer },
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: faq.answer || platformsFaqAnswer,
+          },
         })),
       },
       {

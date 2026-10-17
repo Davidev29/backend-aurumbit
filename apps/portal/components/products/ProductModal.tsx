@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Monitor, Smartphone, Globe, Cpu, Shield, Database, Zap, WifiOff } from "lucide-react";
+import { Check, Monitor, Shield, Database, Zap, WifiOff, RefreshCw } from "lucide-react";
 import { Modal, Badge, Button } from "@/components/ui";
 import { ProductModalBackground } from "./ProductModalBackground";
+import { PlatformBadges } from "./PlatformBadges";
 import { cn, formatCurrency } from "@/lib/utils";
+import {
+  DELIVERY_MODE_TILE,
+  deliveryModeReassurance,
+  normalizeDeliveryMode,
+} from "@/lib/platforms";
 import type { ProductView, PlanView } from "@/types";
 
 interface ProductModalProps {
@@ -13,22 +19,6 @@ interface ProductModalProps {
   onClose: () => void;
   onPurchase?: (plan: PlanView) => void;
 }
-
-const platformIcons = {
-  windows: Monitor,
-  macos: Cpu,
-  linux: Cpu,
-  web: Globe,
-  mobile: Smartphone,
-};
-
-const platformLabels: Record<string, string> = {
-  windows: "Windows",
-  macos: "macOS",
-  linux: "Linux",
-  web: "Web",
-  mobile: "Mobile",
-};
 
 export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductModalProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -68,6 +58,10 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
     (f, i, arr) => arr.findIndex((x) => x.featureCode === f.featureCode) === i
   );
 
+  // Fonte da verdade: `products.delivery_mode` (não "100% offline" fixo).
+  const deliveryMode = normalizeDeliveryMode(product.deliveryMode);
+  const deliveryTile = DELIVERY_MODE_TILE[deliveryMode];
+
   const short =
     product.shortDescription ??
     (product.description ? product.description.slice(0, 110).trim() + "…" : undefined);
@@ -100,8 +94,14 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
                 </Badge>
               )}
             </div>
+            {/* `tags` são rótulos de MARKETING (vêm soltos do catálogo), não
+                plataformas. Rótulo explícito para não se confundirem com o
+                bloco "Plataformas" abaixo, que é o dado real (`platforms`). */}
             {product.tags && product.tags.length > 0 && (
-              <p className="truncate text-caption text-text2">{product.tags.join(" · ")}</p>
+              <p className="text-caption leading-snug text-text3">
+                <span className="font-semibold text-text2">Destaques:</span>{" "}
+                {product.tags.join(" · ")}
+              </p>
             )}
 
             {/* Specs em tiles compactos */}
@@ -114,9 +114,15 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
                 <p className="mt-0.5 text-caption text-text3">computadores</p>
               </div>
               <div className="rounded-base border border-line2 bg-bg1/60 px-2 py-2 text-center backdrop-blur-sm">
-                <WifiOff className="mx-auto mb-1 h-4 w-4 text-ok" aria-hidden="true" />
-                <p className="font-display text-body font-bold leading-none text-text1">100%</p>
-                <p className="mt-0.5 text-caption text-text3">offline</p>
+                {deliveryMode === "HYBRID" ? (
+                  <RefreshCw className="mx-auto mb-1 h-4 w-4 text-info" aria-hidden="true" />
+                ) : (
+                  <WifiOff className="mx-auto mb-1 h-4 w-4 text-ok" aria-hidden="true" />
+                )}
+                <p className="font-display text-body font-bold leading-none text-text1">
+                  {deliveryTile.value}
+                </p>
+                <p className="mt-0.5 text-caption text-text3">{deliveryTile.label}</p>
               </div>
               <div className="rounded-base border border-line2 bg-bg1/60 px-2 py-2 text-center backdrop-blur-sm">
                 <Database className="mx-auto mb-1 h-4 w-4 text-info" aria-hidden="true" />
@@ -127,21 +133,24 @@ export function ProductModal({ product, onClose, isOpen, onPurchase }: ProductMo
               </div>
             </section>
 
-            {/* Plataformas + confiança */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {["windows", "macos", "linux", "web"].map((platform) => {
-                const PlatformIcon = platformIcons[platform as keyof typeof platformIcons];
-                return (
-                  <Badge key={platform} variant="neutral" size="sm">
-                    <PlatformIcon className="h-3 w-3" aria-hidden="true" />
-                    {platformLabels[platform]}
-                  </Badge>
-                );
-              })}
-            </div>
+            {/* Plataformas REAIS do produto (`products.platforms`).
+                Antes esta linha renderizava `["windows","macos","linux","web"]`
+                para todo produto — mintia "Linux" para quem não tem. */}
+            <section aria-label="Plataformas suportadas" className="space-y-1">
+              <h5 className="text-micro uppercase tracking-wide text-text3">Plataformas</h5>
+              <PlatformBadges
+                platforms={product.platforms}
+                labels="full"
+                empty={
+                  <p className="text-caption leading-snug text-text3">
+                    Plataformas não informadas para este produto.
+                  </p>
+                }
+              />
+            </section>
             <p className="inline-flex items-start gap-1 text-caption leading-snug text-text3">
               <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
-              Chave liberada após a confirmação do pagamento · funciona offline por natureza
+              Chave liberada após a confirmação do pagamento · {deliveryModeReassurance(deliveryMode)}
             </p>
           </aside>
 

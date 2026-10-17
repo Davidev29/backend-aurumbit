@@ -3,6 +3,10 @@
  * Forward-compatible com contratos do backend (libs/contracts + Nest DTOs)
  */
 
+import type { DeliveryMode, PlatformId } from "@/lib/platforms";
+
+export type { DeliveryMode, PlatformId };
+
 export interface ApiError {
   code: string;
   message: string;
@@ -68,7 +72,20 @@ export interface ProductView {
   plans: PlanView[];
   gallery: ProductImage[];
   category?: string;
+  /** Marketing (rótulos livres do catálogo) — NÃO confundir com `platforms`. */
   tags?: string[];
+  /**
+   * Plataformas suportadas — espelha `products.platforms TEXT[]` (slugs de
+   * `PLATFORM_IDS`). `[]` = nenhuma declarada, NUNCA "todas". Opcional porque
+   * cache velho/API antiga/stub podem não trazer o campo — a UI trata
+   * ausência como "não informado" (ver `normalizePlatforms`).
+   */
+  platforms?: PlatformId[];
+  /**
+   * Espelha `products.delivery_mode` (`OFFLINE` | `HYBRID`). Ausente cai em
+   * `OFFLINE` (default do banco) via `normalizeDeliveryMode`.
+   */
+  deliveryMode?: DeliveryMode;
   createdAt: string;
   updatedAt?: string;
 }

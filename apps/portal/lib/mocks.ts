@@ -3,6 +3,13 @@
  * Espelham Nest `/v1/products`, `/v1/auth/*`, `/v1/licenses`, `/v1/billing/*`.
  * BFF usa estes stubs quando `API_INTERNAL_URL` não está configurado.
  * TODO(backend pronto): remover e buscar via upstream real.
+ *
+ * `platforms`/`deliveryMode` abaixo são STUB (alarme A-MOCK-001): existem só
+ * para a primeira pintura SSR da landpage não ficar incoerente (o
+ * `requestIdleCallback` de `ProductsSection` troca pelo dado real 2,5s depois).
+ * Não são fonte da verdade — a verdade é `products.platforms` /
+ * `products.delivery_mode` no banco. Se apagarmos este arquivo, estes blocos
+ * vão junto e a UI cai no estado honesto ("não informado").
  */
 import type {
   ProductView,
@@ -67,6 +74,9 @@ export const MOCK_CATALOG: ProductView[] = [
     gallery: [],
     category: "Profissional",
     tags: ["funciona-sem-internet", "3-computadores", "atendimento-prioritario"],
+    // STUB (A-MOCK-001) — slugs de `PLATFORM_IDS`; a verdade é o banco.
+    platforms: ["windows", "macos", "linux"],
+    deliveryMode: "OFFLINE",
     createdAt: "2026-09-01T12:00:00.000Z",
     updatedAt: "2026-09-01T12:00:00.000Z",
   },
@@ -121,6 +131,9 @@ export const MOCK_CATALOG: ProductView[] = [
     gallery: [],
     category: "Essencial",
     tags: ["funciona-sem-internet", "1-computador", "ajuda-em-portugues"],
+    // STUB (A-MOCK-001) — slugs de `PLATFORM_IDS`; a verdade é o banco.
+    platforms: ["windows", "macos", "web"],
+    deliveryMode: "OFFLINE",
     createdAt: "2026-09-15T12:00:00.000Z",
     updatedAt: "2026-09-15T12:00:00.000Z",
   },
@@ -159,6 +172,12 @@ export const MOCK_CATALOG: ProductView[] = [
     gallery: [],
     category: "Enterprise",
     tags: ["funciona-offline", "50-computadores", "gerente-dedicado"],
+    // STUB (A-MOCK-001) — slugs de `PLATFORM_IDS`; a verdade é o banco.
+    platforms: ["windows", "macos", "linux", "web"],
+    // Única linha HYBRID do stub, de propósito: a entrada "funciona offline e
+    // sincroniza com o servidor" precisa existir para o caminho de UI
+    // (`Offline · + sincronização`) ser exercitado na landpage.
+    deliveryMode: "HYBRID",
     createdAt: "2026-10-01T12:00:00.000Z",
     updatedAt: "2026-10-01T12:00:00.000Z",
   },
