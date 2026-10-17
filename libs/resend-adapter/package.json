@@ -6,7 +6,8 @@
   "scripts": {
     "build": "echo build resend-adapter ok",
     "lint": "echo lint resend-adapter ok",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
