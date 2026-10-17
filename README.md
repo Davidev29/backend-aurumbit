@@ -294,7 +294,7 @@ E-mails reais (14, versionados): `verify-email · reset-password · new-device-l
 
 ## 9. API — superfície
 
-Prefixo Nest **`/v1`** (exceções: `/health/*`, `/webhooks/resend`, `/metrics`). BFF Next (`apps/admin/app/api/**`, `apps/portal/app/api/**`): faz **proxy** com sessão httpOnly quando `API_INTERNAL_URL` está definido; em dev cai em stub tipado; em prod falha **502 fail-closed** (nunca mock silencioso — coberto por teste negativo que derruba a API e exige degradação visível).
+Prefixo Nest **`/v1`** (exceções: `/health/*`, `/webhooks/resend`, `/metrics`, `/docs*`). BFF Next (`apps/admin/app/api/**`, `apps/portal/app/api/**`): faz **proxy** com sessão httpOnly quando `API_INTERNAL_URL` está definido; em dev cai em stub tipado; em prod falha **502 fail-closed** (nunca mock silencioso — coberto por teste negativo que derruba a API e exige degradação visível).
 
 Inventário completo e auditado por leitura direta do código: [`.planning/ENDPOINTS-INVENTORY.md`](.planning/ENDPOINTS-INVENTORY.md) (~145 endpoints Nest + ~28 rotas BFF + 11 queues; ver o arquivo como fonte canônica).
 
@@ -309,6 +309,11 @@ Inventário completo e auditado por leitura direta do código: [`.planning/ENDPO
 | Finance (33) | overview · categories/accounts · receivables/payables + `mark-received/mark-paid` · transactions · balance · projections (hit 200 / miss 202+jobId) + `recompute` · `grants finance.read` · expenses + auto-charge + notifications · `internal/sync` |
 | Comms + Health + Audit | `POST /webhooks/resend` (Svix, sempre 200) · `GET /health/live` (sempre 200) + `/health/ready` (PG+Redis+DLQ warn, nunca 503 por DLQ) · audit via BFF |
 | Admin/ops | DLQ paginado + replay · retenção dry-run · `/metrics` (`http_requests_total`) + correlation Outbox→BullMQ→Resend→Audit |
+
+> **Nota de acurácia:** `access/check` e `check-batch` **exigem Bearer JWT** no
+> código atual (não são públicas server-to-server). As divergências entre este
+> resumo e o código estão registradas em [`docs/API.md`](docs/API.md) §14; a
+> referência de integração `v1` está em [`docs/API.md`](docs/API.md).
 
 ---
 
@@ -410,6 +415,7 @@ Qualidade contínua: `lint → typecheck → test → build → prisma validate 
 
 ## 14. Documentação
 
+- **API (integração e referência `v1`):** [`docs/API.md`](docs/API.md) — como conectar, os 4 modos de auth, contrato de envio dos programas gerenciados (ativação/validação/offline-token) e divergências conhecidas · spec [OpenAPI 3.1](docs/openapi.yaml) · **Swagger UI servido pela API em `/docs`** (`/docs-json`, `/docs-yaml`; ligado fora de produção, em prod exige `SWAGGER_ENABLED=true`)
 - **Arquitetura (leia primeiro):** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · visual interativo `docs/architecture-interactive.html` · inventário [`.planning/ENDPOINTS-INVENTORY.md`](.planning/ENDPOINTS-INVENTORY.md)
 - **Decisões:** [`.planning/PROJECT.md`](.planning/PROJECT.md) §§1–6 (offline, chaves, `finance.read`, IP/device/geo, idempotência, templates) · `docs/ADR-00{1,2,3,4,5}.md`
 - **Operação:** [`docs/RUNBOOKS/deploy.md`](docs/RUNBOOKS/deploy.md) · `env-prod.md` · `auth/billing/finance/licensing/health/correlation/webhook-replay/clone-ready.md`

@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { parseAllowlist, securityHelmetOptions } from './common/http/security';
+import { registerSwagger } from './common/openapi/swagger';
+
 // Re-export p/ compatibilidade (Fase ≤5 importava `parseAllowlist` daqui).
 export { parseAllowlist, securityHelmetOptions } from './common/http/security';
 
@@ -39,6 +41,11 @@ async function bootstrap(): Promise<void> {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
+
+  // Swagger UI + spec bruta (`/docs`, `/docs-json`, `/docs-yaml`). Liga fora de
+  // produção; em prod exige SWAGGER_ENABLED=true (fail-closed). Serve o
+  // `docs/openapi.yaml` curado — ver common/openapi/swagger.ts.
+  registerSwagger(app);
 
   // SIGTERM/SIGINT: sem isto o Nest NÃO intercepta o sinal e nenhum
   // `OnApplicationShutdown` roda — o `AuthPoolShutdown` de auth.module.ts

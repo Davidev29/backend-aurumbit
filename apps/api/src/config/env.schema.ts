@@ -107,6 +107,17 @@ const envSchema = z
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
+    // Swagger UI (docs/openapi.yaml). Default por env: ligado fora de produção;
+    // em produção só com SWAGGER_ENABLED=true (ver common/openapi/swagger.ts).
+    SWAGGER_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v?.trim().toLowerCase())
+      .refine((v) => v === undefined || ['true', 'false', '0', '1'].includes(v), {
+        message: 'SWAGGER_ENABLED deve ser true|false|1|0',
+      }),
+    SWAGGER_PATH: z.string().min(1).optional(),
+    OPENAPI_SPEC_PATH: z.string().min(1).optional(),
   })
   .superRefine((val, ctx) => {
     // Placeholders rejeitados em qualquer ambiente (D2-4). O default de teste

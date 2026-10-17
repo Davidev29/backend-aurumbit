@@ -1,0 +1,1485 @@
+openapi: 3.1.0
+info:
+  title: Aurum Bit API (v1)
+  version: "1.0.0"
+  summary: API de venda, licenciamento, cobrança e acesso dos produtos Aurum.
+  description: |
+    Especificação OpenAPI **da superfície de integração** da API Aurum Bit:
+    autenticação, autoridade de acesso (`check-access`), catálogo, ciclo de vida de
+    licença, ativação/validação de dispositivos, token offline, checkout e health.
+
+    Documentação narrativa, exemplos e o guia do programa gerenciado estão em
+    `docs/API.md`. O inventário completo (incl. admin/finance/worker-internos)
+    está em `.planning/ENDPOINTS-INVENTORY.md`.
+
+    ## Convenções
+    - Prefixo de negócio `/v1`; exceções: `/health/*`, `/metrics`, `/webhooks/resend`.
+    - Corpo em JSON. Campos de contrato do dispositivo em `snake_case`
+      (`device_hash`, `app_instance_id`, `token_iat`, `off_exp`).
+    - Toda escrita aceita `x-correlation-id` (ecoado na resposta).
+    - POSTs de cobrança/financeiro aceitam `Idempotency-Key`.
+    - Rate limits respondem `429` com `Retry-After` e `RateLimit-Policy`.
+
+    ## Divergências conhecidas
+    - `GET /v1/access/check` e `POST /v1/access/check-batch` **exigem Bearer JWT**
+      no código atual (guard global), apesar de README/inventário os citarem como
+      públicos. Ver `docs/API.md` §14.
+    - RBAC administrativo é *stub* por header (`x-role`, `x-service-token`,
+      `x-mfa`, `x-scope`) até a substituição pela cadeia real.
+  contact:
+    name: Aurum Bit — Arquitetura
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.aurumbit.com
+    description: Produção (TLS, atrás do Caddy)
+  - url: http://localhost:3000
+    description: Desenvolvimento local (Docker)
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Access
+  - name: Licensing
+  - name: Activation
+  - name: Devices
+  - name: Catalog
+  - name: Billing
+  - name: Internal
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Liveness — sempre 200 se o processo está vivo
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+                required: [status]
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness — checa Postgres e Redis (DLQ só avisa, nunca derruba)
+      security: []
+      responses:
+        "200":
+          description: Dependências de pé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadyResponse" }
+        "503":
+          description: Postgres e/ou Redis indisponíveis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadyResponse" }
+
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Cria identidade (consentimentos TERMS+PRIVACY obrigatórios)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "201":
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Confirma o e-mail com o token enviado
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { token: { type: string, maxLength: 256 } }
+              required: [token]
+      responses:
+        "200":
+          description: Confirmado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /v1/auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Reenvia o e-mail de verificação
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { email: { type: string, format: email, maxLength: 254 } }
+              required: [email]
+      responses:
+        "200":
+          description: Aceito (anti-enumeração)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentica (pode exigir MFA via ticket)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Sessão emitida (ou desafio de MFA)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/LoginResult"
+                  - $ref: "#/components/schemas/MfaChallenge"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "E-mail não verificado (EMAIL_NOT_VERIFIED)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "423":
+          description: "Conta bloqueada (ACCOUNT_LOCKED) — 5 falhas por 15 min"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotaciona os tokens da família de sessão
+      description: |
+        Aceita `refreshToken` no corpo ou o cookie httpOnly `ab_refresh`.
+        Via cookie, exige requisição same-origin (CSRF). Reuso revoga a família.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string, maxLength: 256 }
+                setCookie: { type: boolean }
+      responses:
+        "200":
+          description: Novos tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "Origem inválida (FORBIDDEN_ORIGIN) ao usar cookie"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Encerra a sessão atual e limpa o cookie de refresh
+      responses:
+        "200":
+          description: Encerrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Perfil da identidade autenticada
+      responses:
+        "200":
+          description: Perfil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/sessions:
+    get:
+      tags: [Auth]
+      summary: Lista as sessões da identidade
+      responses:
+        "200":
+          description: Sessões
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/sessions/{id}:
+    delete:
+      tags: [Auth]
+      summary: Revoga uma sessão
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Revogada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/auth/forgot:
+    post:
+      tags: [Auth]
+      summary: Inicia recuperação de senha (resposta genérica)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { email: { type: string, format: email } }
+              required: [email]
+      responses:
+        "200":
+          description: Aceito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/auth/reset:
+    post:
+      tags: [Auth]
+      summary: Redefine a senha com o token (1 uso, 60 min)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string, maxLength: 256 }
+                newPassword: { type: string, minLength: 8, maxLength: 128 }
+              required: [token, newPassword]
+      responses:
+        "200":
+          description: Redefinida
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Troca a senha do usuário autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currentPassword: { type: string, maxLength: 128 }
+                newPassword: { type: string, minLength: 8, maxLength: 128 }
+              required: [currentPassword, newPassword]
+      responses:
+        "200":
+          description: Trocada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/mfa/enroll:
+    post:
+      tags: [Auth]
+      summary: Inicia o enrollment de MFA (TOTP)
+      responses:
+        "200":
+          description: Dados de enrollment
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/mfa/verify:
+    post:
+      tags: [Auth]
+      summary: Conclui login com MFA (ticket) ou confirma enrollment (código)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+                ticket: { type: string, description: "ticket retornado por login com mfaRequired" }
+                deviceLabel: { type: string, maxLength: 128 }
+      responses:
+        "200":
+          description: Sessão emitida
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/access/check:
+    get:
+      tags: [Access]
+      summary: "Autoridade: o uso é permitido? (fonte da verdade)"
+      description: |
+        **Exige Bearer JWT no código atual** (guard global). Cache interno de 60 s
+        com o `channel` na chave. Entre entitlements vence a maior `priority`.
+      parameters:
+        - name: ownerType
+          in: query
+          required: true
+          schema: { type: string, enum: [CUSTOMER, ORGANIZATION] }
+        - name: ownerId
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: productId
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: featureCode
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64 }
+        - name: channel
+          in: query
+          required: false
+          schema: { type: string, enum: [WEB, DESKTOP] }
+      responses:
+        "200":
+          description: Decisão
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckAccessResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/access/check-batch:
+    post:
+      tags: [Access]
+      summary: Checagem em lote (1 a 50 itens)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checks:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items: { $ref: "#/components/schemas/CheckAccessQuery" }
+              required: [checks]
+      responses:
+        "200":
+          description: Decisões na mesma ordem
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/CheckAccessResponse" }
+                required: [results]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/licenses:
+    get:
+      tags: [Licensing]
+      summary: Lista licenças (ou as do titular com ?mine=1)
+      parameters:
+        - { name: mine, in: query, required: false, schema: { type: string, enum: ["1", "true"] } }
+        - { name: ownerType, in: query, required: false, schema: { type: string, enum: [CUSTOMER, ORGANIZATION] } }
+        - { name: ownerId, in: query, required: false, schema: { type: string } }
+        - { name: productId, in: query, required: false, schema: { type: string } }
+        - { name: status, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Licenças mascaradas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/License" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Licensing]
+      summary: Emite licença (admin) — plaintext da chave UMA única vez
+      security:
+        - adminRole: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IssueLicenseRequest" }
+      responses:
+        "201":
+          description: Licença emitida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  license: { $ref: "#/components/schemas/License" }
+                  key: { type: string, description: "AURUM-XXXX-XXXX-XXXX (exibir uma vez)" }
+                required: [license, key]
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/licenses/{id}:
+    get:
+      tags: [Licensing]
+      summary: Detalha a licença (mascarada)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Licença
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/License" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/licenses/{id}/history:
+    get:
+      tags: [Licensing]
+      summary: Histórico append-only da licença (admin)
+      security:
+        - adminRole: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Eventos
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/licenses/{id}/renew:
+    post:
+      tags: [Licensing]
+      summary: Renova a licença (nova linha/chave, continuidade)
+      security:
+        - adminRole: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: { type: string, description: "monthly | annual (ou months 1|12)" }
+      responses:
+        "200": { $ref: "#/components/responses/LicenseOrKey" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "Renovação ilegal (ex. LIFETIME_NO_RENEW)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /v1/licenses/{id}/suspend:
+    post:
+      tags: [Licensing]
+      summary: Suspende a licença (admin)
+      security:
+        - adminRole: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReasonRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/LicenseOrKey" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/licenses/{id}/resume:
+    post:
+      tags: [Licensing]
+      summary: Retoma a licença (admin)
+      security:
+        - adminRole: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReasonRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/LicenseOrKey" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/licenses/{id}/revoke:
+    post:
+      tags: [Licensing]
+      summary: Revoga a licença (bump token_version invalida offline-tokens)
+      security:
+        - adminRole: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ReasonRequest"
+                - type: object
+                  properties:
+                    replacedBy: { type: string, maxLength: 128 }
+      responses:
+        "200": { $ref: "#/components/responses/LicenseOrKey" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/licenses/{id}/reveal:
+    post:
+      tags: [Licensing]
+      summary: Revela a chave (1x, auditado) — admin+MFA ou scope license.read
+      description: Rate-limit de 10/h por ator. Nunca persiste a chave em claro.
+      security:
+        - adminRole: []
+        - licenseReadScope: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReasonRequest" }
+      responses:
+        "200":
+          description: Chave revelada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseId: { type: string }
+                  key: { type: string }
+                  keyMasked: { type: string }
+                  revealedAt: { type: string, format: date-time }
+        "403":
+          description: "FORBIDDEN ou MFA_REQUIRED"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/licenses/trial-issue:
+    post:
+      tags: [Licensing]
+      summary: Emite lote trial/lifetime (admin) — ativação sempre por chave
+      security:
+        - adminRole: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrialIssueRequest" }
+      responses:
+        "200":
+          description: Lote emitido (chaves em claro 1x)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrialIssueResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/licenses/internal/issue-from-payment:
+    post:
+      tags: [Internal]
+      summary: Worker→API — emite a licença a partir do pagamento confirmado
+      description: "Claim-first por eventId; replay → { duplicate: true }. Sem chave interna → 503."
+      security:
+        - internalKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Emitida ou duplicada
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v1/licenses/activate-by-key:
+    post:
+      tags: [Activation]
+      summary: Ativa por chave (programa instalado) — vincula device + emite offline-token
+      description: Pública; rate-limit `licenseReveal` por IP. Chave genérica em erro (anti-enumeração).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActivationRequest" }
+      responses:
+        "200":
+          description: Ativação concluída
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivationResult" }
+        "403":
+          description: "LICENSE_INACTIVE | DEVICE_BLOCKED"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: "KEY_INVALID (genérico)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: "DEVICE_LIMIT | DEVICE_CONFLICT"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/licenses/{id}/devices:
+    get:
+      tags: [Devices]
+      summary: Lista os dispositivos vinculados
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Dispositivos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseId: { type: string }
+                  devices:
+                    type: array
+                    items: { $ref: "#/components/schemas/DeviceView" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/licenses/{id}/devices/link:
+    post:
+      tags: [Devices]
+      summary: Vincula um dispositivo (o servidor deriva o HMAC de app_instance_id)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_hash:
+                  type: string
+                  pattern: "^[0-9a-f]{64}$"
+                  description: "hex64. Prefira app_instance_id."
+                app_instance_id: { type: string, maxLength: 128 }
+                ip:
+                  type: string
+                  maxLength: 64
+                  description: "IP local da máquina (promo). Ausente = IP da conexão."
+                label: { type: string, maxLength: 120 }
+      responses:
+        "201":
+          description: Vinculado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseId: { type: string }
+                  device: { $ref: "#/components/schemas/DeviceView" }
+                  created: { type: boolean }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "DEVICE_LIMIT (com maxDevices) | LICENSE_INACTIVE"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /v1/licenses/{id}/devices/unlink:
+    post:
+      tags: [Devices]
+      summary: Desvincula um dispositivo (o hash permanece na trilha)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+                app_instance_id: { type: string, maxLength: 128 }
+      responses:
+        "200":
+          description: Desvinculado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseId: { type: string }
+                  removed: { type: boolean }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/licenses/{id}/devices/rotate:
+    post:
+      tags: [Devices]
+      summary: Rotaciona o hash (duplo-aceite de 15 min para o hash antigo)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_device_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+                new_device_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+                label: { type: string, maxLength: 120 }
+              required: [old_device_hash, new_device_hash]
+      responses:
+        "200":
+          description: Rotacionado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseId: { type: string }
+                  old_device: { $ref: "#/components/schemas/DeviceView" }
+                  new_device: { $ref: "#/components/schemas/DeviceView" }
+                  dual_accept_until: { type: string, format: date-time }
+        "409":
+          description: "ALREADY_ROTATED | DEVICE_CONFLICT | INVALID_ROTATE | UNKNOWN_DEVICE"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /v1/licenses/{id}/devices/{hash}/block:
+    post:
+      tags: [Devices]
+      summary: Bloqueia um dispositivo (admin)
+      security:
+        - adminRole: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: hash, in: path, required: true, schema: { type: string, pattern: "^[0-9a-f]{64}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { reason: { type: string, maxLength: 500 } }
+              required: [reason]
+      responses:
+        "200":
+          description: Bloqueado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseId: { type: string }
+                  device: { $ref: "#/components/schemas/DeviceView" }
+        "409":
+          description: UNKNOWN_DEVICE
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /v1/licenses/{id}/validate:
+    post:
+      tags: [Devices]
+      summary: Validação online do dispositivo (sempre 200; o corpo decide)
+      description: |
+        Pública; rate-limit `devicePoll` (120/min por IP). Detecta clone por
+        `token_iat` futuro, `ctr` regressivo e geo-IP aproximada (só em memória).
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ValidateRequest" }
+      responses:
+        "200":
+          description: Decisão (allow/deny no corpo, nunca por status HTTP)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidateResponse" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/licenses/{id}/offline-token:
+    get:
+      tags: [Devices]
+      summary: Emite/renova o JWT offline (exige online + device active)
+      description: Pública; rate-limit `devicePoll`. `off_exp = min(iat + 7d, lic_exp + 7d)`.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - name: device_hash
+          in: query
+          required: true
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+      responses:
+        "200":
+          description: Token emitido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OfflineTokenResponse" }
+        "403":
+          description: "LICENSE_REVOKED | LICENSE_SUSPENDED | LICENSE_INACTIVE | EXPIRED | DEVICE_BLOCKED | CLONE_SUSPECT"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: "LICENSE_NOT_FOUND | UNKNOWN_DEVICE"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: DEVICE_NOT_ACTIVE
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /v1/products:
+    get:
+      tags: [Catalog]
+      summary: Catálogo público de produtos ACTIVE
+      security: []
+      responses:
+        "200":
+          description: Produtos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+
+  /v1/products/{code}:
+    get:
+      tags: [Catalog]
+      summary: Detalhe do produto (com versões e imagens)
+      security: []
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Produto
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/products/{code}/plans:
+    get:
+      tags: [Catalog]
+      summary: Planos do produto
+      security: []
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Planos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Plan" }
+
+  /v1/plans:
+    get:
+      tags: [Catalog]
+      summary: Lista planos
+      security: []
+      parameters:
+        - { name: productCode, in: query, required: false, schema: { type: string } }
+        - { name: status, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Planos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Plan" }
+
+  /v1/features:
+    get:
+      tags: [Catalog]
+      summary: Lista features (com canal)
+      security: []
+      parameters:
+        - { name: kind, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Features
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Feature" }
+
+  /v1/billing/checkout:
+    post:
+      tags: [Billing]
+      summary: Cria a sessão de checkout (invoice PENDING, idempotente por orderId)
+      description: Nunca retorna `done` — a licença nasce no PaymentConfirmed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CheckoutRequest" }
+      responses:
+        "201":
+          description: Sessão PENDING
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckoutSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /v1/billing/checkout/{orderId}:
+    get:
+      tags: [Billing]
+      summary: Consulta a sessão de checkout (polling até PAID + licenseId)
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Estado atual
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckoutSession" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/billing/webhooks/asaas:
+    post:
+      tags: [Billing]
+      summary: Webhook Asaas (token timing-safe, sempre 200, dedupe por externalId)
+      security: []
+      parameters:
+        - name: asaas-access-token
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Recebido (idempotente)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean }
+                  duplicate: { type: boolean }
+                  eventId: { type: string }
+                required: [received]
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "JWT HS256 de 15 min (login/refresh). Claims: sub, sid, jti, iss, aud, exp."
+    internalKey:
+      type: apiKey
+      in: header
+      name: x-internal-key
+      description: "Worker→API. Igual a INTERNAL_WEBHOOK_KEY; ausente ⇒ 503 fail-closed."
+    adminRole:
+      type: apiKey
+      in: header
+      name: x-role
+      description: "RBAC stub: 'admin'. Alternativa: x-service-token (licensing)."
+    licenseReadScope:
+      type: apiKey
+      in: header
+      name: x-scope
+      description: "Concessão explícita para reveal sem ser admin; valor 'license.read'."
+
+  responses:
+    BadRequest:
+      description: Requisição inválida
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    Unauthorized:
+      description: Não autenticado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    Forbidden:
+      description: Sem permissão
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    NotFound:
+      description: Não encontrado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    RateLimited:
+      description: Limite excedido
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Segundos até nova tentativa
+        RateLimit-Policy:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    ServiceUnavailable:
+      description: Indisponível (chave interna ausente ou dependência down)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    LicenseOrKey:
+      description: Operação aplicada
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+
+  schemas:
+    ApiError:
+      type: object
+      description: "Envelope de erro (RFC-7807 simplificado). `code` é estável."
+      properties:
+        code: { type: string, examples: ["DEVICE_LIMIT", "RATE_LIMITED", "EXPIRED"] }
+        message: { type: string }
+        correlationId: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+          description: Nunca contém PII.
+      required: [code, message]
+
+    OkResponse:
+      type: object
+      properties: { ok: { type: boolean, const: true } }
+      required: [ok]
+
+    ReadyResponse:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, error] }
+        postgres: { type: string, enum: [up, down] }
+        redis: { type: string, enum: [up, down] }
+        dlq:
+          type: object
+          properties:
+            depth: { type: integer }
+            warn: { type: boolean }
+      required: [status, postgres, redis]
+
+    RegisterRequest:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        consents:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [TERMS, PRIVACY] }
+              version: { type: string, maxLength: 64 }
+            required: [type, version]
+        deviceLabel: { type: string, maxLength: 128 }
+      required: [email, password, consents]
+
+    LoginRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, maxLength: 128 }
+        deviceLabel: { type: string, maxLength: 128 }
+      required: [email, password]
+
+    LoginResult:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        tokenType: { type: string, const: Bearer }
+        expiresIn: { type: integer, description: "Segundos (default 900)." }
+      required: [accessToken, refreshToken, expiresIn]
+
+    MfaChallenge:
+      type: object
+      properties:
+        mfaRequired: { type: boolean, const: true }
+        mfaTicket: { type: string }
+        expiresIn: { type: integer, description: "300 s." }
+      required: [mfaRequired, mfaTicket]
+
+    MeResponse:
+      type: object
+      properties:
+        identityId: { type: string }
+        email: { type: string }
+        emailVerified: { type: boolean }
+        mfaEnabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [identityId, email, emailVerified, mfaEnabled]
+
+    Session:
+      type: object
+      properties:
+        id: { type: string }
+        deviceLabel: { type: string, nullable: true }
+        status: { type: string }
+        expiresAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+
+    CheckAccessQuery:
+      type: object
+      properties:
+        ownerType: { type: string, enum: [CUSTOMER, ORGANIZATION] }
+        ownerId: { type: string, minLength: 1, maxLength: 128 }
+        productId: { type: string, minLength: 1, maxLength: 128 }
+        featureCode: { type: string, minLength: 1, maxLength: 64 }
+        channel: { type: string, enum: [WEB, DESKTOP] }
+      required: [ownerType, ownerId, productId, featureCode]
+
+    CheckAccessResponse:
+      type: object
+      description: |
+        `degraded:true` ⇔ dentro da graça (banner, sem ações destrutivas).
+        `errorCode` presente apenas quando `allow:false`.
+      properties:
+        allow: { type: boolean }
+        degraded: { type: boolean }
+        reason:
+          type: string
+          enum:
+            [ACTIVE, LIFETIME, GRACE, NOT_FOUND, REVOKED, SUSPENDED, EXPIRED, CHANNEL_MISMATCH, DEVICE_LIMIT]
+        entitlementId: { type: string }
+        origin: { type: string, enum: [BONUS, CONTRACT, SUBSCRIPTION, LICENSE] }
+        priority: { type: integer }
+        quotaValue: { type: string, nullable: true }
+        errorCode: { type: string }
+        cached: { type: boolean }
+      required: [allow, degraded, reason]
+
+    ActivationRequest:
+      type: object
+      description: "Ativação por chave (Modo B). O Modo A usa o BFF do portal com sessão."
+      properties:
+        key: { type: string, pattern: "^AURUM-[A-Z0-9-]+$", minLength: 10, maxLength: 64 }
+        app_instance_id: { type: string, maxLength: 128 }
+        ip: { type: string, maxLength: 64 }
+        label: { type: string, maxLength: 120 }
+      required: [key]
+
+    ActivationResult:
+      type: object
+      properties:
+        mode: { type: string, enum: [account, key] }
+        stub: { type: boolean, description: "true apenas no stub local do BFF sem backend." }
+        licenseId: { type: string }
+        keyMasked: { type: string, nullable: true }
+        productId: { type: string, nullable: true }
+        planId: { type: string, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        graceUntil: { type: string, format: date-time, nullable: true }
+        device_hash: { type: string, description: "hex64 (HMAC derivado no servidor)." }
+        deviceCreated: { type: boolean }
+        offlineToken: { type: string }
+        off_exp: { type: integer, nullable: true, description: "epoch em segundos." }
+        token_version: { type: integer }
+      required: [mode, licenseId, device_hash, offlineToken]
+
+    DeviceView:
+      type: object
+      properties:
+        device_hash: { type: string }
+        label: { type: string, nullable: true }
+        status: { type: string, enum: [active, blocked, rotated] }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        ip_hint: { type: string, nullable: true, description: "IP mascarado /24." }
+        cloned_suspect: { type: boolean }
+
+    ValidateRequest:
+      type: object
+      properties:
+        device_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        ip: { type: string, maxLength: 64 }
+        country: { type: string, maxLength: 8 }
+        token_iat: { type: integer, minimum: 0, description: "iat (epoch s) do token apresentado." }
+        ctr: { type: integer, minimum: 0, description: "Contador do token (rollback = clone)." }
+      required: [device_hash]
+
+    ValidateResponse:
+      type: object
+      properties:
+        licenseId: { type: string }
+        device_hash: { type: string }
+        allow: { type: boolean }
+        degraded: { type: boolean }
+        reason:
+          type: string
+          enum:
+            [ACTIVE, LIFETIME, GRACE, DUAL_ACCEPT_ROTATE,
+             REVOKED, SUSPENDED, EXPIRED, LICENSE_NOT_FOUND, LICENSE_INACTIVE,
+             UNKNOWN_DEVICE, DEVICE_BLOCKED, CLONE_SUSPECT, ROTATED_EXPIRED]
+        errorCode: { type: string, description: "Presente quando allow=false." }
+      required: [licenseId, device_hash, allow, degraded, reason]
+
+    OfflineTokenResponse:
+      type: object
+      properties:
+        licenseId: { type: string }
+        device_hash: { type: string }
+        token: { type: string, description: "JWT HS256 (kid local-hs256-1)." }
+        kid: { type: string }
+        lic_exp: { type: integer, nullable: true, description: "epoch s (null = vitalícia)." }
+        grace_until: { type: integer, nullable: true, description: "epoch s." }
+        off_exp: { type: integer, description: "epoch s = min(iat+7d, lic_exp+7d)." }
+        token_version: { type: integer }
+      required: [token, off_exp, token_version]
+
+    License:
+      type: object
+      properties:
+        id: { type: string }
+        ownerType: { type: string, enum: [CUSTOMER, ORGANIZATION] }
+        ownerId: { type: string }
+        productId: { type: string }
+        planId: { type: string, nullable: true }
+        status: { type: string, enum: [pending_payment, active, grace, suspended, expired, revoked] }
+        keyMasked: { type: string, description: "AURUM-••••-••••-AB12" }
+        startsAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        graceUntil: { type: string, format: date-time, nullable: true }
+        tokenVersion: { type: integer }
+        maxDevices: { type: integer }
+
+    IssueLicenseRequest:
+      type: object
+      properties:
+        ownerId: { type: string, minLength: 1, maxLength: 128 }
+        ownerLabel: { type: string, maxLength: 120 }
+        productId: { type: string, minLength: 1, maxLength: 128 }
+        planId: { type: string, maxLength: 128 }
+        months: { type: integer, enum: [1, 12] }
+        maxDevices: { type: integer, minimum: 1, maximum: 50 }
+        paidAt: { type: string, format: date-time }
+        actor: { type: string, maxLength: 128 }
+      required: [ownerId, productId]
+
+    ReasonRequest:
+      type: object
+      properties:
+        actor: { type: string, minLength: 1 }
+        reason: { type: string, minLength: 10 }
+      required: [reason]
+
+    TrialIssueRequest:
+      type: object
+      properties:
+        productId: { type: string }
+        planId: { type: string }
+        qty: { type: integer, minimum: 1, maximum: 100 }
+        maxDevices: { type: integer, minimum: 1, maximum: 100 }
+        expiresInHours: { type: integer, minimum: 1, maximum: 8760 }
+        infinite: { type: boolean }
+        ownerLabel: { type: string, maxLength: 120 }
+        note: { type: string, maxLength: 120 }
+        startsAt: { type: string }
+      required: [productId]
+
+    TrialIssueResult:
+      type: object
+      properties:
+        batchId: { type: string }
+        kind: { type: string, enum: [trial, lifetime] }
+        expiresAt: { type: string, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              licenseId: { type: string }
+              key: { type: string }
+              keyMasked: { type: string }
+              expiresAt: { type: string, nullable: true }
+      required: [batchId, kind, items]
+
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [DRAFT, ACTIVE] }
+        machinesAllowed: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProductDetail:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+        - type: object
+          properties:
+            versions:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  version: { type: string }
+                  changelog: { type: string, nullable: true }
+                  createdAt: { type: string, format: date-time }
+            images:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  filename: { type: string }
+                  originalName: { type: string }
+                  mime: { type: string }
+                  size: { type: integer }
+                  url: { type: string }
+                  createdAt: { type: string, format: date-time }
+
+    Plan:
+      type: object
+      properties:
+        id: { type: string }
+        productCode: { type: string }
+        code: { type: string }
+        name: { type: string }
+        priceCents: { type: integer, description: "Preço imutável (novo preço = nova linha)." }
+        billingInterval: { type: string, enum: [MONTH, YEAR, ONE_TIME] }
+        validFrom: { type: string, format: date-time }
+        validTo: { type: string, format: date-time, nullable: true }
+        status: { type: string }
+        supersededBy: { type: string, nullable: true }
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/PlanFeature" }
+
+    PlanFeature:
+      type: object
+      properties:
+        featureCode: { type: string }
+        featureName: { type: string }
+        kind: { type: string }
+        channel: { type: string, enum: [WEB, DESKTOP, BOTH] }
+        unit: { type: string, nullable: true }
+        value: { type: string, nullable: true }
+
+    Feature:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        channel: { type: string, enum: [WEB, DESKTOP, BOTH] }
+        unit: { type: string, nullable: true }
+
+    CheckoutRequest:
+      type: object
+      description: "orderId é a chave de idempotência (UNIQUE)."
+      properties:
+        orderId: { type: string }
+        ownerType: { type: string, enum: [CUSTOMER, ORGANIZATION] }
+        ownerId: { type: string }
+        productId: { type: string }
+        planId: { type: string }
+        billingInterval: { type: string, enum: [MONTH, YEAR, ONE_TIME] }
+      required: [orderId]
+
+    CheckoutSession:
+      type: object
+      properties:
+        orderId: { type: string }
+        status: { type: string, enum: [PENDING, PAID, FAILED, EXPIRED] }
+        invoiceId: { type: string }
+        amountCents: { type: integer }
+        asaasUrl: { type: string, nullable: true }
+        licenseId: { type: string, nullable: true, description: "Preenchido só após PaymentConfirmed." }
+      required: [orderId, status]

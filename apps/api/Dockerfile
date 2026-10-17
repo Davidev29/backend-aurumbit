@@ -21,6 +21,10 @@ WORKDIR /app/apps/api
 COPY apps/api/package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=builder /app/apps/api/dist ./dist
+# Spec OpenAPI servida pelo Swagger UI (common/openapi/swagger.ts) — resolvida
+# subindo a árvore a partir do cwd (/app/apps/api → /app/docs). Ou use
+# OPENAPI_SPEC_PATH para apontar outro caminho.
+COPY docs/openapi.yaml /app/docs/openapi.yaml
 RUN chown -R nestjs:nodejs /app/apps/api
 USER nestjs
 EXPOSE 3000
