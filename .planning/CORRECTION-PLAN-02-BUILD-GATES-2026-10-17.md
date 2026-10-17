@@ -210,7 +210,41 @@ candidate_files:   docs/CI-VERDE.md, .planning/STATE.md
 mudança:           registrar os gates novos (typecheck 12/12, gates:check, catalog:check) e o que cada
                    um reprova. STATE.md recebe o resumo da onda.
 depends_on:        T0-5
-status:            ready
+status:            done (commit docs(ci))
+```
+
+#### T0-7 — Lacunas de gate nas libs (achadas pelo próprio `gates:check`)
+```
+owner_role:        infra
+candidate_files:   libs/offline-token/package.json, libs/asaas-adapter/package.json,
+                   libs/resend-adapter/package.json, libs/database/package.json, libs/database/tsconfig.json,
+                   tools/gates-matrix.json
+mudança:           offline-token ganhou `lint`; asaas/resend-adapter ganharam `test`
+                   (vitest --passWithNoTests); libs/database (0 importadores, factory importando clientes
+                   Prisma nunca gerados, `prisma generate` falhando por divergir do Prisma 6.8.0 do deploy
+                   — viola a regra 5 do CI-VERDE) ficou com lint+test e isenção explícita de
+                   build/typecheck (motivo + review_by: D-5). Nada foi deletado nem "consertado" pela metade.
+verificação:       pnpm gates:check → 12 pacotes, 6 isenções vivas impressas; turbo typecheck 11 reais verdes
+controle negativo: (matriz) declarar isenção já cumprida REPROVA; pacote sem tarefa REPROVA
+status:            done (commit build(libs))
+```
+
+#### T0-8 — Destravar o `e2e-compose-efemero` (CI vermelho pré-existente)
+```
+owner_role:        infra
+candidate_files:   deploy/scripts/gen-dev-env.sh (novo), .github/workflows/ci.yml, .env.example
+mudança:           o job fazia `cp .env.example .env` e subia o compose — mas o fail-fast D2-4
+                   (`apps/api/src/config/env.schema.ts:24-52`) rejeita `TROCAR_*` em QUALQUER ambiente:
+                   a API entrava em crash-loop (`Env inválida (fail-fast): JWT_SECRET ... MFA_ENC_KEY ...`)
+                   e o `/health/ready` nunca ficava ok (prova: run 39075339998, passo "aguarda /health/ready").
+                   Novo `gen-dev-env.sh` (idempotente, não imprime valores, `--env-file`) completa
+                   JWT_SECRET/MFA_ENC_KEY; AUTH_JWT_SECRET real é espelhado (o schema aborta divergência).
+                   CI chama o script após o `cp`; `.env.example` deixa de prometer que placeholder sobe.
+verificação:       local (WSL + node): .env gerado passa no `validateEnv` REAL (`apps/api/dist/src/config/env.schema.js`),
+                   2ª execução idempotente, diff só nas 2 linhas, `bash -n` ok
+controle negativo: placeholder injetado REPROVA no validateEnv; `test-only-secret-*` continua na whitelist
+                   (setup-e2e do jest não quebra)
+status:            done (commit fix(ci))
 ```
 
 ---
