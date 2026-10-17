@@ -78,7 +78,7 @@ describe('BillingService — idempotência (replay não duplica)', () => {
     );
     expect(out.id).toBe('pay-1');
     expect(queries.filter((q) => q.sql.startsWith('INSERT INTO payments'))).toHaveLength(1);
-    expect(emittedOutbox(queries, 'PaymentConfirmed')).toBe(false);
+    expect(emittedOutbox(queries, 'billing.payment.confirmed.v1')).toBe(false);
   });
 
   it('createSubscription: replay da mesma Idempotency-Key retorna sem INSERT', async () => {
@@ -103,7 +103,7 @@ describe('BillingService — idempotência (replay não duplica)', () => {
     const out = await svc.confirmPayment('pay-1', { amountCents: 1000, paidAt: '2026-10-10T00:00:00.000Z' });
     expect(out.status).toBe('CONFIRMED');
     expect(queries.some((q) => q.sql.startsWith('UPDATE payments'))).toBe(false);
-    expect(emittedOutbox(queries, 'PaymentConfirmed')).toBe(false);
+    expect(emittedOutbox(queries, 'billing.payment.confirmed.v1')).toBe(false);
   });
 });
 
@@ -164,7 +164,7 @@ describe('BillingService — hook PaymentConfirmed emite outbox', () => {
     });
     expect(out.payment.status).toBe('CONFIRMED');
     expect(out.invoice.status).toBe('PAID');
-    expect(emittedOutbox(queries, 'PaymentConfirmed')).toBe(true);
+    expect(emittedOutbox(queries, 'billing.payment.confirmed.v1')).toBe(true);
   });
 
   it('evento fora de ordem (version antiga) não sobrescreve', async () => {

@@ -25,6 +25,7 @@ import {
   IllegalTransitionError,
   assertTransition,
   buildInvoiceNumber,
+  outboxTypeForPaymentStatus,
   paymentConfirmedEventId,
 } from './billing-transitions';
 
@@ -51,8 +52,9 @@ function assertBillingInterval(v: unknown, where: string): asserts v is BillingI
   }
 }
 
-// Hook PaymentConfirmed: emite outbox (lado access/licensing consome —
-// NÃO implementado aqui). Consumidores idempotentes por eventId.
+// Hook de pagamento confirmado: emite outbox `billing.payment.confirmed.v1`
+// (lado access/licensing consome — NÃO implementado aqui). Consumidores
+// idempotentes por eventId.
 export const BILLING_OUTBOX_AGGREGATES = ['Payment', 'Invoice', 'Subscription', 'Refund'] as const;
 
 // Fase 4 — Billing core. Pool PG próprio (DATABASE_URL_BILLING); sem
@@ -609,10 +611,11 @@ export class BillingService {
   }
 
   /**
-   * Hook PaymentConfirmed (PROJECT.md §5): exige `paidAt + amount`
+   * Hook de pagamento confirmado (PROJECT.md §5): exige `paidAt + amount`
    * casando; fora de ordem (version/occurredAt antigo) nunca regride
-   * terminal — retorna o atual sem sobrescrever. Emite outbox
-   * `PaymentConfirmed` (lado access/licensing consome — fora deste módulo).
+   * terminal — retorna o atual sem sobrescrever. Emite outbox com o
+   * tópico canônico `billing.payment.confirmed.v1` (lado access/licensing
+   * consome — fora deste módulo).
    * Fatura vinculada (PENDING/OVERDUE) vira PAID na mesma transação.
    *
    * Guarda de concorrência: `getPayment()` + `check()` rodam FORA da txn,
@@ -622,8 +625,8 @@ export class BillingService {
    * (replay idempotente, não erro). O outbox usa eventId determinístico
    * (`paymentConfirmedEventId(payment.id)`) + `ON CONFLICT DO NOTHING`,
    * então `UNIQUE outbox_events_eventId_key` vira backstop real do
-   * `UNIQUE(eventId)` — nunca 2 linhas `PaymentConfirmed` para o mesmo
-   * pagamento.
+   * `UNIQUE(eventId)` — nunca 2 linhas de
+   * `billing.payment.confirmed.v1` para o mesmo pagamento.
    */
   async confirmPayment(id: string, dto: ConfirmPaymentDto) {
     const current = await this.getPayment(id);
@@ -668,7 +671,7 @@ export class BillingService {
       );
       if (rows.length === 0) {
         // Perdedor da race (webhook duplicado): replay idempotente, sem
-        // segundo PaymentConfirmed no outbox e sem 500.
+        // segunda linha `billing.payment.confirmed.v1` no outbox e sem 500.
         await client.query('ROLLBACK');
         return this.getPayment(id);
       }
@@ -690,11 +693,17 @@ export class BillingService {
           invoice = invRows[0];
         }
       }
+      // `type` do outbox = tópico canônico da fila (fonte única:
+      // billing-transitions.ts) — o relay publica por ele e `routeBillingTopic`
+      // roteia `billing.payment.confirmed.v1` p/ o fan-out. `CONFIRMED` sempre
+      // tem tópico: o guard só estreita `string | null` p/ `string`.
+      const outboxType = outboxTypeForPaymentStatus('CONFIRMED');
+      if (!outboxType) throw new Error('CONFIRMED sem tópico de outbox');
       await this.insertOutbox(
         client,
         'Payment',
         id,
-        'PaymentConfirmed',
+        outboxType,
         {
           paymentId: id,
           invoiceId: payment.invoiceId,
