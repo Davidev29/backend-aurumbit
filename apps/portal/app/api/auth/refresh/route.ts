@@ -1,63 +1,52 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { rotateUpstreamRefresh } from "@/lib/auth-upstream";
+import {
+  clearAuthCookies,
+  cookieContext,
+  REFRESH_COOKIE,
+  SESSION_COOKIE,
+  setAuthCookies,
+} from "@/lib/session";
 import { resolveUpstream } from "@/lib/upstream";
-
-const API_INTERNAL_URL = process.env.API_INTERNAL_URL;
-const SESSION_COOKIE = "aurum_portal_session";
-const REFRESH_COOKIE = "aurum_portal_refresh";
-
-function cookieOpts(maxAge?: number) {
-  return {
-    httpOnly: true as const,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: maxAge ?? 60 * 60 * 8,
-  };
-}
-
-function clearAuth(res: NextResponse) {
-  res.cookies.set(SESSION_COOKIE, "", { ...cookieOpts(0) });
-  res.cookies.set(REFRESH_COOKIE, "", { ...cookieOpts(0), path: "/api/auth" });
-}
 
 /**
  * BFF `POST /api/auth/refresh` — rotação do par sessão/refresh.
- * Lê `aurum_portal_refresh` (httpOnly, nunca exposto ao JS) e troca por
- * um par novo no upstream. Falha → limpa os 2 cookies + 401.
+ * Lê `aurum_portal_refresh` (httpOnly, nunca exposto ao JS) e troca por um par
+ * novo no upstream. Falha → limpa os cookies + 401 (o cliente reabre o login).
  */
 export async function POST(req: NextRequest) {
-  const __up = resolveUpstream();
-  if (__up.kind === "missing") return __up.response;
+  const up = resolveUpstream();
+  if (up.kind === "missing") return up.response;
+
+  const ctx = cookieContext(req);
   const refresh = req.cookies.get(REFRESH_COOKIE)?.value;
 
-  if (API_INTERNAL_URL && refresh) {
+  if (up.kind === "upstream") {
+    if (!refresh) {
+      const res = NextResponse.json(
+        { code: "REVOKED", message: "Sessão expirada. Entre de novo." },
+        { status: 401 }
+      );
+      clearAuthCookies(res, ctx);
+      return res;
+    }
     try {
-      const upstream = await fetch(`${API_INTERNAL_URL}/v1/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refresh }),
-      });
-      const data = (await upstream.json().catch(() => ({}))) as {
-        accessToken?: string;
-        refreshToken?: string;
-      };
-      if (!upstream.ok || typeof data.accessToken !== "string" || !data.accessToken) {
+      const rotated = await rotateUpstreamRefresh(up.base, refresh);
+      if (!rotated) {
         const res = NextResponse.json(
           { code: "REVOKED", message: "Sessão expirada. Entre de novo." },
           { status: 401 }
         );
-        clearAuth(res);
+        clearAuthCookies(res, ctx);
         return res;
       }
       const res = NextResponse.json({ ok: true });
-      res.cookies.set(SESSION_COOKIE, data.accessToken, cookieOpts(15 * 60));
-      if (typeof data.refreshToken === "string" && data.refreshToken) {
-        res.cookies.set(REFRESH_COOKIE, data.refreshToken, {
-          ...cookieOpts(30 * 24 * 3600),
-          path: "/api/auth",
-        });
-      }
+      setAuthCookies(
+        res,
+        { accessToken: rotated.accessToken, refreshToken: rotated.refreshToken },
+        ctx
+      );
       return res;
     } catch {
       return NextResponse.json(
@@ -69,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   // Stub (sem backend): sessão local não expira — nada a rotacionar.
   const session = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!API_INTERNAL_URL && session) {
+  if (session) {
     return NextResponse.json({ ok: true, stub: true });
   }
 
@@ -77,6 +66,6 @@ export async function POST(req: NextRequest) {
     { code: "REVOKED", message: "Sessão expirada. Entre de novo." },
     { status: 401 }
   );
-  clearAuth(res);
+  clearAuthCookies(res, ctx);
   return res;
 }

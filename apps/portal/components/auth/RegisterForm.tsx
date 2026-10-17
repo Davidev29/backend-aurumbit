@@ -8,7 +8,8 @@ import { Eye, EyeOff, AlertCircle, Check, CheckCircle, User, Mail, LockKeyhole, 
 import { useState } from "react";
 import { Button, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { useToastHelpers } from "@/components/ui/Toast";
+import { authErrorMessage } from "@/lib/auth-errors";
+import type { AuthFormResult } from "@/types";
 
 const registerSchema = z
   .object({
@@ -33,7 +34,7 @@ const registerSchema = z
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 interface RegisterFormProps {
-  onSubmit: (data: RegisterFormData) => Promise<{ ok: boolean; mfaRequired?: boolean }>;
+  onSubmit: (data: RegisterFormData) => Promise<AuthFormResult>;
   onSwitchToLogin: () => void;
   isLoading?: boolean;
 }
@@ -57,7 +58,6 @@ function calculatePasswordStrength(password: string): { score: number; label: st
 export function RegisterForm({ onSubmit, onSwitchToLogin, isLoading = false }: RegisterFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const { error: showError } = useToastHelpers();
 
   const {
     register,
@@ -92,16 +92,23 @@ export function RegisterForm({ onSubmit, onSwitchToLogin, isLoading = false }: R
     setApiError(null);
     try {
       const result = await onSubmit(data);
+      // Cadastro criado aguardando confirmação de e-mail NÃO é erro: o modal
+      // troca para o aviso "confirme seu e-mail".
       if (!result.ok && !result.mfaRequired) {
-        setApiError("Erro ao criar conta. Verifique os dados e tente novamente.");
-        showError("Erro no cadastro", "Erro ao criar conta. Verifique os dados e tente novamente.");
+        setApiError(
+          authErrorMessage(
+            result.code,
+            result.message,
+            "Não foi possível criar a conta. Confira os dados e tente novamente."
+          )
+        );
       }
       return result;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro inesperado. Tente novamente.";
+      const message =
+        err instanceof Error ? err.message : "Erro inesperado. Tente novamente.";
       setApiError(message);
-      showError("Erro no cadastro", message);
-      return { ok: false };
+      return { ok: false, message };
     }
   };
 

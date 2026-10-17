@@ -1,39 +1,44 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { MOCK_ME_CUSTOMER } from "@/lib/mocks";
+import { fetchUpstreamIdentity, toMeResponse } from "@/lib/auth-upstream";
+import { cookieContext, setAuthCookies } from "@/lib/session";
 import { resolveUpstream } from "@/lib/upstream";
-
-const API_INTERNAL_URL = process.env.API_INTERNAL_URL;
-const SESSION_COOKIE = "aurum_portal_session";
-const REFRESH_COOKIE = "aurum_portal_refresh";
-
-function cookieOpts(maxAge?: number) {
-  return {
-    httpOnly: true as const,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: maxAge ?? 60 * 60 * 8,
-  };
-}
 
 /**
  * BFF `POST /api/auth/login` → Nest `POST /v1/auth/login`.
- * Sessão em cookies httpOnly (nunca expõe JWT ao JS).
+ *
+ * - `rememberMe` é do formulário, NÃO do Nest (`forbidNonWhitelisted` → 400):
+ *   vira apenas a duração dos cookies (lembrado = persiste; senão = cookie de
+ *   sessão do navegador) e nunca segue no corpo.
+ * - Sessão em cookies httpOnly (JWT nunca exposto ao JS).
+ * - Erros do backend (401 `INVALID_CREDENTIALS`, 403 `EMAIL_NOT_VERIFIED`,
+ *   423 `ACCOUNT_LOCKED`, 429 `RATE_LIMITED`) sobem com código original para
+ *   a UI explicar o que fazer em vez de "credenciais inválidas" genérico.
  */
 export async function POST(req: NextRequest) {
-  // Fase 8 (carry Fase 7): prod sem upstream → 502, nunca stub silencioso.
-  const __up = resolveUpstream();
-  if (__up.kind === "missing") return __up.response;
-  const body = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
-  const email = typeof body.email === "string" ? body.email : "";
+  const up = resolveUpstream();
+  if (up.kind === "missing") return up.response;
 
-  if (API_INTERNAL_URL) {
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  const remember = body.rememberMe !== false;
+  const ctx = cookieContext(req);
+
+  if (!email || !password) {
+    return NextResponse.json(
+      { code: "BAD_REQUEST", message: "Informe e-mail e senha." },
+      { status: 400 }
+    );
+  }
+
+  if (up.kind === "upstream") {
     try {
-      const upstream = await fetch(`${API_INTERNAL_URL}/v1/auth/login`, {
+      const upstream = await fetch(`${up.base}/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ email, password, deviceLabel: "portal-web" }),
       });
       const data = (await upstream.json().catch(() => ({}))) as {
         mfaRequired?: boolean;
@@ -51,12 +56,21 @@ export async function POST(req: NextRequest) {
           { status: 502 }
         );
       }
-      const me = { ...MOCK_ME_CUSTOMER, email: email || MOCK_ME_CUSTOMER.email, mfaRequired: false };
-      const res = NextResponse.json({ ok: true, mfaRequired: false, me });
-      res.cookies.set(SESSION_COOKIE, data.accessToken, cookieOpts(15 * 60));
-      if (typeof data.refreshToken === "string" && data.refreshToken) {
-        res.cookies.set(REFRESH_COOKIE, data.refreshToken, { ...cookieOpts(30 * 24 * 3600), path: "/api/auth" });
-      }
+      // Identidade real (best-effort): quando o `/v1/auth/me` responde, o
+      // cliente já entra com o titular certo em vez de um nome fictício.
+      const identity = await fetchUpstreamIdentity(up.base, data.accessToken).catch(() => null);
+      const me = identity?.identity ? toMeResponse(identity.identity) : undefined;
+
+      const res = NextResponse.json({
+        ok: true,
+        mfaRequired: false,
+        ...(me ? { me } : {}),
+      });
+      setAuthCookies(
+        res,
+        { accessToken: data.accessToken, refreshToken: data.refreshToken, remember },
+        ctx
+      );
       return res;
     } catch {
       return NextResponse.json(
@@ -66,15 +80,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!email || !body.password) {
-    return NextResponse.json(
-      { code: "BAD_REQUEST", message: "Informe e-mail e senha." },
-      { status: 400 }
-    );
-  }
-
-  // Stub: qualquer senha ≥ 1 aceita; e-mail vira identidade.
-  if (body.password === "errada") {
+  // Stub dev-only (sem upstream, nunca em prod): qualquer senha ≥ 1 é aceita;
+  // e-mail vira identidade. `errada` simula credencial inválida.
+  if (password === "errada") {
     return NextResponse.json(
       { code: "INVALID_CREDENTIALS", message: "Credenciais inválidas." },
       { status: 401 }
@@ -82,6 +90,10 @@ export async function POST(req: NextRequest) {
   }
   const me = { ...MOCK_ME_CUSTOMER, email };
   const res = NextResponse.json({ ok: true, mfaRequired: false, me });
-  res.cookies.set(SESSION_COOKIE, `stub-portal-session-${me.id}`, cookieOpts());
+  setAuthCookies(
+    res,
+    { accessToken: `stub-portal-session-${me.id}`, remember },
+    ctx
+  );
   return res;
 }

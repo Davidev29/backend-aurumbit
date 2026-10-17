@@ -127,7 +127,28 @@ export interface AuthResponse {
   mfaRequired?: boolean;
   mfaTicket?: string;
   me?: MeResponse;
+  /** Cadastro criado aguardando confirmação de e-mail (sem sessão ainda). */
+  verificationRequired?: boolean;
+  /** E-mail alvo do cadastro/verificação (eco do formulário). */
+  email?: string;
 }
+
+/**
+ * Resultado normalizado devolvido pelos formulários de auth ao modal.
+ * Erros do backend chegam aqui com `code` + `message` ORIGINAIS (ex.
+ * `EMAIL_NOT_VERIFIED`, `ACCOUNT_LOCKED`, `RATE_LIMITED`) para a UI explicar o
+ * próximo passo em vez de sempre dizer "credenciais inválidas".
+ */
+export interface AuthFormResult {
+  ok: boolean;
+  mfaRequired?: boolean;
+  verificationRequired?: boolean;
+  /** E-mail alvo quando `verificationRequired` (cadastro). */
+  email?: string;
+  code?: string;
+  message?: string;
+}
+
 
 /* ============================================================
  * Área do Cliente — Produtos Adquiridos / Licenças

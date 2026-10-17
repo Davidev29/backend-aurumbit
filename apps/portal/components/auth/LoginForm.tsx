@@ -4,11 +4,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Loader2, AlertCircle, Mail, LockKeyhole } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, Mail, LockKeyhole, MailCheck } from "lucide-react";
 import { useState } from "react";
 import { Button, Input } from "@/components/ui";
-import { cn } from "@/lib/utils";
 import { useToastHelpers } from "@/components/ui/Toast";
+import { resendVerification } from "@/lib/api";
+import { authErrorMessage } from "@/lib/auth-errors";
+import type { AuthFormResult } from "@/types";
 
 const loginSchema = z.object({
   email: z.string().email("E-mail inválido"),
@@ -19,19 +21,21 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginFormProps {
-  onSubmit: (data: LoginFormData) => Promise<{ ok: boolean; mfaRequired?: boolean }>;
+  onSubmit: (data: LoginFormData) => Promise<AuthFormResult>;
   onSwitchToRegister: () => void;
   isLoading?: boolean;
 }
 
 export function LoginForm({ onSubmit, onSwitchToRegister, isLoading = false }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const { error: showError } = useToastHelpers();
+  const [apiError, setApiError] = useState<{ code?: string; message: string } | null>(null);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  const { success, error: showError } = useToastHelpers();
 
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -42,18 +46,33 @@ export function LoginForm({ onSubmit, onSwitchToRegister, isLoading = false }: L
 
   const handleFormSubmit = async (data: LoginFormData) => {
     setApiError(null);
+    setResendState("idle");
+    const result = await onSubmit(data);
+    if (!result.ok && !result.mfaRequired) {
+      // Mensagem ORIGINAL do backend quando legível; senão o mapa por código
+      // (ex. EMAIL_NOT_VERIFIED e ACCOUNT_LOCKED chegam sem texto útil).
+      setApiError({
+        code: result.code,
+        message: authErrorMessage(
+          result.code,
+          result.message,
+          "Não foi possível entrar. Verifique e-mail e senha e tente novamente."
+        ),
+      });
+    }
+    return result;
+  };
+
+  const handleResend = async () => {
+    const email = getValues("email");
+    setResendState("sending");
     try {
-      const result = await onSubmit(data);
-      if (!result.ok && !result.mfaRequired) {
-        setApiError("Credenciais inválidas. Verifique seu e-mail e senha.");
-        showError("Erro no login", "Credenciais inválidas. Verifique seu e-mail e senha.");
-      }
-      return result;
+      await resendVerification(email);
+      setResendState("sent");
+      success("Link reenviado", `Se existir cadastro pendente para ${email}, o link chega em instantes.`);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro inesperado. Tente novamente.";
-      setApiError(message);
-      showError("Erro no login", message);
-      return { ok: false };
+      setResendState("idle");
+      showError("Não foi possível reenviar", err instanceof Error ? err.message : "Tente novamente em instantes.");
     }
   };
 
@@ -69,10 +88,31 @@ export function LoginForm({ onSubmit, onSwitchToRegister, isLoading = false }: L
             role="alert"
           >
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <span>{apiError}</span>
+            <span>{apiError.message}</span>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Conta existe mas o e-mail ainda não foi confirmado: sem esta ação o
+          usuário fica preso em "não consigo entrar" sem saber o que fazer. */}
+      {apiError?.code === "EMAIL_NOT_VERIFIED" && (
+        <div className="flex flex-col gap-2 rounded-base border border-line2 bg-bg2 p-3">
+          <p className="text-caption text-text2">
+            Enviamos o link de confirmação para este e-mail. Confirme para liberar o acesso.
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            isLoading={resendState === "sending"}
+            disabled={resendState === "sending" || resendState === "sent"}
+            onClick={handleResend}
+            leftIcon={<MailCheck className="h-4 w-4" aria-hidden="true" />}
+          >
+            {resendState === "sent" ? "Link reenviado" : "Reenviar link de confirmação"}
+          </Button>
+        </div>
+      )}
 
       <Input
         {...register("email")}

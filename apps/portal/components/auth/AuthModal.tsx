@@ -4,10 +4,12 @@ import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, KeyRound, BadgeCheck, LifeBuoy, LogIn, UserPlus } from "lucide-react";
 import { Modal, Button, Logo, useToastHelpers } from "@/components/ui";
+import { useAuth } from "@/hooks/useAuth";
 import { LoginForm } from "./LoginForm";
 import { RegisterForm } from "./RegisterForm";
+import { VerifyEmailNotice } from "./VerifyEmailNotice";
 import { cn } from "@/lib/utils";
-import { login, register } from "@/lib/api";
+import type { AuthFormResult } from "@/types";
 
 const REGISTER_BENEFITS = [
   { icon: KeyRound, label: "Chave após a confirmação" },
@@ -32,19 +34,28 @@ const TABS: Array<{ mode: AuthMode; label: string; icon: typeof LogIn }> = [
 export function AuthModal({ isOpen, onClose, defaultMode = "login", onSuccess }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>(defaultMode);
   const [isLoading, setIsLoading] = useState(false);
-  const { success, error: showError } = useToastHelpers();
+  /** E-mail do cadastro recém-criado aguardando confirmação (troca a view). */
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const { success } = useToastHelpers();
+  const { login, register } = useAuth();
 
   // Sincroniza a aba toda vez que o modal abre.
   useEffect(() => {
     if (isOpen) {
       setMode(defaultMode);
+      setSentTo(null);
     }
   }, [isOpen, defaultMode]);
 
-  const handleLogin = async (data: { email: string; password: string; rememberMe?: boolean }) => {
+  /**
+   * Erros NÃO são mais convertidos em toast genérico aqui: o resultado volta
+   * com `code`/`message` do backend e o formulário mostra o motivo real
+   * (e-mail não confirmado, conta bloqueada, limite de tentativas...).
+   */
+  const handleLogin = async (data: { email: string; password: string; rememberMe?: boolean }): Promise<AuthFormResult> => {
     setIsLoading(true);
     try {
-      const result = await login(data);
+      const result = await login(data.email, data.password, data.rememberMe);
       if (result.ok) {
         success("Bem-vindo!", "Login realizado com sucesso.");
         onClose();
@@ -56,10 +67,6 @@ export function AuthModal({ isOpen, onClose, defaultMode = "login", onSuccess }:
         }
       }
       return result;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro inesperado";
-      showError("Erro no login", message);
-      return { ok: false };
     } finally {
       setIsLoading(false);
     }
@@ -71,10 +78,15 @@ export function AuthModal({ isOpen, onClose, defaultMode = "login", onSuccess }:
     password: string;
     confirmPassword: string;
     acceptTerms: boolean;
-  }) => {
+  }): Promise<AuthFormResult> => {
     setIsLoading(true);
     try {
       const result = await register(data);
+      if (result.ok && result.verificationRequired) {
+        // Conta criada sem sessão: o acesso só libera após confirmar o e-mail.
+        setSentTo(result.email ?? data.email);
+        return result;
+      }
       if (result.ok) {
         success("Conta criada!", "Bem-vindo à AurumBit. Redirecionando...");
         onClose();
@@ -85,21 +97,19 @@ export function AuthModal({ isOpen, onClose, defaultMode = "login", onSuccess }:
         }
       }
       return result;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro inesperado";
-      showError("Erro no cadastro", message);
-      return { ok: false };
     } finally {
       setIsLoading(false);
     }
   };
 
   const switchMode = useCallback((newMode: AuthMode) => {
+    setSentTo(null);
     setMode(newMode);
   }, []);
 
   const handleClose = useCallback(() => {
     if (!isLoading) {
+      setSentTo(null);
       onClose();
     }
   }, [isLoading, onClose]);
@@ -135,7 +145,7 @@ export function AuthModal({ isOpen, onClose, defaultMode = "login", onSuccess }:
           className="grid grid-cols-2 gap-1 rounded-full border border-line2 bg-bg0 p-1"
         >
           {TABS.map(({ mode: tab, label, icon: Icon }) => {
-            const active = tab === mode;
+            const active = tab === mode && sentTo === null;
             return (
               <button
                 key={tab}
@@ -167,15 +177,17 @@ export function AuthModal({ isOpen, onClose, defaultMode = "login", onSuccess }:
           h compacto no mobile, confortável no desktop. */}
       <div className="h-[400px] pt-4 sm:h-[460px]">
         <motion.div
-          key={mode}
-          initial={{ opacity: 0, x: mode === "register" ? 48 : -48 }}
+          key={sentTo ? "verify" : mode}
+          initial={{ opacity: 0, x: sentTo ? 0 : mode === "register" ? 48 : -48 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           className="h-full overflow-y-auto overscroll-contain"
         >
           {/* respiro interno: o anel de foco (4px) nunca encosta na borda do scroll */}
           <div className="m-auto flex min-h-full w-full flex-col justify-center px-1.5 py-1.5">
-            {mode === "login" ? (
+            {sentTo ? (
+              <VerifyEmailNotice email={sentTo} onSwitchToLogin={() => switchMode("login")} />
+            ) : mode === "login" ? (
               <div>
                 <div className="mb-4 text-center">
                   <h3 className="font-display text-headline font-bold text-text1">Entrar na sua conta</h3>

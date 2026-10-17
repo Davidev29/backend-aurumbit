@@ -1,5 +1,4 @@
 import type {
-  ApiError,
   Page,
   ProductView,
   ProductFilters,
@@ -59,9 +58,15 @@ async function bffFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     let code = "INTERNAL";
     let message = `Falha na requisição (${res.status}).`;
     try {
-      const body = (await res.json()) as Partial<ApiError>;
+      const body = (await res.json()) as { code?: unknown; message?: unknown };
       if (typeof body.code === "string") code = body.code;
-      if (typeof body.message === "string") message = body.message;
+      if (typeof body.message === "string") {
+        message = body.message;
+      } else if (Array.isArray(body.message)) {
+        // `ValidationPipe` do Nest responde `message: string[]`.
+        const parts = body.message.filter((m): m is string => typeof m === "string");
+        if (parts.length > 0) message = parts.join(" ");
+      }
     } catch {
       // Mantém mensagem padrão.
     }
@@ -153,8 +158,28 @@ export function logout(): Promise<void> {
   return apiPost<void>("/api/auth/logout");
 }
 
+/**
+ * 1 fetch de identidade por vez: o provider monta em cada página e o
+ * StrictMode dev invoca o efeito 2x — sem dedupe, cada navegação disparava
+ * vários `GET /api/auth/me`.
+ */
+let mePromise: Promise<MeResponse> | null = null;
+
 export function getMe(): Promise<MeResponse> {
-  return apiGet<MeResponse>("/api/auth/me");
+  if (!mePromise) {
+    mePromise = apiGet<MeResponse>("/api/auth/me").finally(() => {
+      mePromise = null;
+    });
+  }
+  return mePromise;
+}
+
+export function verifyEmail(token: string): Promise<{ ok: boolean; stub?: boolean }> {
+  return apiPost<{ ok: boolean; stub?: boolean }>("/api/auth/verify-email", { token });
+}
+
+export function resendVerification(email: string): Promise<{ ok: boolean; stub?: boolean }> {
+  return apiPost<{ ok: boolean; stub?: boolean }>("/api/auth/resend-verification", { email });
 }
 
 export function requestPasswordReset(_email: string): Promise<{ ok: boolean }> {

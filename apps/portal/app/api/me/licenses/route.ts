@@ -19,8 +19,18 @@ export async function GET(req: NextRequest) {
       const upstream = await fetch(`${API_INTERNAL_URL}/v1/licenses?mine=1`, {
         headers: { Authorization: `Bearer ${session}` },
       });
-      const data = await upstream.json().catch(() => ({}));
-      return NextResponse.json(data, { status: upstream.status });
+      const data = (await upstream.json().catch(() => ({}))) as
+        | { items?: unknown }
+        | unknown[];
+      if (!upstream.ok) {
+        return NextResponse.json(data, { status: upstream.status });
+      }
+      // O upstream responde `{ items: [...] }` (paginação/coleção); o portal
+      // consome array direto (`getMyLicenses(): CustomerLicenseView[]`). Mesmo
+      // unwrap defensivo do BFF de checkout — antes o shape cru quebrava o
+      // painel (`licenses.filter is not a function`).
+      const items = Array.isArray(data) ? data : (data.items ?? []);
+      return NextResponse.json(Array.isArray(items) ? items : []);
     } catch {
       return NextResponse.json(
         { code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível." },
