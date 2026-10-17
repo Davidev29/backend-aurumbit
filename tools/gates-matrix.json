@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "_comentario": "Matriz de gates por workspace. 'scope: all' exige a tarefa de todo pacote de apps/* e libs/*. Isenção viva (dívida) precisa de motivo + revisar_em; isenção já cumprida REPROVA (dívida que não expira).",
+  "required": {
+    "build": "all",
+    "typecheck": "all",
+    "lint": "all",
+    "test": "all"
+  },
+  "exemptions": [
+    {
+      "package": "@aurum/database",
+      "task": "build",
+      "reason": "Pacote sem NENHUM importador (código morto) e sem toolchain utilizável: o factory importa clientes Prisma gerados (node_modules/.prisma/<dominio>) que nunca são gerados no repo/CI, e `prisma generate` falha neste install (o CLI tenta `pnpm add prisma@6.19.3`, divergindo do 6.8.0 de deploy/scripts/migrate-all.sh — viola a regra 5 do docs/CI-VERDE.md). main/types apontam para ./src/index.ts (consumo por fonte): não há artefato de build. Decisão D-5 do CORRECTION-PLAN-02.",
+      "review_by": "D-5"
+    },
+    {
+      "package": "@aurum/database",
+      "task": "typecheck",
+      "reason": "Mesmo bloqueio do build: src/client.factory.ts:1-9 importa node_modules/.prisma/<dominio> (gerados por `prisma generate`/migrate deploy, inexistentes em checkout limpo) => TS2307 ×9. Gate real da camada de dados hoje é prisma validate + migrações (deploy/scripts/prisma-validate.sh). Decisão D-5 do CORRECTION-PLAN-02.",
+      "review_by": "D-5"
+    },
+    {
+      "package": "@aurum-bit/api",
+      "task": "lint",
+      "reason": "apps/api sem eslint configurado (N-B3) — plano CORRECTION-PLAN-02, task T5-1",
+      "review_by": "T5-1"
+    },
+    {
+      "package": "@aurum-bit/workers",
+      "task": "lint",
+      "reason": "apps/workers sem eslint configurado (N-B3) — plano CORRECTION-PLAN-02, task T5-1",
+      "review_by": "T5-1"
+    },
+    {
+      "package": "@aurum/admin",
+      "task": "test",
+      "reason": "apps/admin sem infra de teste (vitest) — plano CORRECTION-PLAN-02, task T5-2",
+      "review_by": "T5-2"
+    },
+    {
+      "package": "@aurum/portal",
+      "task": "test",
+      "reason": "apps/portal sem infra de teste (vitest) — plano CORRECTION-PLAN-02, task T5-2",
+      "review_by": "T5-2"
+    }
+  ]
+}
