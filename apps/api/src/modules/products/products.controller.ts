@@ -1,12 +1,18 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, UseFilters, UseGuards } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
 import { AdminStubGuard } from './admin.guard';
-import { CreatePlanDto, CreateProductDto, CreateVersionDto } from './dto';
+import { CreatePlanDto, CreateProductDto, CreateVersionDto, ReplaceProductDto, UpdateProductDto } from './dto';
 import { PlansService } from './plans.service';
+import { ProductValidationPtBrFilter } from './product-validation.filter';
 import { ProductsService } from './products.service';
 
 // Catálogo público de produtos. Leitura aberta; escrita exige admin (stub x-role).
+//
+// O filtro traduz para pt-BR as mensagens do `ValidationPipe` (que vem em
+// inglês) — ver `product-validation.filter.ts` para o porquê de ser local e
+// não global.
 @Controller('products')
+@UseFilters(ProductValidationPtBrFilter)
 export class ProductsController {
   constructor(
     private readonly products: ProductsService,
@@ -55,6 +61,22 @@ export class ProductsController {
   @UseGuards(AdminStubGuard)
   archive(@Param('code') code: string) {
     return this.products.archiveProduct(code);
+  }
+
+  // Atualização PARCIAL: só o que vier no corpo muda. Idempotente; `code`,
+  // `status` e preço não são campos deste verb (motivo no corpo do 4xx).
+  @Patch(':code')
+  @UseGuards(AdminStubGuard)
+  update(@Param('code') code: string, @Body() dto: UpdateProductDto) {
+    return this.products.updateProduct(code, dto);
+  }
+
+  // Substituição TOTAL: `name`, `slug`, `description`, `machinesAllowed`,
+  // `platforms` e `deliveryMode` são todos obrigatórios (400 lista o que falta).
+  @Put(':code')
+  @UseGuards(AdminStubGuard)
+  replace(@Param('code') code: string, @Body() dto: ReplaceProductDto) {
+    return this.products.replaceProduct(code, dto);
   }
 
   // Alias consumido pelo BFF (change-price): nova linha de catálogo com o

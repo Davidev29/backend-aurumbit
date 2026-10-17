@@ -946,6 +946,79 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ProductDetail" }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Catalog]
+      summary: |
+        Atualização PARCIAL do produto — só os campos presentes no corpo mudam.
+        `code`, `status` e preço NÃO são campos deste verb (recusados com o motivo).
+        Idempotente. Exige `x-role: admin`.
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductPatch" }
+      responses:
+        "200":
+          description: Produto atualizado (mesmo shape do GET)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductDetail" }
+        "400":
+          description: Corpo sem nenhum campo editável, ou valor fora do formato declarado no DTO.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Slug já em uso por outro produto.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "422":
+          description: Campo proibido (code/status/preço) ou valor semanticamente inválido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+    put:
+      tags: [Catalog]
+      summary: |
+        Substituição TOTAL do produto — `name`, `slug`, `description`,
+        `machinesAllowed`, `platforms` e `deliveryMode` são TODOS obrigatórios
+        (ausência de qualquer um = 400 listando o que falta). `description: null`
+        limpa a descrição. Exige `x-role: admin`.
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductReplace" }
+      responses:
+        "200":
+          description: Produto substituído (mesmo shape do GET)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductDetail" }
+        "400":
+          description: Campo obrigatório ausente (a mensagem lista quais) ou valor inválido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Slug já em uso por outro produto.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "422":
+          description: Campo proibido (code/status/preço) ou valor semanticamente inválido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
 
   /v1/products/{code}/plans:
     get:
@@ -1396,14 +1469,45 @@ components:
       type: object
       properties:
         id: { type: string }
-        code: { type: string }
+        code: { type: string, description: "IMUTÁVEL após a criação (licenças/contratos gravam o code)." }
         name: { type: string }
-        slug: { type: string }
+        slug: { type: string, description: "URL pública (SEO); único e lower-kebab." }
         description: { type: string, nullable: true }
-        status: { type: string, enum: [DRAFT, ACTIVE] }
-        machinesAllowed: { type: integer }
+        status: { type: string, enum: [DRAFT, ACTIVE, ARCHIVED] }
+        machinesAllowed: { type: integer, description: "Vale para chaves NOVAS; licenças emitidas mantêm o próprio limite." }
+        platforms:
+          type: array
+          description: "Slugs do catálogo canônico, em ordem canônica. `[]` = nenhuma declarada (não é \"todas\")."
+          items: { type: string, enum: [windows, macos, linux, web, apple] }
+        deliveryMode: { type: string, enum: [OFFLINE, HYBRID] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+
+    ProductPatch:
+      type: object
+      description: |
+        Campos editáveis de um produto. Ausente = preservado. `code`, `status` e
+        qualquer preço são recusados (o `ValidationPipe` é fail-closed e o
+        service recusa de novo) — renomear `code` deixaria órfãs as licenças
+        emitidas; arquivar tem endpoint próprio; preço é imutável por linha de
+        catálogo (`POST /v1/products/{code}/plans` + activate).
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        slug: { type: string, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$", maxLength: 120 }
+        description: { type: string, nullable: true, maxLength: 500 }
+        machinesAllowed: { type: integer, minimum: 1, maximum: 100 }
+        platforms:
+          type: array
+          maxItems: 5
+          items: { type: string, enum: [windows, macos, linux, web, apple] }
+        deliveryMode: { type: string, enum: [OFFLINE, HYBRID] }
+
+    ProductReplace:
+      allOf:
+        - $ref: "#/components/schemas/ProductPatch"
+        - type: object
+          required: [name, slug, description, machinesAllowed, platforms, deliveryMode]
+          description: "PUT = todos os campos obrigatórios; `description: null` limpa."
 
     ProductDetail:
       allOf:

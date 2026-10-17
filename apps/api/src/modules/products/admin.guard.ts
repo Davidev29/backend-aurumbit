@@ -9,7 +9,9 @@ export class AdminStubGuard implements CanActivate {
     const req = context.switchToHttp().getRequest() as { headers?: Record<string, unknown> };
     const role = req.headers?.['x-role'];
     if (role !== 'admin') {
-      throw new ForbiddenException('admin only (stub RBAC: envie header x-role: admin)');
+      throw new ForbiddenException(
+        'Acesso restrito a administradores (controle temporário: envie o cabeçalho x-role: admin).',
+      );
     }
     return true;
   }
