@@ -8,8 +8,8 @@
 
 ```bash
 bash deploy/scripts/prisma-validate.sh          # 9/9 schemas
-npm --prefix apps/api test                      # 475 testes
-npm --prefix apps/api run build                 # nest build
+pnpm gates:check                                # cobertura de gates por workspace (turbo não pode ser "fantasma")
+pnpm turbo run lint typecheck test build --continue   # 12/12 workspaces, inclui as 4 apps
 bash -n deploy/scripts/*.sh                     # sintaxe de todos os scripts
 "$BIN/trivy.exe" fs --severity HIGH,CRITICAL --exit-code 1 --no-progress .   # mesmo binário do CI
 gitleaks detect --redact --exit-code=2 --no-git # mesma versão do CI (8.24.3)
@@ -58,6 +58,15 @@ corrigidos em follow-up imediato, nunca "depois".
     rebuild). Histórico (`PHASE-*`, ADRs antigas) nunca é reescrito.
 11. **Um commit por etapa, aceite antes de avançar.** Correção sem evidência de
     log é chute — ler o log do CI, identificar a causa raiz, corrigir, ver verde.
+12. **Gate fantasma não conta.** O turbo anuncia um pacote na tarefa mesmo quando
+    o script não existe na `package.json` dele (dry-run: `command: "<NONEXISTENT>"`).
+    Foi assim que `typecheck` nas 4 apps virou "verde" checando só as libs.
+    `pnpm gates:check` cobra a matriz (`tools/gates-matrix.json`) e reprova pacote
+    sem a tarefa; isenção viva exige motivo + `review_by`, e **isenção já cumprida
+    reprova** (dívida que não expira visível).
+13. **Gerado à mão se compara, não se confia.** Artefato derivado de uma fonte
+    única (ex.: catálogo de plataformas) é gerado por script determinístico e
+    conferido por `--check` no CI; divergência reprova apontando arquivo e linha.
 
 ## 3. Veredito
 

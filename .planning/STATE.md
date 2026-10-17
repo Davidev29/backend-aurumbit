@@ -35,3 +35,16 @@
   SecurityEvent 6 tipos, envelope `LICENSE_MASTER_KEY_PATH` dual v1/v2,
   CI 1 entrypoint, backup único). Unit api 475/475, worker 5/5, builds PASS.
   Gates vivos (compose/migrate/EXPLAIN/permissões/backup/rotação) no CI e2e/nightly.
+- Correção 02 executada em 2026-10-17 (plano `.planning/CORRECTION-PLAN-02-BUILD-GATES-2026-10-17.md`),
+  onda T0 — gates de build reais: `pnpm gates:check` (novo: `tools/check-gates.mjs`
+  + `tools/gates-matrix.json`) fecha o falso verde do turbo (`<NONEXISTENT>` em
+  `typecheck` das 4 apps — o CI checava só as libs); `typecheck` real em api
+  (novo `tsconfig.typecheck.json`, `rootDir ../..` mata o TS6059 sem mexer no
+  layout de `dist/`), workers, admin e portal; achados do próprio gate:
+  `libs/database` era o único pacote sem NENHUM script (dead code, 0 importadores,
+  clientes Prisma nunca gerados) → isento de build/typecheck (decisão D-5),
+  `asaas-adapter`/`resend-adapter` ganharam `test`, `offline-token` ganhou `lint`.
+  Typecheck 12/12 sem fantasma, lint 0 erros, 6 isenções vivas impressas em todo CI.
+  Pendente: T1 (fonte única do catálogo + drift gate), T2-T3 (provas/push),
+  T4 (workspace + Docker pnpm/prune, dispara com tudo verde), T5 (lint api/workers,
+  testes admin/portal, D8-8 test:e2e no CI — que hoje tem 18 falhas pré-existentes).
