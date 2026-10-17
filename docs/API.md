@@ -124,7 +124,7 @@ não usam CORS e seguem funcionando normalmente.
 |---|---|---|---|
 | `Authorization: Bearer <jwt>` | request | rotas de usuário (guard global) | JWT HS256, TTL 15 min, claims `sub`/`sid`/`jti` (ver §4.1) |
 | `x-correlation-id` | request → response | toda escrita (recomendado) | rastreio ponta a ponta; ecoado |
-| `Idempotency-Key` | request | POSTs de billing/finance | replay retorna o recurso existente (§6) |
+| `Idempotency-Key` | request | **obrigatório** (≥8 chars) nas baixas financeiras (`mark-received`/`mark-paid`) e na automação (`expenses`, `receivables/auto`); opcional nos demais POSTs de billing/finance | replay retorna o recurso existente (§6); ausente/curta onde exigida ⇒ `400 IDEMPOTENCY_REQUIRED` |
 | `x-internal-key` | request | rotas `internal/*` (worker→API) | igual a `INTERNAL_WEBHOOK_KEY`; ausente ⇒ **503 fail-closed** |
 | `x-role: admin` | request | rotas admin "stub" | RBAC provisório (ver §4.4 e §14) |
 | `x-service-token` | request | admin de licensing | alternativa a `x-role` quando `LICENSE_INTERNAL_TOKEN` existe |
@@ -310,7 +310,7 @@ Três mecanismos, escolhidos pelo tipo de operação:
 
 | Mecanismo | Onde | Comportamento de replay |
 |---|---|---|
-| `Idempotency-Key` (header) | POSTs de billing e finance | retorna o recurso existente (200/201), sem novo efeito |
+| `Idempotency-Key` (header) | **obrigatório** (≥8 chars) nas baixas `mark-received`/`mark-paid` e na automação (`expenses`, `receivables/auto`); opcional nos demais POSTs de billing/finance | retorna o recurso existente (200/201), sem novo efeito |
 | `eventId` único (claim-first) | `internal/issue-from-payment`, `finance/internal/sync`, webhooks | `{ duplicate: true }` (ou `{ applied: false }`) — nunca 409 |
 | Chave natural (UNIQUE) | `orderId` do checkout, `(provider, externalId)` do receipt | segunda entrega retorna o mesmo resultado |
 
@@ -318,7 +318,13 @@ Regras para o cliente:
 
 - Gere uma `Idempotency-Key` por **tentativa lógica** (ex. `order-<uuid>`), não
   por retry. Retry de rede deve reusar a mesma chave.
-- `Idempotency-Key` mínima de 8 chars onde exigida (finance automation).
+- `Idempotency-Key` **obrigatória** (mín. 8 chars) nas baixas `mark-received`/`mark-paid`
+  e na automação (`expenses`, `receivables/auto`); ausente/curta ⇒
+  `400 IDEMPOTENCY_REQUIRED` (`Idempotency-Key obrigatória (mín. 8 chars).`), sem
+  baixa e sem query. Nos demais POSTs de billing/finance a chave é opcional.
+- Replay do mesmo `Idempotency-Key` (ou de um título já baixado) devolve o estado
+  existente — `{ receivable, transaction }` / `{ payable, transaction }`, `200` —
+  sem duplicar `Transaction`, sem alterar saldo e sem reemitir outbox.
 - Não assuma 409 em replay: o contrato é **200 com o recurso original**.
 
 ---
@@ -618,16 +624,19 @@ GET /v1/billing/checkout/:orderId (polling)        → status PAID + licenseId (
 Todas sob `@CustomerScope()` com escopo por org (`x-org-id`). Leitura exige
 `finance.read` (`x-finance-read: <orgId>` ou `x-role: admin`); escrita/baixa exige
 admin + escopo. Baixas (`mark-received`/`mark-paid`) e despesas/recebíveis
-automáticos exigem `Idempotency-Key`.
+automáticos exigem `Idempotency-Key` (≥8 chars; ausente/curta ⇒
+`400 IDEMPOTENCY_REQUIRED`). Replay da mesma chave — buscada por org
+(`idempotencyKey` + `orgId`) — devolve o existente (`200`), sem duplicar
+`Transaction` nem saldo.
 
 | Grupo | Rotas |
 |---|---|
 | Visão geral / catálogo | `GET /v1/finance/overview`, `/categories`, `/categories/:id`, `/accounts`, `/accounts/:id` |
-| Recebíveis | `GET/POST /v1/finance/receivables`, `POST /v1/finance/receivables/:id/mark-received` *(chave)*, `POST /v1/finance/receivables/auto` *(chave)* |
-| Pagáveis | `GET/POST /v1/finance/payables`, `POST /v1/finance/payables/:id/mark-paid` *(chave)* |
+| Recebíveis | `GET/POST /v1/finance/receivables`, `POST /v1/finance/receivables/:id/mark-received` *(chave obrigatória)*, `POST /v1/finance/receivables/auto` *(chave obrigatória)* |
+| Pagáveis | `GET/POST /v1/finance/payables`, `POST /v1/finance/payables/:id/mark-paid` *(chave obrigatória)* |
 | Extrato / saldo | `GET /v1/finance/transactions`, `GET /v1/finance/balance?orgId=` |
 | Projeções | `GET /v1/finance/projections?scope=monthly\|quarterly\|annual&ref=&tz=` (HIT 200 · MISS leve 200 · MISS pesado **202 + jobId**), `GET /v1/finance/projections/jobs/:jobId`, `POST /v1/finance/projections/recompute` |
-| Despesas / automação | `POST /v1/finance/expenses` *(chave)*, `GET /v1/finance/expenses/:id/automation`, `GET /v1/finance/notifications`, `POST /v1/finance/notifications/:id/read` |
+| Despesas / automação | `POST /v1/finance/expenses` *(chave obrigatória)*, `GET /v1/finance/expenses/:id/automation`, `GET /v1/finance/notifications`, `POST /v1/finance/notifications/:id/read` |
 | Grants `finance.read` | `POST /v1/finance/grants`, `GET /v1/finance/grants` |
 | Internos (worker) | `POST /v1/finance/internal/sync` 🔑, `/internal/automation/bill-pay` 🔑, `/internal/automation/auto-charge` 🔑, `/internal/compute` 🔑, `/internal/transaction-posted` 🔑 |
 
@@ -851,7 +860,7 @@ curl -s -X POST "$API/v1/licenses/lic_1/reveal" \
 | §4.3 `x-internal-key` | `modules/billing/webhook.controller.ts`, `modules/finance/sync.controller.ts`, `modules/finance/projections.guard.ts` |
 | §4.4/§4.5 admin/finance | `modules/{access,licensing,products}/admin.guard.ts`, `modules/finance/finance-read.guard.ts` |
 | §5 erros | `libs/contracts/src/index.ts`, `apps/api/src/common/filters/http-exception.filter.ts` |
-| §6 idempotência | `modules/billing/billing.controller.ts`, `modules/finance/finance-automation.controller.ts` |
+| §6 idempotência | `modules/billing/billing.controller.ts`, `modules/finance/finance.controller.ts`, `modules/finance/finance-automation.controller.ts` |
 | §7 rate limits | `apps/api/src/common/rate-limit/global-rate-limit.guard.ts`, `modules/auth/rate-limit.ts`, `modules/licensing/reveal.guard.ts` |
 | §8.3 access | `modules/access/access.controller.ts`, `access-check.service.ts`, `access-policy.ts`, `libs/contracts/src/access.ts` |
 | §8.4/§8.5 licensing/ativação | `modules/licensing/{licensing,licenses,activation,devices,offline-token}.controller.ts`, `devices.dto.ts`, `dto.ts`, `licenses.dto.ts` |
@@ -906,3 +915,4 @@ Registradas para você decidir o alinhamento; **nenhuma** impede a integração.
 |---|---|
 | 2026-10-17 | Versão inicial: topologia, headers, 4 modos de auth, erros, idempotência, rate limits, referência por domínio, guia do programa gerenciado, contrato do token offline, lacunas e `openapi.yaml`. |
 | 2026-10-17 | §3.5: API passa a **servir** a spec — Swagger UI em `/docs`, `/docs-json`, `/docs-yaml` (`@nestjs/swagger`, gated por `SWAGGER_ENABLED`, CSP própria). |
+| 2026-10-17 | §3.3/§6/§8.8: `Idempotency-Key` **obrigatória** (≥8 chars) nas baixas `mark-received`/`mark-paid` e na automação financeira (`expenses`, `receivables/auto`); ausente/curta ⇒ `400 IDEMPOTENCY_REQUIRED`; replay (`idempotencyKey`+org) devolve o existente (`200`). Billing segue opcional. |

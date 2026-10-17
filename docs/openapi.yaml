@@ -17,7 +17,10 @@ info:
     - Corpo em JSON. Campos de contrato do dispositivo em `snake_case`
       (`device_hash`, `app_instance_id`, `token_iat`, `off_exp`).
     - Toda escrita aceita `x-correlation-id` (ecoado na resposta).
-    - POSTs de cobrança/financeiro aceitam `Idempotency-Key`.
+    - POSTs de cobrança/financeiro aceitam `Idempotency-Key`; nas **baixas**
+      financeiras (`mark-received`/`mark-paid`) e na automação (`expenses`,
+      `receivables/auto`) ela é **obrigatória** (mín. 8 chars) — ausente/curta ⇒
+      `400 IDEMPOTENCY_REQUIRED`; replay devolve o recurso existente.
     - Rate limits respondem `429` com `Retry-After` e `RateLimit-Policy`.
 
     ## Divergências conhecidas
@@ -26,6 +29,10 @@ info:
       públicos. Ver `docs/API.md` §14.
     - RBAC administrativo é *stub* por header (`x-role`, `x-service-token`,
       `x-mfa`, `x-scope`) até a substituição pela cadeia real.
+    - As baixas financeiras `POST /v1/finance/receivables/{id}/mark-received` e
+      `POST /v1/finance/payables/{id}/mark-paid` **exigem** `Idempotency-Key`
+      (mín. 8 chars; ausente/curta ⇒ `400 IDEMPOTENCY_REQUIRED`) e ainda não
+      estão nesta spec — admin/finance estão em `docs/API.md` §8.8.
   contact:
     name: Aurum Bit — Arquitetura
   license:
