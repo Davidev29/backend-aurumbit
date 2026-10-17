@@ -199,6 +199,11 @@ services:
       REDIS_URL: redis://redis:6379
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
+      # API interna (workers aplicam via endpoints internos da API). Sem esta
+      # variavel o default do worker e `http://localhost:3000` = NADA dentro do
+      # container: licensing.evaluate/outbox falhavam a cada tick com
+      # ECONNREFUSED (visivel no log do container a cada 5 min).
+      API_BASE_URL: ${API_BASE_URL:-http://api:3000}
       LICENSE_MASTER_KEY_PATH: /run/secrets/license-master-key
     volumes:
       - ./secrets/license-master-key:/run/secrets/license-master-key:ro
@@ -240,6 +245,43 @@ services:
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3000}
     ports:
       - "${ADMIN_PORT:-3001}:3000"
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - aurum-net
+
+  portal:
+    # LANDPAGE (portal publico + area do cliente). Mesmo padrao do admin; o
+    # bloco espelha `deploy/docker-compose.prod.yml` (la exposto so em
+    # 127.0.0.1 atras do Caddy; aqui direto, e DEV).
+    build:
+      context: ..
+      dockerfile: apps/portal/Dockerfile
+    image: aurum-portal:local
+    container_name: aurum-portal
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      # BFF -> Nest dentro da rede compose. Em producao, ausente = 502
+      # UPSTREAM_MISSING fail-closed (nunca mock silencioso).
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3000}
+      # URL publica do site (SEO/OG + metadataBase). Lida em server components
+      # (layout/robots/sitemap), entao vale em runtime - nao exige rebuild.
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3002}
+    ports:
+      - "${PORTAL_PORT:-3002}:3000"
     depends_on:
       api:
         condition: service_started

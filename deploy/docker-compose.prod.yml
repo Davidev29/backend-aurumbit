@@ -166,6 +166,10 @@ services:
         required: false
     environment:
       NODE_ENV: production
+      # API interna (mesmo motivo do base, ver deploy/docker-compose.yml): sem
+      # isto o default do worker e `http://localhost:3000` = nada dentro do
+      # container (licensing.evaluate/outbox em ECONNREFUSED).
+      API_BASE_URL: ${API_BASE_URL:-http://api:3000}
     depends_on: !override # sem migrate concluído, worker não parte (evita outbox órfã).
       postgres:
         condition: service_healthy
