@@ -550,8 +550,11 @@ if ($curEnv -notmatch '(?m)^JWT_SECRET=') {
   Info 'JWT_SECRET gerado.'
 }
 if ($curEnv -notmatch '(?m)^DATABASE_URL=') {
-  Add-Content $envFile "`nDATABASE_URL=postgresql://aurum:aurum@localhost:5432/auth"
-  Info 'DATABASE_URL adicionado.'
+  # Formato consolidado (1 banco `aurumbit` + ?schema=auth). O formato antigo
+  # (`...:5432/auth`) colocava o dominio como nome de banco e gerava no postgres:
+  # FATAL: database "auth" does not exist.
+  Add-Content $envFile "`nDATABASE_URL=postgresql://app_auth:dev_auth_pw@localhost:6432/aurumbit?schema=auth&pgbouncer=true&connection_limit=20"
+  Info 'DATABASE_URL adicionado (formato consolidado /aurumbit?schema=auth).'
 }
 
 # Escapa $ da ASAAS_API_KEY para o Compose (idempotente: $$ nao vira $$$).

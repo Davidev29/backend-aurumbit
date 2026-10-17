@@ -56,4 +56,19 @@ psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" \
   -v app_audit_append_password="$APP_AUDIT_APPEND_PASSWORD" \
   -v app_audit_read_password="$APP_AUDIT_READ_PASSWORD"
 
+# Banco de sombra do Prisma (DEV): `prisma migrate dev` e `migrate diff
+# --from-migrations` exigem um shadow database. O role `migrator` NAO tem
+# CREATEDB (least-privilege), entao o banco precisa existir de antemao; sem
+# ele o Prisma falha com:
+#   FATAL: database "aurumbit_shadow" does not exist
+# Criado DEPOIS do init-consolidated.sql (que cria o role `migrator`).
+SHADOW_DB="${SHADOW_DB_NAME:-${DB_NAME}_shadow}"
+SHADOW_EXISTS=$(psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$SHADOW_DB'" || echo "0")
+if [ "$SHADOW_EXISTS" = "1" ]; then
+  echo "Shadow database $SHADOW_DB already exists, skipping CREATE."
+else
+  echo "Creating shadow database: $SHADOW_DB"
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d postgres -c "CREATE DATABASE \"$SHADOW_DB\" OWNER migrator;"
+fi
+
 echo "init-dbs.sh done."
