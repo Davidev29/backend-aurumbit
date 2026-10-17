@@ -238,14 +238,34 @@ export function outboxTypeForPaymentStatus(status: string): string | null {
   }
 }
 
+// --- INVARIANTE BullMQ: eventId de outbox == jobId do relay ------------------
+// O relay publica com `jobId = eventId` (`common/outbox/outbox-relay.ts:105` e
+// `apps/workers/src/queues/outbox.relay.ts:88`) e o `Job` do BullMQ LANÇA
+// `Custom Id cannot contain :` quando o id contém `:` e NÃO tem EXATAMENTE 3
+// segmentos (`bullmq@5.81.5`, `classes/job.js:1073-1076` — 3 = convenção de
+// repeatable job). Como `runOutboxRelayTick`/`relayOutboxBatch` não têm
+// try/catch por linha, o throw aborta o tick ANTES do `buildMarkPublishedSql`
+// → `published` nunca vira true → o tick seguinte repete → STALL PERMANENTE de
+// TODOS os 9 domínios. Logo: TODO eventId de outbox tem exatamente 3
+// segmentos `dominio:evento:id` (e nunca pode ser um inteiro puro).
+/** Higieniza a parte "id": um `:` viraria um 4º segmento (jobId inválido). */
+function outboxEventKeyPart(raw: string): string {
+  return String(raw ?? '').replace(/:/g, '_');
+}
+
+/** eventId canônico de um estado de pagamento (3 segmentos p/ o BullMQ). */
+export function paymentStateEventId(externalId: string, target: string): string {
+  return `billing:payment-${String(target).toLowerCase()}:${outboxEventKeyPart(externalId)}`;
+}
+
 /** eventId determinístico da confirmação (idempotente no replay). */
 export function paymentConfirmedEventId(externalId: string): string {
-  return `billing-payment-confirmed:${externalId}`;
+  return paymentStateEventId(externalId, 'confirmed');
 }
 
 /** eventId sintético da reconciliação (mesmo pipeline, PROJECT.md §5). */
 export function reconEventId(paymentId: string, day: string): string {
-  return `recon:${paymentId}:${day}`;
+  return `recon:${outboxEventKeyPart(paymentId)}:${outboxEventKeyPart(day)}`;
 }
 
 export function isReconEventId(eventId: string): boolean {

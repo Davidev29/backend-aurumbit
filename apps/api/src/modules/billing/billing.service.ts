@@ -25,6 +25,7 @@ import {
   IllegalTransitionError,
   assertTransition,
   buildInvoiceNumber,
+  paymentConfirmedEventId,
 } from './billing-transitions';
 
 function isUniqueViolation(e: unknown): boolean {
@@ -613,6 +614,16 @@ export class BillingService {
    * terminal — retorna o atual sem sobrescrever. Emite outbox
    * `PaymentConfirmed` (lado access/licensing consome — fora deste módulo).
    * Fatura vinculada (PENDING/OVERDUE) vira PAID na mesma transação.
+   *
+   * Guarda de concorrência: `getPayment()` + `check()` rodam FORA da txn,
+   * então dois webhooks duplicados do provedor podem passar nos dois
+   * juntos. O `AND status <> 'CONFIRMED'` no WHERE é o backstop atômico —
+   * o perdedor casa 0 linhas, volta via ROLLBACK e devolve o estado atual
+   * (replay idempotente, não erro). O outbox usa eventId determinístico
+   * (`paymentConfirmedEventId(payment.id)`) + `ON CONFLICT DO NOTHING`,
+   * então `UNIQUE outbox_events_eventId_key` vira backstop real do
+   * `UNIQUE(eventId)` — nunca 2 linhas `PaymentConfirmed` para o mesmo
+   * pagamento.
    */
   async confirmPayment(id: string, dto: ConfirmPaymentDto) {
     const current = await this.getPayment(id);
@@ -646,12 +657,21 @@ export class BillingService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // Guarda de status no WHERE: o pagamento só é confirmado se ainda não
+      // estiver CONFIRMED no momento do lock (EvalPlanQual do PG garante o
+      // re-check após o lock da transação concorrente).
       const { rows } = await client.query(
         `UPDATE payments SET status = 'CONFIRMED', "paidAt" = $2, version = $3,
            "occurredAt" = COALESCE($4, "occurredAt"), "updatedAt" = now()
-         WHERE id = $1 RETURNING ${PAYMENT_COLS}`,
+         WHERE id = $1 AND status <> 'CONFIRMED' RETURNING ${PAYMENT_COLS}`,
         [id, dto.paidAt, dto.version ?? current.version + 1, dto.occurredAt ?? null],
       );
+      if (rows.length === 0) {
+        // Perdedor da race (webhook duplicado): replay idempotente, sem
+        // segundo PaymentConfirmed no outbox e sem 500.
+        await client.query('ROLLBACK');
+        return this.getPayment(id);
+      }
       const payment = rows[0];
       let invoice = null;
       if (payment.invoiceId) {
@@ -670,14 +690,27 @@ export class BillingService {
           invoice = invRows[0];
         }
       }
-      await this.insertOutbox(client, 'Payment', id, 'PaymentConfirmed', {
-        paymentId: id,
-        invoiceId: payment.invoiceId,
-        provider: payment.provider,
-        externalId: payment.externalId,
-        amountCents: payment.amountCents,
-        paidAt: dto.paidAt,
-      });
+      await this.insertOutbox(
+        client,
+        'Payment',
+        id,
+        'PaymentConfirmed',
+        {
+          paymentId: id,
+          invoiceId: payment.invoiceId,
+          provider: payment.provider,
+          externalId: payment.externalId,
+          amountCents: payment.amountCents,
+          paidAt: dto.paidAt,
+        },
+        // eventId determinístico: mesmo pagamento → mesmo fato de negócio →
+        // mesmo eventId. Prefixo `billing:payment-confirmed:` (mesmo de
+        // billing-flow.service) — 3 segmentos, exigido pelo `jobId = eventId`
+        // do relay BullMQ (ver billing-transitions.ts); não colide com `recon:`
+        // (isReconEventId) nem depende de `externalId`, que só é único por
+        // (provider, id).
+        paymentConfirmedEventId(payment.id),
+      );
       await client.query('COMMIT');
       return { payment, invoice };
     } catch (e) {
@@ -760,19 +793,26 @@ export class BillingService {
     return rows[0];
   }
 
+  /**
+   * `eventId` explícito = fato de negócio determinístico: habilita
+   * `ON CONFLICT ("eventId") DO NOTHING`, então `UNIQUE outbox_events_eventId_key`
+   * passa a ser backstop real em vez de decorativo (com `randomUUID()` nunca
+   * colide). Sem o param, mantém o comportamento anterior (UUID + falha dura).
+   */
   private async insertOutbox(
     client: PoolClient,
     aggregate: string,
     aggregateId: string,
     type: string,
     payload: Record<string, unknown>,
+    eventId?: string,
   ): Promise<string> {
-    const eventId = randomUUID();
+    const eid = eventId ?? randomUUID();
     await client.query(
       `INSERT INTO outbox_events (id, "eventId", aggregate, "aggregateId", type, payload, "occurredAt", published, "createdAt")
-       VALUES ($1,$2,$3,$4,$5,$6,now(),false,now())`,
-      [randomUUID(), eventId, aggregate, aggregateId, type, JSON.stringify(payload)],
+       VALUES ($1,$2,$3,$4,$5,$6,now(),false,now())${eventId ? ' ON CONFLICT ("eventId") DO NOTHING' : ''}`,
+      [randomUUID(), eid, aggregate, aggregateId, type, JSON.stringify(payload)],
     );
-    return eventId;
+    return eid;
   }
 }

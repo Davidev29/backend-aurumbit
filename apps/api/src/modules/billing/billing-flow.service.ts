@@ -8,6 +8,7 @@ import {
   isTerminalPayment,
   outboxTypeForPaymentStatus,
   paymentConfirmedEventId,
+  paymentStateEventId,
   paymentTargetForAsaasEvent,
   reconEventId,
 } from './billing-transitions';
@@ -306,7 +307,10 @@ export class BillingFlowService {
 
     const applied = this.applyTransition(receipt, deliveryKey, payment, target, {
       paidAt: null,
-      eventId: `${paymentConfirmedEventId(externalId)}:${target.toLowerCase()}`,
+      // `paymentStateEventId` (e NÃO `paymentConfirmedEventId(...) + ':' + ...`):
+      // sufixar criaria um 4º segmento e o BullMQ rejeitaria o `jobId = eventId`
+      // (invariante de 3 segmentos — ver billing-transitions.ts).
+      eventId: paymentStateEventId(externalId, target),
       event,
     });
     return { http: 200, receipt: applied };

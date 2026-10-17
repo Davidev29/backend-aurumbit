@@ -8,6 +8,7 @@ import {
   isReconEventId,
   outboxTypeForPaymentStatus,
   paymentConfirmedEventId,
+  paymentStateEventId,
   paymentTargetForAsaasEvent,
   reconEventId,
 } from './billing-transitions';
@@ -55,10 +56,73 @@ describe('billing-transitions', () => {
   });
 
   it('eventIds: confirmação determinística; recon sintético `recon:<id>:<data>`', () => {
-    expect(paymentConfirmedEventId('pay_abc')).toBe('billing-payment-confirmed:pay_abc');
+    expect(paymentConfirmedEventId('pay_abc')).toBe('billing:payment-confirmed:pay_abc');
     expect(reconEventId('p1', '2026-10-10')).toBe('recon:p1:2026-10-10');
     expect(isReconEventId('recon:p1:2026-10-10')).toBe(true);
-    expect(isReconEventId('billing-payment-confirmed:pay_abc')).toBe(false);
+    expect(isReconEventId('billing:payment-confirmed:pay_abc')).toBe(false);
+  });
+});
+
+// ===========================================================================
+// Regressão: eventId de outbox == jobId do BullMQ (stall global do relay)
+// ===========================================================================
+
+/**
+ * Regra COPIADA LITERALMENTE de `bullmq@5.81.5`
+ * (`node_modules/bullmq/dist/cjs/classes/job.js:1067-1076`):
+ *   - `Custom Id cannot be integers`  → `parseInt(id) === id`
+ *   - `Custom Id cannot contain :`    → `id.includes(':') && id.split(':').length !== 3`
+ * `bullmq` não é dependência de `@aurum-bit/api` (pnpm strict não resolve a
+ * partir de apps/api), então a regra é replicada em vez de importada.
+ */
+function bullMqAcceptsJobId(jobId: string): boolean {
+  if (`${parseInt(jobId, 10)}` === jobId) return false;
+  return !jobId.includes(':') || jobId.split(':').length === 3;
+}
+
+describe('eventId de outbox x jobId do BullMQ (regressão stall do relay)', () => {
+  it.each([
+    ['paymentConfirmedEventId (id externo)', paymentConfirmedEventId('pay_abc')],
+    ['paymentConfirmedEventId (uuid interno)', paymentConfirmedEventId('7f1c2b3a-0000-4000-8000-000000000001')],
+    ['paymentStateEventId CONFIRMED', paymentStateEventId('pay_abc', 'CONFIRMED')],
+    ['paymentStateEventId REFUNDED', paymentStateEventId('pay_abc', 'REFUNDED')],
+    ['paymentStateEventId FAILED', paymentStateEventId('pay_abc', 'FAILED')],
+    ['reconEventId', reconEventId('pay_1', '2026-10-17')],
+  ])('%s → jobId aceito e com EXATAMENTE 3 segmentos', (_label, eventId) => {
+    expect(eventId.split(':')).toHaveLength(3);
+    expect(bullMqAcceptsJobId(eventId)).toBe(true);
+  });
+
+  it('nenhum eventId colide com a rota de reconciliação (`recon:`)', () => {
+    for (const id of [
+      paymentConfirmedEventId('pay_abc'),
+      paymentStateEventId('pay_abc', 'REFUNDED'),
+      paymentStateEventId('pay_abc', 'FAILED'),
+    ]) {
+      expect(isReconEventId(id)).toBe(false);
+    }
+  });
+
+  it('higieniza `:` do id externo — nunca gera um 4º segmento', () => {
+    expect(paymentConfirmedEventId('a:b')).toBe('billing:payment-confirmed:a_b');
+    expect(paymentStateEventId('a:b', 'FAILED')).toBe('billing:payment-failed:a_b');
+    expect(reconEventId('a:b', '2026:10:17')).toBe('recon:a_b:2026_10_17');
+    for (const id of [paymentConfirmedEventId('a:b'), reconEventId('a:b', 'c:d')]) {
+      expect(bullMqAcceptsJobId(id)).toBe(true);
+    }
+  });
+
+  it('o formato ANTERIOR da confirmação era rejeitado (motivo da regressão)', () => {
+    // 2 segmentos (bug D1-5, `billing-payment-confirmed:<id>`) → LANÇAVA
+    // `Custom Id cannot contain :`, abortava o tick e travava TODOS os domínios.
+    expect(bullMqAcceptsJobId('billing-payment-confirmed:pay_abc')).toBe(false);
+    // O `:confirmed` que o flow-service acrescentava dava 3 segmentos e passava
+    // por ACIDENTE (mesmo por onde `recon:<id>:<dia>` passa) — mas confunde o
+    // prefixo da reconciliação e qualquer 4º segmento volta a estourar.
+    expect(bullMqAcceptsJobId('billing-payment-confirmed:pay_abc:confirmed')).toBe(true);
+    expect(bullMqAcceptsJobId('billing:payment-confirmed:pay_abc:confirmed')).toBe(false);
+    // E o jobId inteiro puro também é recusado.
+    expect(bullMqAcceptsJobId('123')).toBe(false);
   });
 });
 

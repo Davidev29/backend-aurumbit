@@ -108,6 +108,22 @@ export class FinanceController {
     return this.finance.createAccount(this.orgOf(req as never), dto);
   }
 
+  /**
+   * `Idempotency-Key` obrigatória (mín. 8 chars) nas baixas — mesmo padrão
+   * de `FinanceAutomationController.keyOf`. Sem ela um retry gerava chave
+   * nova e a dedupe por `UNIQUE(idempotencyKey)` não protegia.
+   */
+  private keyOf(header?: string): string {
+    const key = (header ?? '').trim();
+    if (key.length < 8) {
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_REQUIRED',
+        message: 'Idempotency-Key obrigatória (mín. 8 chars).',
+      });
+    }
+    return key;
+  }
+
   // -- Receivables -----------------------------------------------------------
 
   @Get('receivables')
@@ -136,7 +152,7 @@ export class FinanceController {
     @Body() dto: MarkReceivedDto,
     @Headers('idempotency-key') key?: string,
   ) {
-    return this.finance.markReceived(this.orgOf(req as never), id, dto, key || undefined);
+    return this.finance.markReceived(this.orgOf(req as never), id, dto, this.keyOf(key));
   }
 
   // -- Payables ----------------------------------------------------------------
@@ -167,7 +183,7 @@ export class FinanceController {
     @Body() dto: MarkPaidDto,
     @Headers('idempotency-key') key?: string,
   ) {
-    return this.finance.markPaid(this.orgOf(req as never), id, dto, key || undefined);
+    return this.finance.markPaid(this.orgOf(req as never), id, dto, this.keyOf(key));
   }
 
   // -- Transactions (extrato realizado) ----------------------------------------

@@ -93,6 +93,11 @@ APP_AUDIT_READ_PASSWORD="$(rand_b64 24)"
 INTERNAL_WEBHOOK_KEY="$(rand_hex 32)"     # 64 hex
 INTERNAL_PROJECTION_KEY="$(rand_hex 32)"  # 64 hex
 JWT_SECRET="$(rand_hex 32)"               # 64 hex (>= 16 chars exigidos)
+# Chave DEDICADA do segredo TOTP (D2-3): obrigatória em produção — sem ela o
+# `env.schema.ts` aborta o boot (crash-loop com `restart: unless-stopped`).
+# 64 hex: nunca casa com as regex de placeholder do schema (nenhum prefixo de
+# placeholder é só-hex) e passa o piso de 32 chars.
+MFA_ENC_KEY="$(rand_hex 32)"              # 64 hex
 
 # Master key de licenças (AES-256): 64 hex SEM newline, só no arquivo 0600.
 MASTER_KEY="$(rand_hex 32)"
@@ -157,6 +162,19 @@ JWT_SECRET=${JWT_SECRET}
 JWT_ISS=aurum-bit
 JWT_AUD=aurum-clients
 JWT_TTL=15m
+# AUTH_JWT_SECRET: NAO gerar aqui. O AuthService emite com ele (tem precedencia
+# sobre JWT_SECRET) mas o JwtAuthGuard valida SO com JWT_SECRET -- divergentes
+# = 401 em toda request. O env.schema.ts agora rejeita a divergencia no boot;
+# a correcao e NAO declarar a variavel (ou declarar com valor IDENTICO).
+# (Sem crases neste bloco: o heredoc e nao-quoted, crase = command substitution.)
+
+# Chave dedicada do segredo TOTP (D2-3): o boot em producao ABORTA sem ela.
+# NAO derivar de JWT_SECRET (rotacionar o JWT derrubaria o MFA de todo mundo).
+# INCLUA no backup cifrado OFF-VPS: perde-la torna TODO segredo TOTP ilegivel.
+MFA_ENC_KEY=${MFA_ENC_KEY}
+# MFA_ENC_KEY_PREVIOUS=<chave-anterior[,chave-antiga]> -- comentada de proposito:
+# so entra na ROTACAO (lista separada por virgula) e vazia reprovaria o piso
+# min(1) do schema. No primeiro deploy nao existe chave anterior.
 
 CORS_ORIGIN=https://aurumbit.com
 CORS_ORIGINS=https://aurumbit.com

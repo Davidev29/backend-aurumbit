@@ -8,6 +8,49 @@ import { z } from 'zod';
 // dev/test (superRefine abaixo) — em dev os pools fazem fallback/disable
 // quando ausentes. Leitores (FINANCE_REPORTS/AUDIT_READ) e MIGRATOR_DATABASE_URL
 // são sempre opcionais: o migrator nunca é lido pelo app (só pelo one-shot).
+/**
+ * D2-4: segredos PLACEHOLDER não podem virar segredo real.
+ *
+ * O bug: `.env.example` traz `JWT_SECRET=TROCAR_JWT_SECRET_GERADO_MIN_32_BYTES`
+ * — 39 chars, passa `min(16)`, e era aceito como segredo de verdade. Copiar o
+ * example e subir com `NODE_ENV=production` publicava a API com um segredo que
+ * está no repositório. O fail-fast existente (`jwt.service.ts`) só rejeita a
+ * string default de TESTE, não placeholders.
+ *
+ * A checagem vale em TODO ambiente (dev included): o `.env` de desenvolvimento
+ * da repo tem um segredo real (64 hex) e segue válido — a rejeição aqui é
+ * justamente para pegar o copy-paste do example cedo.
+ */
+const SECRET_PLACEHOLDERS: RegExp[] = [
+  /^trocar/i,
+  /^change[-_ ]?me/i,
+  /^changeme/i,
+  /^placeholder/i,
+  /^replace[-_ ]?me/i,
+  /^gerar[-_ ]/i,
+  /^example/i,
+  /^seu[-_ ]?segredo/i,
+  /^xxx/i,
+  /^\$\{.*\}$/, // valor não interpolado
+  /^<.*>$/,
+];
+
+/** Defaults de teste (não são segredo): aceitos em qualquer ambiente. */
+const TEST_ONLY_SECRETS = new Set(['test-only-secret-min-16-chars']);
+
+/** Fallback hardcoded de `auth.module.ts` — nunca pode chegar em produção. */
+const DEV_ONLY_FALLBACK = 'dev-only-insecure-secret';
+
+const SECRET_KEYS = ['JWT_SECRET', 'AUTH_JWT_SECRET', 'MFA_ENC_KEY', 'MFA_ENC_KEY_PREVIOUS'] as const;
+
+function isRealSecret(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  const s = v.trim();
+  if (s.length === 0) return false;
+  if (TEST_ONLY_SECRETS.has(s)) return true;
+  return !SECRET_PLACEHOLDERS.some((re) => re.test(s));
+}
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -41,6 +84,18 @@ const envSchema = z
     LICENSE_MASTER_KEY_PATH: z.string().min(1).optional(),
     LICENSE_MASTER_KEY_PREVIOUS_PATH: z.string().min(1).optional(),
     JWT_SECRET: z.string().min(16, 'JWT_SECRET deve ter ao menos 16 chars').default('test-only-secret-min-16-chars'),
+    // Auth (Fase 2). `AUTH_JWT_SECRET` tem PRECEDÊNCIA sobre `JWT_SECRET` no
+    // AuthService e não era validado por nada (fora do schema) — declarado aqui
+    // com o mesmo piso de tamanho e com fail-fast de DIVERGÊNCIA no
+    // `superRefine` (bloco antes do gate de produção). `MFA_ENC_KEY` é a
+    // chave DEDICADA do segredo
+    // TOTP (D2-3): obrigatória em produção (fail-fast no `superRefine` abaixo e
+    // em `assertMfaEncKeyConfig`). `MFA_ENC_KEY_PREVIOUS` (lista separada por
+    // vírgula) permite rotacionar sem quebrar o MFA já emitido — mesmo padrão de
+    // `LICENSE_MASTER_KEY_PREVIOUS_PATH`.
+    AUTH_JWT_SECRET: z.string().min(16, 'AUTH_JWT_SECRET deve ter ao menos 16 chars').optional(),
+    MFA_ENC_KEY: z.string().min(32, 'MFA_ENC_KEY deve ter ao menos 32 chars').optional(),
+    MFA_ENC_KEY_PREVIOUS: z.string().min(1).optional(),
     JWT_ISS: z.string().min(1).default('aurum-bit'),
     JWT_AUD: z.string().min(1).default('aurum-clients'),
     // Fase 3 (opcionais; fallbacks documentados nos serviços):
@@ -54,6 +109,37 @@ const envSchema = z
       .default('info'),
   })
   .superRefine((val, ctx) => {
+    // Placeholders rejeitados em qualquer ambiente (D2-4). O default de teste
+    // está na whitelist, então `setup-e2e.ts`/e2e seguem funcionando.
+    for (const key of SECRET_KEYS) {
+      const v = val[key];
+      if (v === undefined || isRealSecret(v)) continue;
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} é placeholder/valor de exemplo — gere um segredo real (ex.: \`openssl rand -hex 32\`) e nunca versione o valor.`,
+      });
+    }
+    // AUTH_JWT_SECRET divergente de JWT_SECRET = sessão INTEIRA morta (401 em
+    // toda request autenticada) e o boot passa: o `AuthService` EMITE com
+    // `AUTH_JWT_SECRET` (tem precedência, `auth.service.ts:91`) enquanto o
+    // `JwtAuthGuard` VALIDA só com `JWT_SECRET` (`jwt.service.ts:28`, que nunca
+    // lê `AUTH_JWT_SECRET`) => `TOKEN_SIGNATURE` em tudo. Como declarar
+    // `AUTH_JWT_SECRET` no schema (D2-4) convida o operador a configurá-lo, o
+    // fail-fast é aqui: enquanto o `jwt.service.ts` não resolver a mesma
+    // precedência, os dois segredos precisam ser IGUAIS (ou o segundo ausente).
+    // Vale em TODO ambiente — a armadilha é a mesma; o `.env` de dev e o
+    // `setup-e2e.ts` não definem `AUTH_JWT_SECRET`, então nada muda neles.
+    // A comparação usa o valor JÁ resolvido do schema: sem `JWT_SECRET`, o
+    // default é exatamente o que o `jwt.service.ts` verifica.
+    if (val.AUTH_JWT_SECRET && val.AUTH_JWT_SECRET !== val.JWT_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUTH_JWT_SECRET'],
+        message:
+          'AUTH_JWT_SECRET divergente de JWT_SECRET: o AuthService assina com AUTH_JWT_SECRET (precedência) e o JwtAuthGuard valida só com JWT_SECRET — todo token emitido é rejeitado (401 em toda request). Remova AUTH_JWT_SECRET ou defina-o com o MESMO valor de JWT_SECRET enquanto o jwt.service.ts não ler AUTH_JWT_SECRET.',
+      });
+    }
     // Em produção cada domínio exige seu role dedicado (fail-closed: sem URL
     // por domínio, o boot aborta em vez de subir com pool errado).
     if (val.NODE_ENV !== 'production') return;
@@ -74,6 +160,27 @@ const envSchema = z
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} é obrigatória em produção (E2/E3: role dedicada via PgBouncer)`,
+        });
+      }
+    }
+    // D2-3(a): chave dedicada do segredo TOTP é obrigatória em produção. Sem
+    // ela o segredo de todo usuário seria cifrado com o segredo JWT e a
+    // rotação (rotina) do JWT derrubaria o MFA de todos.
+    if (!val.MFA_ENC_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MFA_ENC_KEY'],
+        message:
+          'MFA_ENC_KEY é obrigatória em produção (chave dedicada do segredo TOTP; derivar de JWT_SECRET quebra MFA na rotação). Gere com `openssl rand -hex 32`.',
+      });
+    }
+    // O fallback hardcoded do código (`auth.module.ts`) nunca pode chegar em prod.
+    for (const key of ['JWT_SECRET', 'AUTH_JWT_SECRET'] as const) {
+      if (val[key] === DEV_ONLY_FALLBACK) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} está com o fallback dev-only do código — gere um segredo real.`,
         });
       }
     }

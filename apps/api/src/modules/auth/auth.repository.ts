@@ -1,3 +1,4 @@
+import { createAuthPool, getSharedAuthPool } from './auth-pool.provider';
 import { newId } from './crypto';
 
 /** Token de DI do repositório auth (evita import circular com auth.module). */
@@ -85,6 +86,15 @@ export interface IAuthRepository {
   // Fase 6 (LGPD): patch admite emailNorm/emailDisplay p/ anonimização
   // (apaga identificadores diretos, mantém o id opaco p/ trilha/auditoria).
   updateIdentity(id: string, patch: Partial<Pick<IdentityRow, 'status' | 'emailNorm' | 'emailDisplay' | 'emailVerifiedAt' | 'failedAttempts' | 'lockedUntil' | 'mfaEnabled'>>): Promise<IdentityRow>;
+  /**
+   * D2-2: incremento ATÔMICO de `failed_attempts` com lockout derivado no MESMO
+   * statement (`failed_attempts = failed_attempts + 1` + `CASE WHEN ... >= max`).
+   * `updateIdentity` grava valor ABSOLUTO e continua existindo p/ os resets
+   * legítimos (verify-email, reset de senha, GDPR); o contador de falha NUNCA
+   * pode sair dele, senão N logins simultâneos com `k` tentativas sobrescrevem
+   * `k+1` e `MAX_FAILED_ATTEMPTS` fica inatingível.
+   */
+  incrementFailedAttempts(input: { id: string; max: number; lockedStatus: string; lockedUntil: Date }): Promise<IdentityRow>;
   // credentials
   findCredentialByIdentityId(identityId: string): Promise<CredentialRow | null>;
   findCredentialByRecoveryHash(hash: string): Promise<CredentialRow | null>;
@@ -100,6 +110,15 @@ export interface IAuthRepository {
   createRefreshToken(input: { sessionId: string; familyId: string; tokenHash: string; parentHash: string | null; expiresAt: Date }): Promise<RefreshTokenRow>;
   findRefreshTokenByHash(hash: string): Promise<RefreshTokenRow | null>;
   updateRefreshToken(id: string, patch: Partial<Pick<RefreshTokenRow, 'status' | 'rotatedAt'>>): Promise<RefreshTokenRow>;
+  /**
+   * D2-1: rotação ATÔMICA. Só rotaciona (`ACTIVE` → `ROTATED`) se o token
+   * ainda estiver `ACTIVE` no momento do UPDATE; devolve `null` quando outro
+   * request já rotacionou (perdedor da race). Sem essa guarda, dois
+   * `POST /v1/auth/refresh` simultâneos liam `ACTIVE`, ambos rotacionavam e
+   * ambos criavam um token filho — 2 tokens válidos na mesma família, e o
+   * índice UNIQUE(token_hash) não segura (hashes disjuntos por `randomTokenHex`).
+   */
+  rotateRefreshToken(id: string, rotatedAt: Date): Promise<RefreshTokenRow | null>;
   revokeFamilyTokens(familyId: string, reasonStatus: string): Promise<number>;
   // verification / consents / outbox
   createVerificationToken(input: { identityId: string; tokenHash: string; expiresAt: Date }): Promise<VerificationRow>;
@@ -163,6 +182,27 @@ export class InMemoryAuthRepository implements IAuthRepository {
     const next = { ...cur, ...patch, updatedAt: this.now() };
     this.identities.set(id, next);
     return clone(next);
+  }
+  /**
+   * D2-2: espelha o `UPDATE ... SET failed_attempts = failed_attempts + 1, status =
+   * CASE WHEN failed_attempts + 1 >= max ...` do Postgres. O teste de concorrência
+   * depende deste double ser fiel à guarda: o read-then-write do serviço é
+   * justamente o que o double NÃO pode emular (senão o teste passa no vazio).
+   */
+  async incrementFailedAttempts(input: { id: string; max: number; lockedStatus: string; lockedUntil: Date }): Promise<IdentityRow> {
+    const cur = this.identities.get(input.id);
+    if (!cur) throw new Error('IDENTITY_NOT_FOUND');
+    const next = cur.failedAttempts + 1;
+    const locked = next >= input.max;
+    const row: IdentityRow = {
+      ...cur,
+      failedAttempts: next,
+      status: locked ? input.lockedStatus : cur.status,
+      lockedUntil: locked ? input.lockedUntil : cur.lockedUntil,
+      updatedAt: this.now(),
+    };
+    this.identities.set(input.id, row);
+    return clone(row);
   }
   async findCredentialByIdentityId(identityId: string): Promise<CredentialRow | null> {
     const r = this.credentials.get(identityId);
@@ -240,6 +280,21 @@ export class InMemoryAuthRepository implements IAuthRepository {
     }
     throw new Error('TOKEN_NOT_FOUND');
   }
+  /**
+   * D2-1: guarda `AND status = 'ACTIVE'` do SQL, espelhada aqui. Devolve `null`
+   * (não lança) quando o token já saiu de `ACTIVE` — o perdedor da race de
+   * rotação cai no caminho de detecção de REUSO no serviço.
+   */
+  async rotateRefreshToken(id: string, rotatedAt: Date): Promise<RefreshTokenRow | null> {
+    for (const [k, v] of this.refreshTokens.entries()) {
+      if (v.id !== id) continue;
+      if (v.status !== 'ACTIVE') return null;
+      const next: RefreshTokenRow = { ...v, status: 'ROTATED', rotatedAt };
+      this.refreshTokens.set(k, next);
+      return clone(next);
+    }
+    throw new Error('TOKEN_NOT_FOUND');
+  }
   async revokeFamilyTokens(familyId: string, reasonStatus: string): Promise<number> {
     let n = 0;
     for (const t of this.refreshTokens.values()) {
@@ -283,18 +338,33 @@ export class InMemoryAuthRepository implements IAuthRepository {
 type PgPool = any;
 
 export class PgAuthRepository implements IAuthRepository {
-  private pool: PgPool | null = null;
-  constructor(private readonly connectionString?: string) {}
+  private readonly injectedPool: PgPool | null | undefined;
+  private ownPool: PgPool | null = null;
+
+  /**
+   * @param connectionString 1º argumento preservado (compat com quem já
+   *   instanciava `new PgAuthRepository(cs)`).
+   * @param pool 2º: pool compartilhado (AUTH_POOL / `getSharedAuthPool()`). Se
+   *   não for injetado, cai no singleton compartilhado — nunca num `new Pool()`
+   *   próprio, senão o processo abre um segundo pool contra o mesmo
+   *   `DATABASE_URL_AUTH` (D2-5).
+   */
+  constructor(private readonly connectionString?: string, pool?: PgPool | null) {
+    this.injectedPool = pool;
+  }
 
   private db(): PgPool {
-    if (this.pool) return this.pool;
-    const cs = this.connectionString ?? process.env.DATABASE_URL_AUTH ?? process.env.DATABASE_URL;
+    if (this.injectedPool) return this.injectedPool;
+    const shared = getSharedAuthPool();
+    if (shared) return shared;
+    // Só reached quando `getSharedAuthPool()` devolveu null (sem DATABASE_URL_*)
+    // e o repo recebeu uma connectionString explícita: pool próprio, com os
+    // MESMOS limites do compartilhado (nunca `new Pool(cs)` cru = espera infinita).
+    if (this.ownPool) return this.ownPool;
+    const cs = this.connectionString;
     if (!cs) throw new Error('auth DB indisponível: defina DATABASE_URL_AUTH.');
-    // require lazy p/ não quebrar em ambientes sem o driver instalado.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Pool } = require('pg');
-    this.pool = new Pool({ connectionString: cs });
-    return this.pool;
+    this.ownPool = createAuthPool(cs);
+    return this.ownPool;
   }
 
   private static mapIdentity(r: any): IdentityRow {
@@ -311,16 +381,16 @@ export class PgAuthRepository implements IAuthRepository {
   }
 
   async findIdentityByEmailNorm(emailNorm: string): Promise<IdentityRow | null> {
-    const { rows } = await this.db().query('SELECT * FROM user_identities WHERE email_norm = $1 LIMIT 1', [emailNorm]);
+    const { rows } = await this.db().query('SELECT * FROM auth.user_identities WHERE email_norm = $1 LIMIT 1', [emailNorm]);
     return rows[0] ? PgAuthRepository.mapIdentity(rows[0]) : null;
   }
   async findIdentityById(id: string): Promise<IdentityRow | null> {
-    const { rows } = await this.db().query('SELECT * FROM user_identities WHERE id = $1 LIMIT 1', [id]);
+    const { rows } = await this.db().query('SELECT * FROM auth.user_identities WHERE id = $1 LIMIT 1', [id]);
     return rows[0] ? PgAuthRepository.mapIdentity(rows[0]) : null;
   }
   async createIdentity(input: { emailNorm: string; emailDisplay: string; status: string }): Promise<IdentityRow> {
     const { rows } = await this.db().query(
-      'INSERT INTO user_identities (id, email_norm, email_display, status) VALUES ($1,$2,$3,$4) RETURNING *',
+      'INSERT INTO auth.user_identities (id, email_norm, email_display, status) VALUES ($1,$2,$3,$4) RETURNING *',
       [newId(), input.emailNorm, input.emailDisplay, input.status],
     );
     return PgAuthRepository.mapIdentity(rows[0]);
@@ -340,20 +410,42 @@ export class PgAuthRepository implements IAuthRepository {
     if (patch.lockedUntil !== undefined) push('locked_until', patch.lockedUntil);
     if (patch.mfaEnabled !== undefined) push('mfa_enabled', patch.mfaEnabled);
     vals.push(id);
-    const { rows } = await this.db().query(`UPDATE user_identities SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    const { rows } = await this.db().query(`UPDATE auth.user_identities SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    if (!rows[0]) throw new Error('IDENTITY_NOT_FOUND');
+    return PgAuthRepository.mapIdentity(rows[0]);
+  }
+  /**
+   * D2-2: `failed_attempts` incrementado no próprio statement — sem read-then-write
+   * em Node. No Postgres TODAS as expressões do `SET` são avaliadas contra a
+   * linha ANTES do update, então `failed_attempts + 1` no `CASE` é o valor
+   * pós-incremento: o lockout é derivado do contador real, sem corrida. N
+   * logins simultâneos somam N (antes: todos gravavam `k+1` absoluto e a conta
+   * nunca travava, deixando `MAX_FAILED_ATTEMPTS` inatingível).
+   */
+  async incrementFailedAttempts(input: { id: string; max: number; lockedStatus: string; lockedUntil: Date }): Promise<IdentityRow> {
+    const { rows } = await this.db().query(
+      `UPDATE auth.user_identities
+          SET failed_attempts = failed_attempts + 1,
+              status = CASE WHEN failed_attempts + 1 >= $2 THEN $3 ELSE status END,
+              locked_until = CASE WHEN failed_attempts + 1 >= $2 THEN $4 ELSE locked_until END,
+              "updatedAt" = now()
+        WHERE id = $1
+        RETURNING *`,
+      [input.id, input.max, input.lockedStatus, input.lockedUntil],
+    );
     if (!rows[0]) throw new Error('IDENTITY_NOT_FOUND');
     return PgAuthRepository.mapIdentity(rows[0]);
   }
   async findCredentialByIdentityId(identityId: string): Promise<CredentialRow | null> {
-    const { rows } = await this.db().query('SELECT * FROM credentials WHERE identity_id = $1 LIMIT 1', [identityId]);
+    const { rows } = await this.db().query('SELECT * FROM auth.credentials WHERE identity_id = $1 LIMIT 1', [identityId]);
     return rows[0] ? PgAuthRepository.mapCredential(rows[0]) : null;
   }
   async findCredentialByRecoveryHash(hash: string): Promise<CredentialRow | null> {
-    const { rows } = await this.db().query('SELECT * FROM credentials WHERE recovery_hash = $1 LIMIT 1', [hash]);
+    const { rows } = await this.db().query('SELECT * FROM auth.credentials WHERE recovery_hash = $1 LIMIT 1', [hash]);
     return rows[0] ? PgAuthRepository.mapCredential(rows[0]) : null;
   }
   async createCredential(input: { identityId: string; passwordHash: string }): Promise<CredentialRow> {
-    const { rows } = await this.db().query('INSERT INTO credentials (id, identity_id, password_hash) VALUES ($1,$2,$3) RETURNING *', [newId(), input.identityId, input.passwordHash]);
+    const { rows } = await this.db().query('INSERT INTO auth.credentials (id, identity_id, password_hash) VALUES ($1,$2,$3) RETURNING *', [newId(), input.identityId, input.passwordHash]);
     return PgAuthRepository.mapCredential(rows[0]);
   }
   async updateCredential(identityId: string, patch: Partial<Pick<CredentialRow, 'passwordHash' | 'recoveryHash' | 'recoveryExpiresAt' | 'recoveryUsedAt' | 'mfaSecretEnc' | 'mfaVerifiedAt'>>): Promise<CredentialRow> {
@@ -370,23 +462,23 @@ export class PgAuthRepository implements IAuthRepository {
     if (patch.mfaSecretEnc !== undefined) push('mfa_secret_enc', patch.mfaSecretEnc);
     if (patch.mfaVerifiedAt !== undefined) push('mfa_verified_at', patch.mfaVerifiedAt);
     vals.push(identityId);
-    const { rows } = await this.db().query(`UPDATE credentials SET ${sets.join(', ')} WHERE identity_id = $${vals.length} RETURNING *`, vals);
+    const { rows } = await this.db().query(`UPDATE auth.credentials SET ${sets.join(', ')} WHERE identity_id = $${vals.length} RETURNING *`, vals);
     if (!rows[0]) throw new Error('CREDENTIAL_NOT_FOUND');
     return PgAuthRepository.mapCredential(rows[0]);
   }
   async createSession(input: { identityId: string; familyId: string; deviceLabel: string | null; expiresAt: Date }): Promise<SessionRow> {
     const { rows } = await this.db().query(
-      'INSERT INTO auth_sessions (id, identity_id, family_id, device_label, status, expires_at) VALUES ($1,$2,$3,$4,\'ACTIVE\',$5) RETURNING *',
+      'INSERT INTO auth.auth_sessions (id, identity_id, family_id, device_label, status, expires_at) VALUES ($1,$2,$3,$4,\'ACTIVE\',$5) RETURNING *',
       [newId(), input.identityId, input.familyId, input.deviceLabel, input.expiresAt],
     );
     return PgAuthRepository.mapSession(rows[0]);
   }
   async findSessionById(id: string): Promise<SessionRow | null> {
-    const { rows } = await this.db().query('SELECT * FROM auth_sessions WHERE id = $1 LIMIT 1', [id]);
+    const { rows } = await this.db().query('SELECT * FROM auth.auth_sessions WHERE id = $1 LIMIT 1', [id]);
     return rows[0] ? PgAuthRepository.mapSession(rows[0]) : null;
   }
   async listSessionsByIdentity(identityId: string): Promise<SessionRow[]> {
-    const { rows } = await this.db().query('SELECT * FROM auth_sessions WHERE identity_id = $1 ORDER BY last_seen_at DESC LIMIT 50', [identityId]);
+    const { rows } = await this.db().query('SELECT * FROM auth.auth_sessions WHERE identity_id = $1 ORDER BY last_seen_at DESC LIMIT 50', [identityId]);
     return rows.map(PgAuthRepository.mapSession);
   }
   async updateSession(id: string, patch: Partial<Pick<SessionRow, 'status' | 'revokedReason' | 'lastSeenAt' | 'expiresAt'>>): Promise<SessionRow> {
@@ -406,26 +498,26 @@ export class PgAuthRepository implements IAuthRepository {
       return cur;
     }
     vals.push(id);
-    const { rows } = await this.db().query(`UPDATE auth_sessions SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    const { rows } = await this.db().query(`UPDATE auth.auth_sessions SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
     if (!rows[0]) throw new Error('SESSION_NOT_FOUND');
     return PgAuthRepository.mapSession(rows[0]);
   }
   async revokeFamilySessions(familyId: string, reason: string, exceptSessionId?: string): Promise<number> {
     const { rowCount } = await this.db().query(
-      "UPDATE auth_sessions SET status = 'REVOKED', revoked_reason = $1 WHERE family_id = $2 AND status = 'ACTIVE' AND ($3::text IS NULL OR id <> $3)",
+      "UPDATE auth.auth_sessions SET status = 'REVOKED', revoked_reason = $1 WHERE family_id = $2 AND status = 'ACTIVE' AND ($3::text IS NULL OR id <> $3)",
       [reason, familyId, exceptSessionId ?? null],
     );
     return rowCount ?? 0;
   }
   async createRefreshToken(input: { sessionId: string; familyId: string; tokenHash: string; parentHash: string | null; expiresAt: Date }): Promise<RefreshTokenRow> {
     const { rows } = await this.db().query(
-      "INSERT INTO refresh_tokens (id, session_id, family_id, token_hash, parent_hash, status, expires_at) VALUES ($1,$2,$3,$4,$5,'ACTIVE',$6) RETURNING *",
+      "INSERT INTO auth.refresh_tokens (id, session_id, family_id, token_hash, parent_hash, status, expires_at) VALUES ($1,$2,$3,$4,$5,'ACTIVE',$6) RETURNING *",
       [newId(), input.sessionId, input.familyId, input.tokenHash, input.parentHash, input.expiresAt],
     );
     return PgAuthRepository.mapToken(rows[0]);
   }
   async findRefreshTokenByHash(hash: string): Promise<RefreshTokenRow | null> {
-    const { rows } = await this.db().query('SELECT * FROM refresh_tokens WHERE token_hash = $1 LIMIT 1', [hash]);
+    const { rows } = await this.db().query('SELECT * FROM auth.refresh_tokens WHERE token_hash = $1 LIMIT 1', [hash]);
     return rows[0] ? PgAuthRepository.mapToken(rows[0]) : null;
   }
   async updateRefreshToken(id: string, patch: Partial<Pick<RefreshTokenRow, 'status' | 'rotatedAt'>>): Promise<RefreshTokenRow> {
@@ -440,38 +532,51 @@ export class PgAuthRepository implements IAuthRepository {
       sets.push(`rotated_at = $${vals.length}`);
     }
     vals.push(id);
-    const { rows } = await this.db().query(`UPDATE refresh_tokens SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    const { rows } = await this.db().query(`UPDATE auth.refresh_tokens SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
     if (!rows[0]) throw new Error('TOKEN_NOT_FOUND');
     return PgAuthRepository.mapToken(rows[0]);
   }
+  /**
+   * D2-1: rotação CAS — `AND status = 'ACTIVE'` (mesmo padrão de guarda já usado
+   * em `revokeFamilyTokens`/`revokeFamilySessions` deste arquivo). O `rowCount`
+   * decide o vencedor da race: só o request que Rotacionou o token pode criar o
+   * filho; o perdedor recebe `null` e cai na detecção de REUSO no serviço.
+   */
+  async rotateRefreshToken(id: string, rotatedAt: Date): Promise<RefreshTokenRow | null> {
+    const { rows } = await this.db().query(
+      "UPDATE auth.refresh_tokens SET status = 'ROTATED', rotated_at = $2 WHERE id = $1 AND status = 'ACTIVE' RETURNING *",
+      [id, rotatedAt],
+    );
+    return rows[0] ? PgAuthRepository.mapToken(rows[0]) : null;
+  }
   async revokeFamilyTokens(familyId: string, reasonStatus: string): Promise<number> {
-    const { rowCount } = await this.db().query("UPDATE refresh_tokens SET status = $1 WHERE family_id = $2 AND status = 'ACTIVE'", [reasonStatus, familyId]);
+    const { rowCount } = await this.db().query("UPDATE auth.refresh_tokens SET status = $1 WHERE family_id = $2 AND status = 'ACTIVE'", [reasonStatus, familyId]);
     return rowCount ?? 0;
   }
   async createVerificationToken(input: { identityId: string; tokenHash: string; expiresAt: Date }): Promise<VerificationRow> {
-    const { rows } = await this.db().query('INSERT INTO email_verification_tokens (id, identity_id, token_hash, expires_at) VALUES ($1,$2,$3,$4) RETURNING *', [newId(), input.identityId, input.tokenHash, input.expiresAt]);
+    const { rows } = await this.db().query('INSERT INTO auth.email_verification_tokens (id, identity_id, token_hash, expires_at) VALUES ($1,$2,$3,$4) RETURNING *', [newId(), input.identityId, input.tokenHash, input.expiresAt]);
     const r = rows[0];
     return { id: r.id, identityId: r.identity_id, tokenHash: r.token_hash, expiresAt: r.expires_at, consumedAt: r.consumed_at, createdAt: r.createdAt };
   }
   async findVerificationTokenByHash(hash: string): Promise<VerificationRow | null> {
-    const { rows } = await this.db().query('SELECT * FROM email_verification_tokens WHERE token_hash = $1 LIMIT 1', [hash]);
+    const { rows } = await this.db().query('SELECT * FROM auth.email_verification_tokens WHERE token_hash = $1 LIMIT 1', [hash]);
     if (!rows[0]) return null;
     const r = rows[0];
     return { id: r.id, identityId: r.identity_id, tokenHash: r.token_hash, expiresAt: r.expires_at, consumedAt: r.consumed_at, createdAt: r.createdAt };
   }
   async consumeVerificationToken(id: string): Promise<void> {
-    await this.db().query('UPDATE email_verification_tokens SET consumed_at = now() WHERE id = $1', [id]);
+    await this.db().query('UPDATE auth.email_verification_tokens SET consumed_at = now() WHERE id = $1', [id]);
   }
   async createConsent(input: { identityId: string; type: string; version: string }): Promise<ConsentRow> {
-    const { rows } = await this.db().query('INSERT INTO consent_grants (id, identity_id, type, version) VALUES ($1,$2,$3,$4) ON CONFLICT (identity_id, type, version) DO NOTHING RETURNING *', [newId(), input.identityId, input.type, input.version]);
+    const { rows } = await this.db().query('INSERT INTO auth.consent_grants (id, identity_id, type, version) VALUES ($1,$2,$3,$4) ON CONFLICT (identity_id, type, version) DO NOTHING RETURNING *', [newId(), input.identityId, input.type, input.version]);
     const r = rows[0] ?? { id: newId(), identity_id: input.identityId, type: input.type, version: input.version, accepted_at: new Date() };
     return { id: r.id, identityId: r.identity_id ?? input.identityId, type: r.type ?? input.type, version: r.version ?? input.version, acceptedAt: r.accepted_at ?? new Date() };
   }
   async listConsentsByIdentity(identityId: string): Promise<ConsentRow[]> {
-    const { rows } = await this.db().query('SELECT * FROM consent_grants WHERE identity_id = $1 ORDER BY accepted_at ASC', [identityId]);
+    const { rows } = await this.db().query('SELECT * FROM auth.consent_grants WHERE identity_id = $1 ORDER BY accepted_at ASC', [identityId]);
     return rows.map((r: any) => ({ id: r.id, identityId: r.identity_id, type: r.type, version: r.version, acceptedAt: r.accepted_at }));
   }
   async emitOutbox(input: { eventId: string; aggregate: string; aggregateId: string; type: string; payload: unknown }): Promise<void> {
-    await this.db().query('INSERT INTO outbox_events (id, "eventId", aggregate, "aggregateId", type, payload) VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT ("eventId") DO NOTHING', [newId(), input.eventId, input.aggregate, input.aggregateId, input.type, JSON.stringify(input.payload ?? {})]);
+    await this.db().query('INSERT INTO auth.outbox_events (id, "eventId", aggregate, "aggregateId", type, payload) VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT ("eventId") DO NOTHING', [newId(), input.eventId, input.aggregate, input.aggregateId, input.type, JSON.stringify(input.payload ?? {})]);
   }
 }

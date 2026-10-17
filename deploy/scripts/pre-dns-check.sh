@@ -29,7 +29,11 @@ http_code_resolve() { # host path — via VPS_IP sem DNS
 
 if [ "$MODE" = "pin" ]; then
   [ -n "$VPS_IP" ] || { echo "VPS_IP obrigatório no modo pin (ex.: VPS_IP=203.0.113.10 $0)" >&2; exit 2; }
-  for h in aurumbit.com admin.aurumbit.com api.aurumbit.com; do
+  # Só os hosts que têm rota em `/`: portal e admin. A API Nest NÃO tem rota
+  # em `/` (setGlobalPrefix('v1') sem exceção para a raiz) → 404 em `/`, o que
+  # deixaria este gate permanentemente vermelho. Ela é validada em
+  # /health/live logo abaixo.
+  for h in aurumbit.com admin.aurumbit.com; do
     code="$(http_code_resolve "$h" "/")"
     [ "$code" = "200" ] && ok "$h / → 200 via --resolve $VPS_IP" || bad "$h / via --resolve" "HTTP $code"
   done

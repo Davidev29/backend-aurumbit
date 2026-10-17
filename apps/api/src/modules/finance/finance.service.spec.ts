@@ -107,7 +107,7 @@ describe('FinanceService — baixa idempotente', () => {
       return { rows: [] };
     });
     const svc = new FinanceService(pool as never);
-    const out = await svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-1');
+    const out = await svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-recv-replay');
     expect(out.receivable.status).toBe('RECEBIDO');
     expect(out.transaction.id).toBe('txn-1');
     expect(queries.some((q) => q.sql.startsWith('UPDATE receivables'))).toBe(false);
@@ -145,7 +145,7 @@ describe('FinanceService — baixa idempotente', () => {
       return { rows: [] };
     });
     const svc = new FinanceService(pool as never);
-    const out = await svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-1');
+    const out = await svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-recv-happy');
     expect(out.receivable.status).toBe('RECEBIDO');
     expect(out.transaction.kind).toBe('INCOME');
     const balanceUpdate = queries.find((q) => q.sql.includes('"balanceCents" = "balanceCents" +'));
@@ -169,7 +169,7 @@ describe('FinanceService — baixa idempotente', () => {
       return { rows: [] };
     });
     const svc = new FinanceService(pool as never);
-    const out = await svc.markPaid('org-1', 'pay-1', { accountId: 'acc-1' }, 'key-2');
+    const out = await svc.markPaid('org-1', 'pay-1', { accountId: 'acc-1' }, 'key-paid-happy');
     expect(out.payable.status).toBe('PAGO');
     expect(out.transaction.kind).toBe('EXPENSE');
     const balanceUpdate = queries.find((q) => q.sql.includes('"balanceCents" = "balanceCents" -'));
@@ -187,7 +187,7 @@ describe('FinanceService — transição ilegal → 422, sem sobrescrever', () =
       return { rows: [] };
     });
     const svc = new FinanceService(pool as never);
-    await expect(svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'k')).rejects.toBeInstanceOf(
+    await expect(svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-cancel-1')).rejects.toBeInstanceOf(
       UnprocessableEntityException,
     );
     expect(queries.some((q) => q.sql.startsWith('UPDATE receivables'))).toBe(false);
@@ -202,7 +202,7 @@ describe('FinanceService — transição ilegal → 422, sem sobrescrever', () =
       return { rows: [] };
     });
     const svc = new FinanceService(pool as never);
-    await expect(svc.markPaid('org-1', 'pay-1', { accountId: 'acc-1' }, 'k')).rejects.toBeInstanceOf(
+    await expect(svc.markPaid('org-1', 'pay-1', { accountId: 'acc-1' }, 'key-inativa-1')).rejects.toBeInstanceOf(
       UnprocessableEntityException,
     );
     expect(queries.some((q) => q.sql.startsWith('INSERT INTO financial_transactions'))).toBe(false);
@@ -217,10 +217,144 @@ describe('FinanceService — transição ilegal → 422, sem sobrescrever', () =
       return { rows: [] };
     });
     const svc = new FinanceService(pool as never);
-    await expect(svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'k')).rejects.toBeInstanceOf(
+    await expect(svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-categoria-1')).rejects.toBeInstanceOf(
       UnprocessableEntityException,
     );
     expect(queries.some((q) => q.sql.startsWith('UPDATE receivables'))).toBe(false);
+  });
+});
+
+/**
+ * D1-1/D1-2 — corrida entre duas requests com chaves de idempotência
+ * DIFERENTES (o vetor real: sem header cada retry gerava `randomUUID()`).
+ * Harness no padrão de `finance-automation.spec.ts:274-320`: fake PG
+ * stateful onde o UPDATE só casa se o título ainda NÃO estiver baixado
+ * (equivale ao `AND status <> 'RECEBIDO'/'PAGO'` real).
+ */
+describe('FinanceService — concorrência: baixa única por título', () => {
+  function raceHarness(kind: 'receivable' | 'payable') {
+    const isRec = kind === 'receivable';
+    const table = isRec ? 'receivables' : 'payables';
+    const base = isRec ? receivableRow() : payableRow();
+    const baseTxn = isRec ? txnRow() : txnRow({ id: 'txn-2', kind: 'EXPENSE', categoryId: 'cat-2', payableId: 'pay-1', receivableId: null });
+    const cat = isRec ? INCOME_CATEGORY : EXPENSE_CATEGORY;
+    const state = {
+      row: { ...base } as Record<string, unknown>,
+      txn: null as Record<string, unknown> | null,
+      balance: 0,
+      outbox: 0,
+    };
+    const queries: Array<{ sql: string; params?: unknown[] }> = [];
+    const q = async (sql: string, params?: unknown[]) => {
+      queries.push({ sql, params });
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [], rowCount: 0 };
+      // O fake honra a GUARDA REAL do SQL: sem `AND status <> '<baixa>'`
+      // no WHERE, o UPDATE casa sempre (comportamento pré-fix) e o teste
+      // acusa a duplicidade.
+      if (sql.startsWith(`UPDATE ${table} SET status`)) {
+        const guarded = sql.includes(`status <> '${isRec ? 'RECEBIDO' : 'PAGO'}'`);
+        if (guarded && state.row.status === (isRec ? 'RECEBIDO' : 'PAGO')) {
+          return { rows: [], rowCount: 0 }; // perdedor da race
+        }
+        state.row = {
+          ...state.row,
+          status: isRec ? 'RECEBIDO' : 'PAGO',
+          [isRec ? 'receivedAt' : 'paidAt']: new Date('2026-10-10T00:00:00Z'),
+          accountId: 'acc-1',
+        };
+        return { rows: [state.row], rowCount: 1 };
+      }
+      if (sql.startsWith('INSERT INTO financial_transactions')) {
+        if (state.txn) return { rows: [], rowCount: 0 };
+        state.txn = { ...baseTxn, id: 'txn-race', idempotencyKey: (params ?? [])[9] };
+        return { rows: [state.txn], rowCount: 1 };
+      }
+      if (sql.includes('"balanceCents" = "balanceCents"')) {
+        state.balance += base.amountCents;
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes('finance_outbox')) {
+        state.outbox += 1;
+        return { rows: [], rowCount: 1 };
+      }
+      // leituras
+      if (sql.includes(`FROM ${table} WHERE id`)) return { rows: [state.row] };
+      if (sql.includes('FROM financial_transactions WHERE "idempotencyKey"')) {
+        const key = (params ?? [])[0];
+        return { rows: state.txn && state.txn.idempotencyKey === key ? [state.txn] : [] };
+      }
+      if (sql.includes(isRec ? '"receivableId"' : '"payableId"')) {
+        return { rows: state.txn ? [state.txn] : [] };
+      }
+      if (sql.includes('FROM financial_accounts WHERE id')) return { rows: [ACTIVE_ACCOUNT] };
+      if (sql.includes('FROM financial_categories WHERE id')) return { rows: [cat] };
+      return { rows: [], rowCount: 0 };
+    };
+    const client = { query: q, release: jest.fn() };
+    const pool = { query: q, connect: jest.fn(async () => client) };
+    return { svc: new FinanceService(pool as never), state, queries };
+  }
+
+  it('markReceived concorrente (chaves distintas) → 1 Transaction, saldo 1×, 1 outbox', async () => {
+    const { svc, state, queries } = raceHarness('receivable');
+    const [a, b] = await Promise.all([
+      svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-race-a'),
+      svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, 'key-race-b'),
+    ]);
+    expect(queries.filter((q) => q.sql.startsWith('INSERT INTO financial_transactions'))).toHaveLength(1);
+    expect(state.balance).toBe(5000);
+    expect(state.outbox).toBe(1);
+    expect(a.receivable.status).toBe('RECEBIDO');
+    expect(b.receivable.status).toBe('RECEBIDO');
+    expect(b.transaction.id).toBe('txn-race');
+    // SQL literal: a guarda precisa estar no WHERE, não só no fake.
+    expect(queries.find((q) => q.sql.startsWith('UPDATE receivables SET status'))?.sql).toContain(
+      `AND status <> 'RECEBIDO'`,
+    );
+  });
+
+  it('markPaid concorrente (chaves distintas) → 1 Transaction, saldo 1×, 1 outbox', async () => {
+    const { svc, state, queries } = raceHarness('payable');
+    const [a, b] = await Promise.all([
+      svc.markPaid('org-1', 'pay-1', { accountId: 'acc-1' }, 'key-race-c'),
+      svc.markPaid('org-1', 'pay-1', { accountId: 'acc-1' }, 'key-race-d'),
+    ]);
+    expect(queries.filter((q) => q.sql.startsWith('INSERT INTO financial_transactions'))).toHaveLength(1);
+    expect(state.balance).toBe(2000);
+    expect(state.outbox).toBe(1);
+    expect(a.payable.status).toBe('PAGO');
+    expect(b.payable.status).toBe('PAGO');
+    expect(b.transaction.id).toBe('txn-race');
+    expect(queries.find((q) => q.sql.startsWith('UPDATE payables SET status'))?.sql).toContain(
+      `AND status <> 'PAGO'`,
+    );
+  });
+});
+
+describe('FinanceService — Idempotency-Key obrigatória (D1-3)', () => {
+  it.each([
+    ['ausente', undefined],
+    ['vazia', ''],
+    ['curta', 'abc'],
+  ])('markReceived sem chave %s → 400 e zero queries', async (_label, key) => {
+    const { pool, queries } = mockPool(() => ({ rows: [] }));
+    const svc = new FinanceService(pool as never);
+    await expect(svc.markReceived('org-1', 'rec-1', { accountId: 'acc-1' }, key as never)).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'IDEMPOTENCY_REQUIRED' }),
+    });
+    expect(queries).toHaveLength(0);
+  });
+
+  it.each([
+    ['ausente', undefined],
+    ['curta', 'abc'],
+  ])('markPaid sem chave %s → 400 e zero queries', async (_label, key) => {
+    const { pool, queries } = mockPool(() => ({ rows: [] }));
+    const svc = new FinanceService(pool as never);
+    await expect(svc.markPaid('org-1', 'pay-1', { accountId: 'acc-1' }, key as never)).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'IDEMPOTENCY_REQUIRED' }),
+    });
+    expect(queries).toHaveLength(0);
   });
 });
 

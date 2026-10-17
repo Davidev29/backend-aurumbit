@@ -25,6 +25,22 @@ function isUniqueViolation(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
 }
 
+// Baixas manuais exigem `Idempotency-Key` (mín. 8 chars — mesmo padrão de
+// `finance-automation.service.ts`/`FinanceAutomationController.keyOf`).
+// Antes, `idempotencyKey ?? randomUUID()` gerava chave nova a cada request
+// sem o header: a dedupe por `UNIQUE(financial_transactions.idempotencyKey)`
+// nunca protegia e o retry virava 2ª Transaction + saldo creditado 2×.
+function requireIdempotencyKey(key?: string): string {
+  const k = (key ?? '').trim();
+  if (k.length < 8) {
+    throw new BadRequestException({
+      code: 'IDEMPOTENCY_REQUIRED',
+      message: 'Idempotency-Key obrigatória (mín. 8 chars).',
+    });
+  }
+  return k;
+}
+
 const CATEGORY_COLS = `id, "orgId", code, name, type, active, "createdAt", "updatedAt"`;
 const ACCOUNT_COLS = `id, "orgId", code, name, type, "balanceCents", active, "createdAt", "updatedAt"`;
 const RECEIVABLE_COLS = `id, "orgId", "sourceType", "sourceId", "categoryId", "amountCents", "dueDate", status, "receivedAt", "accountId", "createdAt", "updatedAt"`;
@@ -216,14 +232,21 @@ export class FinanceService {
   }
 
   /**
-   * Baixa de recebimento (idempotente). Replay do mesmo idempotencyKey —
-   * ou de um título já RECEBIDO — retorna `{ receivable, transaction }`
-   * existentes, sem duplicar Transaction, sem remexer saldo, sem reemitir
-   * outbox. Sucesso: RECEBIDO + Transaction INCOME + saldo += valor +
-   * outbox, tudo na mesma txn.
+   * Baixa de recebimento (idempotente). `Idempotency-Key` é OBRIGATÓRIA
+   * (mín. 8 chars) — sem ela cada retry gerava chave nova e não deduplicava.
+   * Replay do mesmo idempotencyKey — ou de um título já RECEBIDO — retorna
+   * `{ receivable, transaction }` existentes, sem duplicar Transaction, sem
+   * remexer saldo, sem reemitir outbox. Sucesso: RECEBIDO + Transaction
+   * INCOME + saldo += valor + outbox, tudo na mesma txn.
+   *
+   * Guarda de concorrência: o `check()` roda FORA da txn, então duas
+   * requests com chaves DIFERENTES podem passar nele juntas. O
+   * `AND status <> 'RECEBIDO'` no WHERE é o backstop atômico — o perdedor
+   * da race casa 0 linhas, volta via ROLLBACK e devolve o estado
+   * vencedor (replay), nunca 500 e nunca 2 Transaction para o mesmo título.
    */
-  async markReceived(orgId: string, id: string, dto: MarkReceivedDto, idempotencyKey?: string) {
-    const key = idempotencyKey ?? randomUUID();
+  async markReceived(orgId: string, id: string, dto: MarkReceivedDto, idempotencyKey: string) {
+    const key = requireIdempotencyKey(idempotencyKey);
     // Replay pela chave: mesma baixa, sem duplicar.
     const replay = await this.findTransactionByKey(orgId, key);
     if (replay) {
@@ -248,11 +271,21 @@ export class FinanceService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // Guarda de status no WHERE (backstop atômico da corrida): o título
+      // só é baixado se ainda não estiver RECEBIDO no momento do lock.
       const { rows: recRows } = await client.query(
         `UPDATE receivables SET status = 'RECEBIDO', "receivedAt" = $3, "accountId" = $4, "updatedAt" = now()
-         WHERE id = $1 AND "orgId" = $2 RETURNING ${RECEIVABLE_COLS}`,
+         WHERE id = $1 AND "orgId" = $2 AND status <> 'RECEBIDO' RETURNING ${RECEIVABLE_COLS}`,
         [id, orgId, occurredAt, dto.accountId],
       );
+      if (recRows.length === 0) {
+        // Perdedor da race (outra baixa já RECEBIDO): desfaz e devolve o
+        // estado vencedor — replay idempotente, sem 2ª Transaction.
+        await client.query('ROLLBACK');
+        const receivable = await this.getReceivable(orgId, id);
+        const transaction = await this.findTransactionByReceivable(orgId, id);
+        return { receivable, transaction };
+      }
       const { rows: txnRows } = await client.query(
         `INSERT INTO financial_transactions (id, "orgId", "accountId", "categoryId", kind, "amountCents",
            "occurredAt", "receivableId", provider, "externalId", "idempotencyKey", "createdAt", "updatedAt")
@@ -359,10 +392,14 @@ export class FinanceService {
 
   /**
    * Baixa de pagamento (idempotente, espelho de markReceived).
+   * `Idempotency-Key` obrigatória (mín. 8 chars) + guarda de concorrência
+   * `AND status <> 'PAGO'` no WHERE — mesmo backstop atômico de
+   * `markReceived`: o perdedor da race casa 0 linhas e devolve o estado
+   * vencedor via ROLLBACK.
    * Sucesso: PAGO + Transaction EXPENSE + saldo -= valor + outbox, mesma txn.
    */
-  async markPaid(orgId: string, id: string, dto: MarkPaidDto, idempotencyKey?: string) {
-    const key = idempotencyKey ?? randomUUID();
+  async markPaid(orgId: string, id: string, dto: MarkPaidDto, idempotencyKey: string) {
+    const key = requireIdempotencyKey(idempotencyKey);
     const replay = await this.findTransactionByKey(orgId, key);
     if (replay) {
       const payable = await this.getPayable(orgId, id);
@@ -386,11 +423,20 @@ export class FinanceService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // Guarda de status no WHERE (backstop atômico da corrida).
       const { rows: payRows } = await client.query(
         `UPDATE payables SET status = 'PAGO', "paidAt" = $3, "accountId" = $4, "updatedAt" = now()
-         WHERE id = $1 AND "orgId" = $2 RETURNING ${PAYABLE_COLS}`,
+         WHERE id = $1 AND "orgId" = $2 AND status <> 'PAGO' RETURNING ${PAYABLE_COLS}`,
         [id, orgId, occurredAt, dto.accountId],
       );
+      if (payRows.length === 0) {
+        // Perdedor da race: devolve o estado vencedor, sem 2ª Transaction
+        // e sem tocar o saldo.
+        await client.query('ROLLBACK');
+        const payable = await this.getPayable(orgId, id);
+        const transaction = await this.findTransactionByPayable(orgId, id);
+        return { payable, transaction };
+      }
       const { rows: txnRows } = await client.query(
         `INSERT INTO financial_transactions (id, "orgId", "accountId", "categoryId", kind, "amountCents",
            "occurredAt", "payableId", provider, "externalId", "idempotencyKey", "createdAt", "updatedAt")

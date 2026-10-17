@@ -6,7 +6,6 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { parseAllowlist, securityHelmetOptions } from './common/http/security';
-
 // Re-export p/ compatibilidade (Fase ≤5 importava `parseAllowlist` daqui).
 export { parseAllowlist, securityHelmetOptions } from './common/http/security';
 
@@ -40,6 +39,12 @@ async function bootstrap(): Promise<void> {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
+
+  // SIGTERM/SIGINT: sem isto o Nest NÃO intercepta o sinal e nenhum
+  // `OnApplicationShutdown` roda — o `AuthPoolShutdown` de auth.module.ts
+  // nunca chamaria `pool.end()` e o pod sairia no grace period do orchestrator
+  // com os pools abertos (conexões penduradas no shutdown).
+  app.enableShutdownHooks();
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port);

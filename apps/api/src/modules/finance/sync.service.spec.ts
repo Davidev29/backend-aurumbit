@@ -2,7 +2,7 @@
 // Sem PG/Redis: fake em memória implementando a superfície SQL usada pelo
 // `FinanceSyncService` (mesmo padrão de `billing/webhook.spec.ts`).
 
-import { FinanceSyncService, type FinanceEnvelope } from './sync.service';
+import { FinanceSyncService, projectionMarkerIdOf, type FinanceEnvelope } from './sync.service';
 import { financeSyncJobOptions } from './sync.queue';
 import { classifyRefund, normalizeFinanceTopic, shouldApplyFinanceEvent } from './sync.transitions';
 
@@ -344,6 +344,28 @@ describe('FinanceSyncService — projeção e tipos desconhecidos', () => {
     );
     expect(again.status).toBe('noop');
     expect(fake.outbox).toHaveLength(1);
+  });
+
+  // O UNIQUE global de `scope` saiu em 20261017000000 (o core precisa de 1
+  // snapshot por PERÍODO), então o marcador arbitra pela PK `id`.
+  it('marcador usa id determinístico por namespace e ON CONFLICT (id) — não (scope)', async () => {
+    const fake = makeFakeDb();
+    const svc = new FinanceSyncService(fake.pool as never);
+    await svc.handleEnvelope(envelope({ eventId: 'evt-m1', type: 'SubscriptionActivated', payload: {} }));
+    await svc.handleEnvelope(
+      envelope({ eventId: 'evt-m2', type: 'SubscriptionActivated', payload: { orgId: 'org-1' } }),
+    );
+
+    const inserts = fake.calls.filter((c) => c.sql.startsWith('INSERT INTO projection_snapshots'));
+    expect(inserts).toHaveLength(2);
+    for (const call of inserts) {
+      expect(call.sql).toContain('ON CONFLICT (id) DO UPDATE');
+      expect(call.sql).not.toContain('ON CONFLICT (scope)');
+      expect(call.params?.[0]).toBe(projectionMarkerIdOf(String(call.params?.[1]))); // id estável
+    }
+    expect(fake.snapshots.size).toBe(2); // 'global' e 'org:org-1' são namespaces distintos
+    expect(fake.snapshots.get('global')?.id).toBe(projectionMarkerIdOf('global'));
+    expect(fake.snapshots.get('org:org-1')?.id).toBe(projectionMarkerIdOf('org:org-1'));
   });
 
   it('tipo desconhecido → noop sem DLQ', async () => {

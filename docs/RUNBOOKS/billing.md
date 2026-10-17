@@ -13,7 +13,7 @@ Este runbook cobre o fluxo canônico + webhook + reconciliação + DLQ.
 | Criar order | `POST /v1/billing/orders` (`x-role: admin`) | Order + Invoice + Payment `PENDING` (externalId `pay_*`). |
 | Invoice | `POST /v1/billing/orders/:id/invoices` | Idempotente (retorna a pendente). |
 | Webhook Asaas (mock) | `POST /v1/billing/webhooks/asaas` (**pública**) | `RECEIVED → VALIDATED → APPLIED / REJECTED / DUPLICATE`. Sempre 200 (inclusive duplicate/rejected) p/ não gerar retry inútil do provedor. |
-| Confirmado | — | Payment `CONFIRMED` + order/invoice `PAID` + outbox `billing.payment.confirmed.v1` (`eventId = billing-payment-confirmed:<externalId>`) + hook de licença `TODO(worker licensing)` + e-mail stub `payment-confirmed` (`idempotencyKey = eventId`). |
+| Confirmado | — | Payment `CONFIRMED` + order/invoice `PAID` + outbox `billing.payment.confirmed.v1` (`eventId = billing:payment-confirmed:<externalId>` — 3 segmentos, exigido pelo `jobId = eventId` do relay BullMQ) + hook de licença `TODO(worker licensing)` + e-mail stub `payment-confirmed` (`idempotencyKey = eventId`). |
 
 `PaymentConfirmed` exige `paidAt + amount` casando; divergência → `REJECTED` + alerta.
 Inspeção: `GET /v1/billing/outbox|emails|license-hooks|receipts|alerts|metrics` (admin).

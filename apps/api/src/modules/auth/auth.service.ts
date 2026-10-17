@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { IAuthRepository } from './auth.repository';
+import { IAuthRepository, IdentityRow } from './auth.repository';
 import { AuthError, ConsentInput, IDENTITY_STATUS, LoginMfaChallenge, LoginResult, OUTBOX_TYPES } from './auth.types';
 import { emitSecurityEvent, getSecurityEventPool } from '../audit/security-events';
 import {
   decryptSecret,
   deriveEncKey,
+  deriveKeyId,
   encryptSecret,
   hashPassword,
   maskEmail,
@@ -29,6 +30,28 @@ export interface AuthOptions {
   jwtAudience?: string;
   accessTtlSec?: number;
   clock?: () => Date;
+}
+
+/**
+ * Label do KDF do segredo MFA. **NUNCA MUDAR** — é o que mantém legíveis os
+ * ciphertexts já gravados (trocar o label invalida todo MFA existente).
+ */
+const MFA_ENC_KEY_LABEL = 'aurum-mfa-v1';
+
+/**
+ * D2-3(a) / D2-4: fail-fast de boot. Em produção o segredo TOTP de cada usuário
+ * é cifrado com uma chave que precisa ser INDEPENDENTE do segredo JWT —
+ * derivar de `JWT_SECRET` faz a rotação do JWT (rotina) derrubar o MFA de
+ * todo mundo e expõe os segredos TOTP a quem vazar o JWT. Sem chave dedicada o
+ * processo não sobe. Mesmo padrão de `loadAsaasConfig` (asaas-adapter).
+ */
+export function assertMfaEncKeyConfig(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.MFA_ENC_KEY) return;
+  if (env.NODE_ENV !== 'production') return;
+  throw new Error(
+    'MFA_ENC_KEY ausente (fail-fast em produção): sem chave dedicada o segredo TOTP seria cifrado ' +
+      'com o segredo JWT (rotacionar o JWT quebraria todo MFA). Gere com `openssl rand -hex 32`.',
+  );
 }
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -70,10 +93,64 @@ export class AuthService {
     return s;
   }
 
-  private encKey(): Buffer {
-    // TODO(KMS): envelope encryption; hoje deriva de env com fallback dev-only.
-    const k = process.env.MFA_ENC_KEY ?? this.secret;
-    return deriveEncKey('aurum-mfa-v1', k);
+  /**
+   * D2-3: chaves de encriptação do segredo TOTP.
+   *
+   * Antes: `process.env.MFA_ENC_KEY ?? this.secret` — `MFA_ENC_KEY` não está em
+   * `env.schema.ts`, nem no `.env.example`, nem no `gen-prod-env.sh`, então em
+   * produção TODO segredo TOTP era cifrado com chave derivada do segredo JWT
+   * (rotacionar o JWT quebrava todo MFA) e o ciphertext só carregava `'v1'`,
+   * sem `kid` nem lista de chaves anteriores.
+   *
+   * - `current`: `MFA_ENC_KEY` (obrigatório em produção) ou, em dev/test, o
+   *   segredo JWT — fallback preservado para não quebrar ambiente existente.
+   * - `byKid`: keyring `kid → chave` incluindo `MFA_ENC_KEY_PREVIOUS`
+   *   (lista separada por vírgula), então rotacionar a chave NÃO invalida o MFA
+   *   já emitido — mesmo padrão de `LICENSE_MASTER_KEY_PREVIOUS_PATH`.
+   * - `legacy`: material derivado do segredo JWT, usado SÓ para decifrar
+   *   ciphertext SEM `kid` (emitido antes de existir `MFA_ENC_KEY`) — é o que
+   *   mantém os MFA já registrados legíveis depois da adoção da chave nova.
+   */
+  private mfaKeys(): { current: Buffer; kid: string; byKid: Map<string, Buffer>; legacy: Buffer | null } {
+    const explicit = process.env.MFA_ENC_KEY;
+    const raw = explicit ?? this.secret;
+    const byKid = new Map<string, Buffer>();
+    const kid = deriveKeyId(raw);
+    byKid.set(kid, deriveEncKey(MFA_ENC_KEY_LABEL, raw));
+    for (const prev of (process.env.MFA_ENC_KEY_PREVIOUS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
+      byKid.set(deriveKeyId(prev), deriveEncKey(MFA_ENC_KEY_LABEL, prev));
+    }
+    const legacy = explicit ? deriveEncKey(MFA_ENC_KEY_LABEL, this.secret) : null;
+    return { current: deriveEncKey(MFA_ENC_KEY_LABEL, raw), kid, byKid, legacy };
+  }
+
+  /**
+   * D2-3(d): falha de decifragem vira erro CONTROLADO (código + trilha de
+   * segurança), não um 500 mudo com stack de AES. Causa prática: `MFA_ENC_KEY`
+   * trocada sem listar a anterior em `MFA_ENC_KEY_PREVIOUS`.
+   */
+  private decryptMfaSecret(enc: string, identityId: string): string {
+    const { current, byKid, legacy } = this.mfaKeys();
+    try {
+      return decryptSecret(enc, current, { keyring: byKid });
+    } catch {
+      // Ciphertext legado (sem kid) cifrado com a chave derivada do JWT secret.
+      if (legacy) {
+        try {
+          return decryptSecret(enc, legacy);
+        } catch {
+          // cai no erro controlado abaixo
+        }
+      }
+      void emitSecurityEvent(getSecurityEventPool(), {
+        type: 'MFA_FAILED',
+        actorId: identityId,
+        entity: 'credentials',
+        entityId: identityId,
+        metadata: { reason: 'MFA_KEY_MISMATCH' },
+      });
+      throw new AuthError('MFA_SECRET_UNREADABLE', 500, 'Segredo MFA ilegível com a chave atual (MFA_ENC_KEY trocada sem MFA_ENC_KEY_PREVIOUS?).');
+    }
   }
 
   // ---------------------------------------------------------------- register
@@ -151,13 +228,22 @@ export class AuthService {
     }
   }
 
-  private async failAttempt(identityId: string, attempts: number): Promise<void> {
-    const next = attempts + 1;
-    if (next >= MAX_FAILED_ATTEMPTS) {
-      await this.repo.updateIdentity(identityId, { failedAttempts: next, status: IDENTITY_STATUS.LOCKED, lockedUntil: new Date(+this.now() + LOCKOUT_MS) });
-    } else {
-      await this.repo.updateIdentity(identityId, { failedAttempts: next });
-    }
+  /**
+   * D2-2: registra a falha de autenticação com incremento ATÔMICO + lockout no
+   * MESMO statement. Antes o contador era calculado em Node (`attempts + 1`) e
+   * gravado como valor ABSOLUTO: N tentativas concorrentes partindo de `k`
+   * gravavam todas `k+1` → 5 senhas erradas em paralelo deixavam
+   * `failed_attempts = 1` e a conta NUNCA travava.
+   * @returns a identidade já persistida (contador + lockout) — o caller deriva
+   *   o `reason` do evento de segurança do valor REAL, não de aritmética local.
+   */
+  private async failAttempt(identityId: string): Promise<IdentityRow> {
+    return this.repo.incrementFailedAttempts({
+      id: identityId,
+      max: MAX_FAILED_ATTEMPTS,
+      lockedStatus: IDENTITY_STATUS.LOCKED,
+      lockedUntil: new Date(+this.now() + LOCKOUT_MS),
+    });
   }
 
   private async issueSession(identityId: string, deviceLabel: string | null, mfa: boolean): Promise<LoginResult> {
@@ -191,7 +277,8 @@ export class AuthService {
     const cred = await this.repo.findCredentialByIdentityId(identity.id);
     const ok = cred ? await verifyPassword(cred.passwordHash, input.password).catch(() => false) : false;
     if (!ok) {
-      await this.failAttempt(identity.id, identity.failedAttempts);
+      // Contador/lockout derivados do statement atômico (D2-2).
+      const after = await this.failAttempt(identity.id);
       // E7 (Fase 9): trilha de segurança best-effort (fire-and-forget —
       // nunca muda a decisão/anti-enumeração do login).
       void emitSecurityEvent(getSecurityEventPool(), {
@@ -200,20 +287,27 @@ export class AuthService {
         entity: 'user_identity',
         entityId: identity.id,
         metadata: {
-          reason:
-            identity.failedAttempts + 1 >= MAX_FAILED_ATTEMPTS
-              ? 'ACCOUNT_LOCKED'
-              : 'INVALID_CREDENTIALS',
+          reason: after.failedAttempts >= MAX_FAILED_ATTEMPTS ? 'ACCOUNT_LOCKED' : 'INVALID_CREDENTIALS',
         },
       });
       throw new AuthError('INVALID_CREDENTIALS', 401, 'Credenciais inválidas.');
     }
-    await this.repo.updateIdentity(identity.id, { failedAttempts: 0, lockedUntil: null });
     if (identity.status === IDENTITY_STATUS.PENDING_VERIFICATION) {
       throw new AuthError('EMAIL_NOT_VERIFIED', 403, 'E-mail ainda não verificado.');
     }
     const fresh = await this.repo.findIdentityById(identity.id);
     if (!fresh || fresh.status === IDENTITY_STATUS.DELETED) throw new AuthError('INVALID_CREDENTIALS', 401, 'Credenciais inválidas.');
+    // Lockout concorrente ENTRE a leitura e o re-read: `failAttempt` grava o
+    // status no mesmo statement atômico, então um `failAttempt` disparado por
+    // outro request pode ter travado a conta enquanto esta senha era conferida.
+    // NEVER emitir sessão numa conta LOCKED (o token viveria além do lockout).
+    if (fresh.status === IDENTITY_STATUS.LOCKED) throw new AuthError('INVALID_CREDENTIALS', 401, 'Credenciais inválidas.');
+    // Reset do contador SÓ AQUI: senha conferida + e-mail verificado + re-read
+    // confirmando que a identidade não foi deletada/travada no meio. Antes o
+    // reset absoluto rodava ANTES do check de e-mail e do re-read — um único
+    // login legítimo concorrente zerava `failed_attempts` do atacante e o brute
+    // force nunca atingia MAX_FAILED_ATTEMPTS (lockout ficava resistível).
+    await this.repo.updateIdentity(fresh.id, { failedAttempts: 0, lockedUntil: null });
     if (fresh.mfaEnabled) {
       return { mfaRequired: true as const, mfaTicket: signMfaTicket(fresh.id, this.secret, { issuer: this.issuer, audience: this.audience }), expiresIn: 300 };
     }
@@ -227,6 +321,27 @@ export class AuthService {
     await this.repo.emitOutbox({ eventId: newId(), aggregate: 'auth_session_family', aggregateId, type: OUTBOX_TYPES.SessionRevoked, payload: { familyId, reason } });
   }
 
+  /**
+   * Detecção de REUSO (D2-1): o token JÁ estava rotacionado/revogado, ou o
+   * request perdeu a race de rotação (`rotateRefreshToken` devolveu `null`).
+   * Mesmo tratamento nos dois casos — reuso de refresh token é indistinguível de
+   * roubo, então a família inteira morre (OAuth 2.0 Security BCP, §4.14.2).
+   * @returns nunca — sempre lança `REUSE_DETECTED` (401).
+   */
+  private async denyReuse(rec: { id: string; familyId: string }, actorId?: string | null): Promise<never> {
+    await this.repo.updateRefreshToken(rec.id, { status: 'REUSED' }).catch(() => undefined);
+    await this.revokeFamily(rec.familyId, 'REUSE_DETECTED', rec.familyId);
+    // E7 (Fase 9): reuso detectado — trilha best-effort (decisão inalterada).
+    void emitSecurityEvent(getSecurityEventPool(), {
+      type: 'TOKEN_ROTATED',
+      actorId: actorId ?? undefined,
+      entity: 'auth_session_family',
+      entityId: rec.familyId,
+      metadata: { reason: 'REUSE_DETECTED', familyId: rec.familyId },
+    });
+    throw new AuthError('REUSE_DETECTED', 401, 'Sessão inválida.');
+  }
+
   async refresh(rawToken: string): Promise<LoginResult> {
     const hash = sha256Hex(String(rawToken ?? ''));
     const rec = await this.repo.findRefreshTokenByHash(hash);
@@ -235,17 +350,7 @@ export class AuthService {
 
     // Reuso: token já rotacionado/revogado ou sessão revogada por reuso → revoga a família.
     if (rec.status === 'ROTATED' || rec.status === 'REVOKED' || rec.status === 'REUSED') {
-      await this.repo.updateRefreshToken(rec.id, { status: 'REUSED' }).catch(() => undefined);
-      await this.revokeFamily(rec.familyId, 'REUSE_DETECTED', rec.familyId);
-      // E7 (Fase 9): reuso detectado — trilha best-effort (decisão inalterada).
-      void emitSecurityEvent(getSecurityEventPool(), {
-        type: 'TOKEN_ROTATED',
-        actorId: session?.identityId,
-        entity: 'auth_session_family',
-        entityId: rec.familyId,
-        metadata: { reason: 'REUSE_DETECTED', familyId: rec.familyId },
-      });
-      throw new AuthError('REUSE_DETECTED', 401, 'Sessão inválida.');
+      return this.denyReuse(rec, session?.identityId);
     }
     if (!session || session.status !== 'ACTIVE') {
       if (session && session.revokedReason === 'REUSE_DETECTED') {
@@ -262,8 +367,13 @@ export class AuthService {
     if (!identity || identity.status === IDENTITY_STATUS.DELETED || identity.status === IDENTITY_STATUS.LOCKED) {
       throw new AuthError('INVALID_TOKEN', 401, 'Sessão inválida.');
     }
-    // Rotação: invalida o atual, emite o próximo na mesma família/sessão.
-    await this.repo.updateRefreshToken(rec.id, { status: 'ROTATED', rotatedAt: this.now() });
+    // Rotação ATÔMICA (D2-1): a guarda `AND status = 'ACTIVE'` no UPDATE decide
+    // o vencedor. Sem ela, dois `POST /v1/auth/refresh` com o MESMO token liam
+    // `ACTIVE`, ambos rotacionavam e ambos criavam um token filho — 2 refresh
+    // tokens válidos na mesma família (o UNIQUE(token_hash) não segura, pois
+    // `randomTokenHex(32)` dá hashes disjuntos). Perdedor (`null`) = reuso.
+    const rotated = await this.repo.rotateRefreshToken(rec.id, this.now());
+    if (!rotated) return this.denyReuse(rec, session.identityId);
     // E7 (Fase 9): rotação legítima — trilha best-effort (decisão inalterada).
     void emitSecurityEvent(getSecurityEventPool(), {
       type: 'TOKEN_ROTATED',
@@ -397,14 +507,17 @@ export class AuthService {
     const identity = await this.repo.findIdentityById(identityId);
     if (!identity) throw new AuthError('NOT_FOUND', 404);
     const secret = newMfaSecret();
-    await this.repo.updateCredential(identityId, { mfaSecretEnc: encryptSecret(secret, this.encKey()), mfaVerifiedAt: null });
+    const keys = this.mfaKeys();
+    // `kid` vai no ciphertext: permite decifrar com a chave anterior depois de
+    // uma rotação de MFA_ENC_KEY (D2-3b).
+    await this.repo.updateCredential(identityId, { mfaSecretEnc: encryptSecret(secret, keys.current, keys.kid), mfaVerifiedAt: null });
     return { secret, otpauthUrl: mfaOtpauthUrl(secret, identity.emailDisplay), warning: 'SHOW_ONCE' };
   }
 
   async mfaVerifyEnrollment(identityId: string, code: string, atMs?: number): Promise<{ ok: true }> {
     const cred = await this.repo.findCredentialByIdentityId(identityId);
     if (!cred?.mfaSecretEnc) throw new AuthError('MFA_NOT_ENROLLED', 400);
-    const secret = decryptSecret(cred.mfaSecretEnc, this.encKey());
+    const secret = this.decryptMfaSecret(cred.mfaSecretEnc, identityId);
     if (!verifyTotp(secret, code, atMs ?? +this.now())) {
       // E7 (Fase 9): falha de verificação do enroll — trilha best-effort.
       void emitSecurityEvent(getSecurityEventPool(), {
@@ -433,9 +546,9 @@ export class AuthService {
     await this.checkLock(identity);
     const cred = await this.repo.findCredentialByIdentityId(sub);
     if (!cred?.mfaSecretEnc || !identity.mfaEnabled) throw new AuthError('MFA_NOT_ENROLLED', 400);
-    const secret = decryptSecret(cred.mfaSecretEnc, this.encKey());
+    const secret = this.decryptMfaSecret(cred.mfaSecretEnc, sub);
     if (!verifyTotp(secret, code, atMs ?? +this.now())) {
-      await this.failAttempt(sub, identity.failedAttempts);
+      await this.failAttempt(sub);
       // E7 (Fase 9): falha de MFA no login — trilha best-effort (decisão inalterada).
       void emitSecurityEvent(getSecurityEventPool(), {
         type: 'MFA_FAILED',

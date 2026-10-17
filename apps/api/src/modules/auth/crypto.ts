@@ -338,21 +338,48 @@ export function deriveEncKey(...parts: string[]): Buffer {
   return createHash('sha256').update(parts.join('|'), 'utf8').digest();
 }
 
-export function encryptSecret(plainB32: string, key: Buffer): string {
+/**
+ * Key-id do envelope: `sha256(<material> da chave>)[:8]` — mesmo padrão já
+ * usado em `license-keys.ts` (`sha256(path)[:8]`). Serve p/ decifrar com a
+ * chave anterior depois de uma rotação, já que o ciphertext legado (pre-kid)
+ * não carrega com qual chave foi cifrado.
+ */
+export function deriveKeyId(rawKey: string): string {
+  return createHash('sha256').update(rawKey, 'utf8').digest('hex').slice(0, 8);
+}
+
+/**
+ * `v1.<kid>.<iv>.<ct>.<tag>` quando `keyId` é informado (formato atual, com
+ * key-id p/ rotação); `v1.<iv>.<ct>.<tag>` sem ele (formato legado, aceito
+ * na leitura por `decryptSecret`). Base64 não contém `.`, então o split é
+ * inequívoco nos dois formatos.
+ */
+export function encryptSecret(plainB32: string, key: Buffer, keyId?: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const ct = Buffer.concat([cipher.update(plainB32, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return `v1.${iv.toString('base64')}.${ct.toString('base64')}.${tag.toString('base64')}`;
+  const tail = `${iv.toString('base64')}.${ct.toString('base64')}.${tag.toString('base64')}`;
+  return keyId ? `v1.${keyId}.${tail}` : `v1.${tail}`;
 }
 
-export function decryptSecret(enc: string, key: Buffer): string {
+function aesGcmOpen(ivB64: string, ctB64: string, tagB64: string, key: Buffer): string {
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+}
+
+/**
+ * @param key chave corrente; `opts.keyring` mapeia `kid → chave` p/ ciphertexts
+ *   cifrados com chaves anteriores (rotação de `MFA_ENC_KEY` sem quebrar MFA).
+ *   Kid ausente do ring cai na chave corrente (mesma família de material).
+ */
+export function decryptSecret(enc: string, key: Buffer, opts?: { keyring?: ReadonlyMap<string, Buffer> }): string {
   const parts = enc.split('.');
-  if (parts.length !== 4 || parts[0] !== 'v1') throw new Error('MFA_SECRET_VERSION');
-  const iv = Buffer.from(parts[1], 'base64');
-  const ct = Buffer.from(parts[2], 'base64');
-  const tag = Buffer.from(parts[3], 'base64');
-  const decipher = createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
+  if (parts[0] !== 'v1') throw new Error('MFA_SECRET_VERSION');
+  // Legado (pré-kid): v1.<iv>.<ct>.<tag> — só a chave fornecida serve.
+  if (parts.length === 4) return aesGcmOpen(parts[1], parts[2], parts[3], key);
+  // Com key-id: v1.<kid>.<iv>.<ct>.<tag>.
+  if (parts.length === 5) return aesGcmOpen(parts[2], parts[3], parts[4], opts?.keyring?.get(parts[1]) ?? key);
+  throw new Error('MFA_SECRET_VERSION');
 }

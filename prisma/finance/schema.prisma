@@ -24,10 +24,16 @@ datasource db {
 //   (orgId/accountId/categoryId/idempotencyKey UNIQUE + UNIQUE
 //   (provider, externalId)). accountId/categoryId OPCIONAIS: o sync legado
 //   lança sem conta/categoria; a baixa core sempre informa.
-// - `projection_snapshots`: Sync usa colunas camelCase + `ON CONFLICT
-//   (scope)` (exige `scope @unique`; namespaces `global | org:<id>`) +
-//   Projections-store usa snake_case (`ref_date`, `premises_hash`, ...,
-//   PK composta) + Core exige UNIQUE(org, scope, refDate, premisesHash).
+// - `projection_snapshots`: Sync usa colunas camelCase + marcador único por
+//   namespace (namespaces `global | org:<id>`; arbitrado pela PK `id` com id
+//   determinístico por namespace — ver `projectionMarkerIdOf` em
+//   sync.service.ts) + Projections-store usa snake_case (`ref_date`,
+//   `premises_hash`, ..., `id` determinística) + Core exige
+//   UNIQUE(org, scope, refDate, premisesHash).
+//   `scope` NÃO é @unique: o core guarda UM snapshot por período, logo o
+//   mesmo scope aparece em vários refDate. O UNIQUE global de `scope`
+//   (0001_baseline) vivia até 20261017000000 e quebrava o 2º período do
+//   mesmo scope com PG 23505 → HTTP 500 no GET de projeção.
 //   `refDate` é String (o store grava TEXT, ex. `2026-10`); o compute é
 //   dono do formato. Convivência documentada; DDL canônico futuro =
 //   migration do orquestrador (o store ainda faz ensure() próprio).
@@ -212,15 +218,20 @@ model FinanceOutboxEvent {
 }
 
 // Snapshot de projeção (persistência compartilhada; o compute é dono do
-// formato/conteúdo — core NÃO implementa cálculo). `scope @unique` atende o
-// `ON CONFLICT (scope)` do sync (namespaces `global | org:<id>`);
-// `@@unique([scope, refDate, premisesHash])` atende o upsert do store;
+// formato/conteúdo — core NÃO implementa cálculo).
+//
+// `scope` NÃO é único (migration 20261017000000): o core precisa de UM
+// snapshot por PERÍODO — a chave é `@@unique([scope, refDate, premisesHash])`,
+// então o mesmo scope (monthly|quarterly|annual) aparece em vários refDate.
+// `@unique` em `scope` (0001_baseline) existia só para o `ON CONFLICT (scope)`
+// do marcador do sync (namespace `global | org:<id>`, 1 linha por namespace);
+// o sync agora arbitra pela PK `id` com id determinístico por namespace.
 // `@@unique([orgId, scope, refDate, premisesHash])` é o contrato core
 // (mesmas premissas no mesmo período → mesmo snapshot, idempotente).
 model ProjectionSnapshot {
   id            String    @id @default(cuid())
   orgId         String? // core: customers.Customer.id opaco
-  scope         String    @unique // sync: ex. global | org:<id>; core/store: MONTHLY/... (namespaces distintos por workstream)
+  scope         String // sync: ex. global | org:<id>; core/store: monthly|quarterly|annual (namespaces distintos por workstream) — NÃO único
   valid         Boolean   @default(true) // sync: invalidação sem recálculo
   computedAt    DateTime? // sync (camelCase)
   invalidatedAt DateTime? // sync (camelCase)

@@ -43,7 +43,46 @@ fi
 # (schema não vazio sem histórico). Marca 0001 como aplicada SOMENTE quando
 # ainda não há registro — idempotente: primeira passada registra ("marked as
 # applied"), repetições caem no P3008 ("already recorded as applied") e seguem.
+#
+# SAFETY: marcar 0001 sem a tabela `audit.audit_events` existir produz um
+# `migrate status` verde sobre um schema INCOMPLETO — se o init-consolidated.sql
+# falhou, a tabela nunca é criada e o runtime quebra depois com
+# `relation "audit_events" does not exist` sem nenhum erro no deploy. Só marca
+# quando a baseline realmente criou a tabela; caso contrário, ABORTA.
+MIG_URL_BASELINE="${MIGRATOR_DATABASE_URL:-}"
+audit_events_exists() { # 0=existe 1=ausente 2=não verificável
+  local q="SELECT to_regclass('audit.audit_events') IS NOT NULL"
+  local out
+  if [ -n "$MIG_URL_BASELINE" ] && command -v psql >/dev/null 2>&1; then
+    out="$(psql -tAX -v ON_ERROR_STOP=1 "$MIG_URL_BASELINE" -c "$q" 2>/dev/null)" || return 2
+  elif [ -n "$MIG_URL_BASELINE" ] && command -v docker >/dev/null 2>&1; then
+    # Sem `psql` no PATH (ex.: Windows dev), vai pelo container do Postgres.
+    out="$(printf '%s\n' "$q" | docker exec -i \
+      -e PGPASSWORD="${MIGRATOR_PASSWORD:-dev_migrator_pw}" "${PG_CONTAINER:-aurum-postgres}" \
+      psql -tAX -v ON_ERROR_STOP=1 -U migrator -d aurumbit 2>/dev/null)" || return 2
+  else
+    return 2
+  fi
+  [ "$out" = "t" ] && return 0
+  [ "$out" = "f" ] && return 1
+  return 2
+}
+
 echo "==> audit baseline (0001_baseline)"
+audit_rc=0
+audit_events_exists || audit_rc=$?
+if [ "$audit_rc" -ne 0 ]; then
+  if [ "$audit_rc" -eq 1 ]; then
+    echo "ERRO: a tabela audit.audit_events NAO existe — init-consolidated.sql (§6) falhou ou nao rodou." >&2
+    echo "      Marcar 0001 como applied agora deixaria 'migrate status' verde sobre um schema incompleto" >&2
+    echo "      e o runtime quebraria com 'relation \"audit_events\" does not exist' SEM erro no deploy." >&2
+  else
+    echo "ERRO: nao foi possivel verificar a existencia de audit.audit_events (MIGRATOR_DATABASE_URL/psql/docker)." >&2
+    echo "      Recusando marcar 0001 como applied sem prova de que a baseline rodou." >&2
+  fi
+  echo "      Rode o init-consolidated.sql (§6) com o role migrator e so entao reexecute o deploy." >&2
+  exit 1
+fi
 AUDIT_BASE="$(npx -y "prisma@${PRISMA_VERSION}" migrate resolve --applied 0001_baseline --schema="$ROOT/prisma/audit/schema.prisma" 2>&1)" || true
 echo "$AUDIT_BASE" | tail -n 2
 case "$AUDIT_BASE" in

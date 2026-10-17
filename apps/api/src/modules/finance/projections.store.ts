@@ -13,11 +13,20 @@
  * finance core / schema Prisma: TODO(core) absorver no
  * `prisma/finance/schema.prisma` como model ProjectionSnapshot.
  *
+ * O DDL do adaptador espelha o do schema Prisma de propósito: PK `id`
+ * + UNIQUE (scope, ref_date, premises_hash). NÃO recrie UNIQUE(scope):
+ * o core guarda UM snapshot por PERÍODO (mesmo scope, refDates
+ * diferentes) e o índice global de `scope` — que vivia até a migration
+ * 20261017000000 — fazia o 2º período do mesmo scope estourar PG 23505
+ * → HTTP 500 no GET. O marcador do sync (namespace `global | org:<id>`)
+ * arbitra pela PK `id` (id determinístico), logo segue íntegro.
+ *
  * Jobs (polling do 202): registro em memória por instância; em
  * produção multi-instância o estado canônico é o job BullMQ
  * (`jobId = scope:ref:hash`) — TODO(Fase 6) ler o job no Redis.
  */
 
+import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { ProjectionSnapshot } from './projections.compute';
 
@@ -50,6 +59,19 @@ export const PROJECTION_STORE = 'FINANCE_PROJECTION_STORE';
 
 function keyOf(scope: string, refDate: string, premisesHash: string): string {
   return `${scope}:${refDate}:${premisesHash}`;
+}
+
+/**
+ * `id` determinístico da linha (mesmos 3 inputs → mesmo id), para o
+ * INSERT continuar idempotente em retry/recompute concorrente.
+ *
+ * O banco migrado pelo Prisma (`prisma/finance/schema.prisma` +
+ * `0001_baseline`) tem `id TEXT NOT NULL` como PK com `@default(cuid())`
+ * — default *client-side*, sem DEFAULT no Postgres — então o INSERT
+ * precisa fornecer o valor, senão viola NOT NULL (HTTP 500).
+ */
+export function snapshotIdOf(scope: string, refDate: string, premisesHash: string): string {
+  return createHash('sha256').update(keyOf(scope, refDate, premisesHash)).digest('hex');
 }
 
 function overlaps(snapStart: string, snapEnd: string, startIso: string, endIso: string): boolean {
@@ -112,6 +134,7 @@ export class PgProjectionSnapshotStore implements ProjectionSnapshotStore {
     if (this.ensured) return;
     await this.connect().query(
       `CREATE TABLE IF NOT EXISTS projection_snapshots (
+        id TEXT NOT NULL,
         scope TEXT NOT NULL,
         ref_date TEXT NOT NULL,
         premises_hash TEXT NOT NULL,
@@ -120,8 +143,10 @@ export class PgProjectionSnapshotStore implements ProjectionSnapshotStore {
         period_end TIMESTAMPTZ NOT NULL,
         payload JSONB NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        PRIMARY KEY (scope, ref_date, premises_hash)
+        PRIMARY KEY (id)
       );
+       CREATE UNIQUE INDEX IF NOT EXISTS projection_snapshots_scope_ref_date_premises_hash_key
+         ON projection_snapshots (scope, ref_date, premises_hash);
        CREATE INDEX IF NOT EXISTS projection_snapshots_period_idx
          ON projection_snapshots (period_start, period_end);`,
     );
@@ -143,11 +168,20 @@ export class PgProjectionSnapshotStore implements ProjectionSnapshotStore {
   async upsert(snap: ProjectionSnapshot): Promise<StoredSnapshot> {
     await this.ensure();
     await this.connect().query(
-      `INSERT INTO projection_snapshots (scope, ref_date, premises_hash, tz, period_start, period_end, payload, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,now())
+      `INSERT INTO projection_snapshots (id, scope, ref_date, premises_hash, tz, period_start, period_end, payload, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
         ON CONFLICT (scope, ref_date, premises_hash) DO UPDATE SET
           payload = EXCLUDED.payload, updated_at = now()`,
-      [snap.scope, snap.refDate, snap.premisesHash, snap.tz, snap.period.start, snap.period.end, JSON.stringify(snap)],
+      [
+        snapshotIdOf(snap.scope, snap.refDate, snap.premisesHash),
+        snap.scope,
+        snap.refDate,
+        snap.premisesHash,
+        snap.tz,
+        snap.period.start,
+        snap.period.end,
+        JSON.stringify(snap),
+      ],
     );
     const stored: StoredSnapshot = { ...snap, storedAt: new Date().toISOString() };
     return stored;

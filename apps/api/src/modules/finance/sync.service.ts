@@ -23,7 +23,7 @@
 // (stubs, TODO Fase 5+).
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { FINANCE_POOL } from './finance-pool.provider';
 import {
   classifyRefund,
@@ -63,6 +63,19 @@ export type FinanceSyncResult =
 
 export interface FinanceSyncMetrics {
   inc(name: 'finance.sync.received' | 'finance.sync.applied' | 'finance.sync.duplicate' | 'finance.sync.noop'): void;
+}
+
+/**
+ * `id` determinístico do marcador de invalidação por namespace
+ * (`global | org:<id>`): mesmo namespace → mesma linha, então o
+ * `ON CONFLICT (id)` arbitra na PK e o sync mantém 1 marcador por
+ * namespace sem depender do UNIQUE de `scope` (removido em
+ * 20261017000000 — o core precisa de 1 snapshot por PERÍODO, logo
+ * `scope` deixou de ser único). Mesmo prefixo de chave do store
+ * (`snapshotIdOf` usa `scope:refDate:premisesHash`), sem colisão.
+ */
+export function projectionMarkerIdOf(scope: string): string {
+  return createHash('sha256').update(`sync-projection-marker:${scope}`).digest('hex');
 }
 
 class NoopFinanceSyncMetrics implements FinanceSyncMetrics {
@@ -532,12 +545,16 @@ export class FinanceSyncService {
     const existing = rows[0] as Record<string, unknown> | undefined;
     let snapshotId: string;
     if (!existing) {
+      // 1 marcador por namespace, arbitrado pela PK `id` (id determinístico):
+      // o UNIQUE de `scope` saiu em 20261017000000 p/ o core guardar 1
+      // snapshot por período. `ref_date`/`premises_hash` seguem NULL —
+      // marcador não tem período — então o UNIQUE composto não colide.
       const ins = await client.query(
         `INSERT INTO projection_snapshots (id, scope, valid, "computedAt", "invalidatedAt", "createdAt", "updatedAt")` +
           ` VALUES ($1,$2,false,NULL,now(),now(),now())` +
-          ` ON CONFLICT (scope) DO UPDATE SET valid = false, "invalidatedAt" = now(), "updatedAt" = now()` +
+          ` ON CONFLICT (id) DO UPDATE SET valid = false, "invalidatedAt" = now(), "updatedAt" = now()` +
           ` RETURNING id`,
-        [randomUUID(), scope],
+        [projectionMarkerIdOf(scope), scope],
       );
       snapshotId = String(ins.rows[0].id);
     } else {

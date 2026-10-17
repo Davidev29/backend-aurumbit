@@ -20,24 +20,32 @@ NEXT_START="$(date -d "$(date +%Y-%m-01) +1 month" +%Y-%m-%d)"
 NEXT_END="$(date -d "$NEXT_START +1 month" +%Y-%m-%d)"
 SUFFIX="$(date -d "$NEXT_START" +%Y_%m)"
 
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5432}"
-PGUSER="${POSTGRES_USER:-aurum}"
-export PGPASSWORD="${POSTGRES_PASSWORD:-aurum}"
+# DDL de particionamento declarativo exige ACCESS EXCLUSIVE e NÃO pode passar
+# por PgBouncer (transaction mode). `DATABASE_URL_AUDIT` aponta para a role
+# `app_audit_append` (só GRANT SELECT, INSERT) — com ela o CREATE TABLE
+# ... PARTITION OF morre em `permission denied` e a partição NUNCA é criada.
+# Usa a URL do role `migrator` (DDL), porta 5432 direta (mesmo papel do
+# grant-repair em migrate-all.sh).
+MIG_URL="${MIGRATOR_DATABASE_URL:-}"
+if [ -z "$MIG_URL" ]; then
+  echo "ERRO: MIGRATOR_DATABASE_URL ausente — CREATE TABLE ... PARTITION OF exige role com DDL." >&2
+  echo "      NAO usar DATABASE_URL_AUDIT (role app_audit_append via PgBouncer): a particao nunca seria criada." >&2
+  exit 1
+fi
 
 psql_audit() {
-  if [ -n "${DATABASE_URL_AUDIT:-}" ] && command -v psql >/dev/null 2>&1; then
-    psql -v ON_ERROR_STOP=1 "$DATABASE_URL_AUDIT" -c "$1"
+  if command -v psql >/dev/null 2>&1; then
+    psql -v ON_ERROR_STOP=1 "$MIG_URL" -c "$1"
   elif command -v docker >/dev/null 2>&1; then
     # Sem `psql` local (ex.: Windows dev): executa dentro do container do
-    # Postgres (container_name fixo `aurum-postgres`, salvo PG_CONTAINER).
-    PG_CONTAINER="${PG_CONTAINER:-aurum-postgres}"
-    printf '%s\n' "$1" | docker exec -i -e PGPASSWORD="${POSTGRES_PASSWORD:-aurum}" \
-      "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-aurum}" -d aurumbit
-  elif [ -n "${DATABASE_URL_AUDIT:-}" ]; then
-    psql -v ON_ERROR_STOP=1 "$DATABASE_URL_AUDIT" -c "$1"
+    # Postgres (container_name fixo `aurum-postgres`, salvo PG_CONTAINER),
+    # com as credenciais do role migrator (DDL).
+    printf '%s\n' "$1" | docker exec -i -e PGPASSWORD="${MIGRATOR_PASSWORD:-dev_migrator_pw}" \
+      "${PG_CONTAINER:-aurum-postgres}" \
+      psql -v ON_ERROR_STOP=1 -U migrator -d aurumbit
   else
-    psql -v ON_ERROR_STOP=1 -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d audit -c "$1"
+    echo "ERRO: psql e docker ausentes — nao ha como criar as particoes declarativas." >&2
+    exit 1
   fi
 }
 

@@ -186,6 +186,77 @@ describe('BillingService — hook PaymentConfirmed emite outbox', () => {
   });
 });
 
+/**
+ * D1-4/D1-5 — webhook duplicado do provedor: duas confirmações
+ * concorrentes do MESMO pagamento. `getPayment()` + `check()` rodam FORA
+ * da txn, então sem guarda de status no WHERE as duas emitem
+ * `PaymentConfirmed` no outbox. Harness no padrão de
+ * `finance-automation.spec.ts:274-320`: fake PG stateful que só faz o
+ * UPDATE casar se o pagamento ainda NÃO estiver CONFIRMED — e só quando a
+ * guarda está LITERALMENTE no SQL (sem ela o teste acusa a duplicidade).
+ */
+describe('BillingService — concorrência: 1 PaymentConfirmed por pagamento', () => {
+  function confirmRaceHarness() {
+    const state = { row: paymentRow() as Record<string, unknown>, outboxEventIds: [] as string[] };
+    const queries: Array<{ sql: string; params?: unknown[] }> = [];
+    const q = async (sql: string, params?: unknown[]) => {
+      queries.push({ sql, params });
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [], rowCount: 0 };
+      if (sql.startsWith('UPDATE payments SET status')) {
+        const guarded = sql.includes(`status <> 'CONFIRMED'`);
+        if (guarded && state.row.status === 'CONFIRMED') return { rows: [], rowCount: 0 }; // perdedor
+        state.row = { ...state.row, status: 'CONFIRMED', paidAt: new Date('2026-10-10T00:00:00Z'), version: 2 };
+        return { rows: [state.row], rowCount: 1 };
+      }
+      if (sql.includes('INSERT INTO outbox_events')) {
+        const eventId = (params ?? [])[1] as string;
+        if (state.outboxEventIds.includes(eventId)) return { rows: [], rowCount: 0 }; // ON CONFLICT DO NOTHING
+        state.outboxEventIds.push(eventId);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes('FROM payments WHERE id')) return { rows: [state.row] };
+      return { rows: [], rowCount: 0 };
+    };
+    const client = { query: q, release: jest.fn() };
+    const pool = { query: q, connect: jest.fn(async () => client) };
+    return { svc: new BillingService(pool as never), state, queries };
+  }
+
+  it('confirmPayment duplicado concorrente → 1 UPDATE CONFIRMED, 1 PaymentConfirmed no outbox', async () => {
+    const { svc, state, queries } = confirmRaceHarness();
+    const [a, b] = await Promise.all([
+      svc.confirmPayment('pay-1', { amountCents: 1000, paidAt: '2026-10-10T00:00:00.000Z' }),
+      svc.confirmPayment('pay-1', { amountCents: 1000, paidAt: '2026-10-10T00:00:00.000Z' }),
+    ]);
+    expect(queries.filter((q) => q.sql.startsWith('UPDATE payments SET status'))).toHaveLength(2);
+    // só UM casou a guarda (o outro devolveu 0 linhas → ROLLBACK)
+    expect(queries.filter((q) => q.sql.includes('ROLLBACK'))).toHaveLength(1);
+    expect(queries.filter((q) => q.sql.includes('INSERT INTO outbox_events'))).toHaveLength(1);
+    expect(state.outboxEventIds).toEqual(['billing:payment-confirmed:pay-1']);
+    // o perdedor devolve o estado atual (replay), não 500
+    expect(b.status).toBe('CONFIRMED');
+    expect('payment' in b ? b.payment.status : b.status).toBe('CONFIRMED');
+    void a;
+    expect(queries.find((q) => q.sql.startsWith('UPDATE payments SET status'))?.sql).toContain(
+      `AND status <> 'CONFIRMED'`,
+    );
+  });
+
+  it('eventId de PaymentConfirmed é determinístico e protege o UNIQUE(eventId)', async () => {
+    const { svc, queries } = confirmRaceHarness();
+    await svc.confirmPayment('pay-1', { amountCents: 1000, paidAt: '2026-10-10T00:00:00.000Z' });
+    const outbox = queries.find((q) => q.sql.includes('INSERT INTO outbox_events'));
+    expect(outbox?.params?.[1]).toBe('billing:payment-confirmed:pay-1');
+    expect(outbox?.sql).toContain('ON CONFLICT ("eventId") DO NOTHING');
+    // prefixo não colide com a rota de reconciliação (`recon:`)
+    expect(String(outbox?.params?.[1]).startsWith('recon:')).toBe(false);
+    // e tem os 3 segmentos exigidos pelo `jobId = eventId` do relay BullMQ
+    // (2 lance `Custom Id cannot contain :` e travam o tick — ver
+    // billing-transitions.spec.ts).
+    expect(String(outbox?.params?.[1]).split(':')).toHaveLength(3);
+  });
+});
+
 describe('BillingService — Fase 8 comercial (billingInterval + checkout)', () => {
   const noDb = () => {
     const { pool, queries } = mockPool(() => {

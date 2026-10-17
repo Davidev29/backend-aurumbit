@@ -86,7 +86,7 @@ describe('Billing flow (e2e)', () => {
     const confirmed = outbox.body.filter((e: { type: string }) => e.type === 'billing.payment.confirmed.v1');
     expect(confirmed.length).toBeGreaterThan(0);
     const evt = confirmed.find((e: { payload: { externalId: string } }) => e.payload.externalId === externalId);
-    expect(evt.eventId).toBe(`billing-payment-confirmed:${externalId}`);
+    expect(evt.eventId).toBe(`billing:payment-confirmed:${externalId}`);
 
     const hooks = await request(app.getHttpServer()).get('/v1/billing/license-hooks').set(admin).expect(200);
     const hook = hooks.body.find((h: { eventId: string }) => h.eventId === evt.eventId);
