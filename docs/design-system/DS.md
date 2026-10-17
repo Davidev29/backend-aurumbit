@@ -44,7 +44,26 @@
 }
 ```
 
-**Travas:** funcional só com token ≥4.5:1; `--text-3` proibido p/ funcional; warn/danger sempre com cue não-cor (ícone/texto); sem sombra colorida (só anel de foco); sem assets Apple.
+**Travas:** funcional só com token ≥4.5:1; `--text-3` proibido p/ funcional; warn/danger sempre com cue não-cor (ícone/texto); sem sombra colorida (só anel de foco).
+
+**Ícones de plataforma (exceção aos ícones genéricos — rev. 2026-10-17):** o §4
+trava `lucide-react` como biblioteca canônica. Isso **vale para ícones de UI**
+(ação, navegação, estado). Para **ícone de plataforma de produto** — Windows,
+macOS, Linux, Web, Apple — usa-se o bitmap de marca, porque o nome da plataforma
+é a informação e um ícone genérico (`Monitor` para Windows e macOS, `Cpu` para
+Linux) **confunde o usuário em vez de informá-lo**. Regras:
+
+- Fonte: `tools/build-tag-icons.py` gera `apps/{admin,portal}/public/tags/<id>.png`
+  (256px RGBA, id = o mesmo slug gravado em `products.platforms`). **Nunca editar
+  o PNG gerado** — mudar o asset de origem e rodar o script.
+- Apple é a única marca monocromática: tem variante `-dark` (invertida) porque a
+  marca preta some em `--bg-0`. Os demais não têm variante.
+- Sempre **decorativo** (`alt=""`) com o rótulo pt-BR em texto ao lado: a
+  informação nunca pode depender de reconhecer o logo.
+- O bitmap **não** traz status nem valence — nunca usar para estado/alerta (esse
+  segue `lucide-react` + cue não-cor).
+- Licença de marca é exposição de terceiros do cliente final; usar apenas nas
+  plataformas efetivamente suportadas pelo produto.
 
 ## 2. Blur (valor único — resolve A1)
 
@@ -65,6 +84,11 @@ Escala (rem, root 16px): `title-auth 1.35/700`, `title-page 1.25/700`, `section 
 ## 4. Ícones (03 canônica — resolve A5)
 
 `lucide-react`, 16/20/24px, stroke 1.75 (1.5 em 16px, 2 em 24px), `currentColor`, wrapper `Icon`. Toque ≥44px (ícone 20px em botão 44px). Sidebar: LayoutDashboard, Users, ReceiptText, Landmark, ListOrdered, Package, ScrollText, KeyRound (+ colapso ChevronsLeft/Right, sino Bell, usuário CircleUserRound). Ações: Eye/EyeOff, RotateCcw, Ban, Download, Copy/Check, Search, X, Plus/Minus, Menu, TriangleAlert/Info/CircleCheck/CircleX/Loader2. Sem emoji na UI. Decoração `aria-hidden`, interativo com `aria-label` pt-BR.
+
+**Bitmap de plataforma é a exceção conhecida (rev. 2026-10-17):** ícone que **nomeia a
+plataforma** do produto (Windows/macOS/Linux/Web/Apple) usa o bitmap de `public/tags/`,
+não `lucide-react` — ver §1. As demais regras desta seção (44px, `currentColor` p/
+genérico, aria) seguem válidas.
 
 ## 5. Elevação + sombras (01 manda — resolve A1/B7)
 
