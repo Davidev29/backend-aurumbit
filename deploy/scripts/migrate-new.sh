@@ -38,6 +38,15 @@ export "DATABASE_URL_${UP}=postgresql://migrator:${MIG_PW}@${MIG_HOST}:${MIG_POR
 export "DATABASE_URL=postgresql://migrator:${MIG_PW}@${MIG_HOST}:${MIG_PORT}/aurumbit?schema=auth"
 
 SHADOW_URL="${SHADOW_DATABASE_URL:-postgresql://migrator:${MIG_PW}@${MIG_HOST}:${MIG_PORT}/aurumbit_shadow}"
+# O replay das migrations usa nomes NAO qualificados por schema (ex.:
+# `CREATE TABLE "chat_messages"`): o schema alvo vem do ?schema= da URL.
+# Sem `?schema=<dominio>` aqui, o Prisma compara schemas diferentes
+# (public x dominio) e reporta "drift" que nao existe.
+case "$SHADOW_URL" in
+  *schema=*) ;;                                          # ja tem: respeita
+  *\?*)      SHADOW_URL="${SHADOW_URL}&schema=${DOMAIN}" ;;  # tem params: adiciona
+  *)         SHADOW_URL="${SHADOW_URL}?schema=${DOMAIN}" ;;  # sem params: adiciona
+esac
 
 echo "==> migrate dev: $DOMAIN ($NAME)  [role migrator @ ${MIG_HOST}:${MIG_PORT}]"
 npx -y "prisma@${PRISMA_VERSION}" migrate dev \
