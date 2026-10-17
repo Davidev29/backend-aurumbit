@@ -30,6 +30,17 @@ model Product {
   // Sem migrations versionadas até aqui: coluna aplicada via `prisma db push`
   // (baseline de migrations TBD depois do push inicial).
   machinesAllowed Int @default(3) @map("machines_allowed")
+  // Plataformas suportadas pelo produto — slugs do catálogo canônico
+  // (windows | macos | linux | web | apple). O slug é o MESMO id do catálogo
+  // de ícones (`tools/build-tag-icons.py`), então é ESTÁVEL e vai pro banco:
+  // nunca renomear sem migration de dado. Array vazio = produto sem
+  // plataforma declarada (NÃO significa "todas"). Slug fora do catálogo é
+  // rejeitado (fail-closed) no service, nunca persistido em silêncio.
+  platforms  String[] @default([]) @map("platforms")
+  // Como o produto é entregue ao cliente. OFFLINE = opera só no dispositivo,
+  // sem rede (comportamento legado de tudo que já existe). HYBRID = opera
+  // offline mas sincroniza estado com o servidor. Default OFFLINE.
+  deliveryMode String @default("OFFLINE") @map("delivery_mode") // OFFLINE | HYBRID
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt @default(now())
 
