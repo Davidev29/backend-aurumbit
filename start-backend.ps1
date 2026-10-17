@@ -9,6 +9,10 @@
 #   BACKEND  -> Aurum_Bit_Backend (:3000) + aurum-workers +
 #               postgres/redis/pgbouncer/mailhog
 #
+# Ordem de subida (importante): infra (postgres/redis/pgbouncer/mailhog) ->
+# migrations/seed -> apps (api/workers/admin/portal). Assim a API nunca roda
+# com schema atrasado (era a causa de `column "archivedAt" does not exist`).
+#
 # O painel mostra OS 3 SERVICOS com status ao vivo E OS LOGS DE CADA UM:
 #   - logs vem de `docker compose logs` (um unico comando, separados por painel);
 #   - log JSON do pino e compactado (nivel/hora/rota/msg) - so o util aparece;
@@ -592,66 +596,73 @@ if ($EnvMap['RESEND_API_KEY'] -eq 'changeme') {
 }
 
 # ===========================================================================
-# 2) Subir a stack inteira (build transmite log normal; painel assume depois)
+# 2) Subir a INFRA primeiro (postgres/redis/pgbouncer/mailhog)
 # ===========================================================================
-$CoreServices = @('postgres', 'redis', 'pgbouncer', 'mailhog', 'api', 'workers', 'admin')
+# A ordem importa: infra -> migrations -> apps. Subindo os apps antes das
+# migrations, a API roda por alguns segundos com o schema atrasado (foi o que
+# gerou `column "archivedAt" does not exist` no start de 2026-10-17).
+$InfraServices = @('postgres', 'redis', 'pgbouncer', 'mailhog')
+$AppServices = @('api', 'workers', 'admin')
 $usePortal = -not $NoPortal
-$AllServices = $CoreServices
-if ($usePortal) { $AllServices += 'portal' }
+if ($usePortal) { $AppServices += 'portal' }
 
-Info 'Subindo LANDPAGE + ADM + BACKEND (1a vez compila as imagens, pode demorar)...'
-docker compose -f $ComposeFile up --build -d @AllServices
-if ($LASTEXITCODE -ne 0) {
-  Warn 'Falha no up completo. Tentando o nucleo (sem LANDPAGE)...'
-  docker compose -f $ComposeFile up --build -d @CoreServices
-  if ($LASTEXITCODE -ne 0) { Fail 'Nucleo tambem falhou. Veja as mensagens acima.' }
-  Warn 'LANDPAGE ficou de fora desta vez (build do portal falhou).'
-  $usePortal = $false
-}
-else { Ok 'Containers criados.' }
+Info 'Subindo a infraestrutura (postgres, redis, pgbouncer, mailhog)...'
+docker compose -f $ComposeFile up -d @InfraServices
+if ($LASTEXITCODE -ne 0) { Fail 'Falha ao subir a infraestrutura (veja as mensagens acima).' }
+Ok 'Infraestrutura no ar.'
 
 # ===========================================================================
 # 3) Grupos do painel: LANDPAGE, ADM, BACKEND (+ infra no detalhe do backend)
 # ===========================================================================
-$groups = New-Object System.Collections.ArrayList
-if ($usePortal) {
-  [void]$groups.Add((New-Group -Key 'LANDPAGE' -Label 'LANDPAGE' -Header 'LANDPAGE (portal)' `
-    -Url ("http://localhost:" + $PortalPort) -Color 'Green' `
-    -Primary @('portal') -Secondary @() -Services @('portal') -Prefixes @('aurum-portal') `
-    -HttpUrl ("http://localhost:" + $PortalPort + '/')))
+# Funcao (e nao bloco fixo) porque o grupo LANDPAGE pode sair no meio do
+# caminho: se o build do portal falhar, o painel e remontado sem ele.
+function New-BoardGroups([bool]$withPortal) {
+  $list = New-Object System.Collections.ArrayList
+  if ($withPortal) {
+    [void]$list.Add((New-Group -Key 'LANDPAGE' -Label 'LANDPAGE' -Header 'LANDPAGE (portal)' `
+      -Url ("http://localhost:" + $PortalPort) -Color 'Green' `
+      -Primary @('portal') -Secondary @() -Services @('portal') -Prefixes @('aurum-portal') `
+      -HttpUrl ("http://localhost:" + $PortalPort + '/')))
+  }
+  [void]$list.Add((New-Group -Key 'ADM' -Label 'ADM' -Header 'ADM (admin)' `
+    -Url ("http://localhost:" + $AdminPort) -Color 'Magenta' `
+    -Primary @('admin') -Secondary @() -Services @('admin') -Prefixes @('aurum-admin') `
+    -HttpUrl ("http://localhost:" + $AdminPort + '/login')))
+  [void]$list.Add((New-Group -Key 'BACKEND' -Label 'BACKEND' -Header 'BACKEND (api + workers + infra)' `
+    -Url ("http://localhost:" + $ApiPort) -Color 'Cyan' `
+    -Primary @('api', 'workers') -Secondary @('postgres', 'redis', 'pgbouncer', 'mailhog') `
+    -Services @('postgres', 'redis', 'pgbouncer', 'mailhog', 'api', 'workers') `
+    -Prefixes @('Aurum_Bit_Backend', 'aurum-workers', 'aurum-postgres', 'aurum-redis', 'aurum-pgbouncer', 'aurum-mailhog') `
+    -HttpUrl ("http://localhost:" + $ApiPort + '/health/live')))
+  return ,@($list)
 }
-[void]$groups.Add((New-Group -Key 'ADM' -Label 'ADM' -Header 'ADM (admin)' `
-  -Url ("http://localhost:" + $AdminPort) -Color 'Magenta' `
-  -Primary @('admin') -Secondary @() -Services @('admin') -Prefixes @('aurum-admin') `
-  -HttpUrl ("http://localhost:" + $AdminPort + '/login')))
-[void]$groups.Add((New-Group -Key 'BACKEND' -Label 'BACKEND' -Header 'BACKEND (api + workers + infra)' `
-  -Url ("http://localhost:" + $ApiPort) -Color 'Cyan' `
-  -Primary @('api', 'workers') -Secondary @('postgres', 'redis', 'pgbouncer', 'mailhog') `
-  -Services @('postgres', 'redis', 'pgbouncer', 'mailhog', 'api', 'workers') `
-  -Prefixes @('Aurum_Bit_Backend', 'aurum-workers', 'aurum-postgres', 'aurum-redis', 'aurum-pgbouncer', 'aurum-mailhog') `
-  -HttpUrl ("http://localhost:" + $ApiPort + '/health/live')))
-$Board.Groups = @($groups)
+$Board.Groups = New-BoardGroups $usePortal
 
 # ===========================================================================
-# 4) Painel + espera dos 3 servicos
+# 4) Painel + espera da infra (postgres saudavel ANTES de migrar)
 # ===========================================================================
 Initialize-Board
 Set-Footer ' conectando ao docker (primeira leitura de status/logs)...'
 Step-BoardOnce
 
-Info 'Aguardando LANDPAGE + ADM + BACKEND ficarem saudaveis...'
-$allUp = Wait-AllUp 240
-if (-not $allUp) {
-  Warn 'Algum servico nao ficou saudavel no tempo esperado - veja o painel/status.'
-}
-else {
-  Set-Footer ' tudo no ar - acompanhando logs (Ctrl+C sai; containers continuam rodando)'
+Info 'Aguardando o postgres ficar saudavel...'
+$infraOk = $false
+$infraDeadline = (Get-Date).AddSeconds(120)
+while ((Get-Date) -lt $infraDeadline) {
   Step-BoardOnce
+  if ($Board.Statuses['postgres'] -eq 'saudavel') { $infraOk = $true; break }
+  $Board.Spin++
+  Set-Footer (' ' + (Spin-Char) + ' aguardando o postgres ficar saudavel...')
+  Start-Sleep -Milliseconds 900
 }
+if (-not $infraOk) { Fail 'Postgres nao ficou saudavel em 120s (veja o status acima).' }
+Ok 'Postgres saudavel.'
 
 # ===========================================================================
-# 5) Migrate + seed (opcional) com o painel no ar
+# 5) Migrate + seed ANTES dos apps (opcional) com o painel no ar
 # ===========================================================================
+# A infra ja esta saudavel e os apps ainda NAO subiram - de proposito: assim
+# a API nunca roda com o schema atrasado.
 if (-not $SkipSeed) {
   # `bash` do PATH pode ser o do WSL (instavel aqui): prefere o Git Bash.
   function Find-Bash() {
@@ -676,7 +687,38 @@ if (-not $SkipSeed) {
 }
 
 # ===========================================================================
-# 6) Vigia: painel continua mostrando os 3 servicos e os logs de cada um
+# 6) Subir os apps (api/workers/admin/portal) - schema ja migrado
+# ===========================================================================
+Info 'Subindo LANDPAGE + ADM + BACKEND (1a vez compila as imagens, pode demorar)...'
+# Build escreve no console: fecha o painel para a saida sair limpa e reabre
+# depois (mesma ideia usada quando um passo falha).
+Close-Board
+docker compose -f $ComposeFile up --build -d @AppServices
+if ($LASTEXITCODE -ne 0) {
+  Warn 'Falha no up completo. Tentando o nucleo (sem LANDPAGE)...'
+  $AppServices = @($AppServices | Where-Object { $_ -ne 'portal' })
+  docker compose -f $ComposeFile up --build -d @AppServices
+  if ($LASTEXITCODE -ne 0) { Fail 'Nucleo tambem falhou. Veja as mensagens acima.' }
+  Warn 'LANDPAGE ficou de fora desta vez (build do portal falhou).'
+  $usePortal = $false
+  $Board.Groups = New-BoardGroups $false
+}
+else { Ok 'Containers criados.' }
+Initialize-Board
+Step-BoardOnce
+
+Info 'Aguardando LANDPAGE + ADM + BACKEND ficarem saudaveis...'
+$allUp = Wait-AllUp 240
+if (-not $allUp) {
+  Warn 'Algum servico nao ficou saudavel no tempo esperado - veja o painel/status.'
+}
+else {
+  Set-Footer ' tudo no ar - acompanhando logs (Ctrl+C sai; containers continuam rodando)'
+  Step-BoardOnce
+}
+
+# ===========================================================================
+# 7) Vigia: painel continua mostrando os 3 servicos e os logs de cada um
 # ===========================================================================
 if (-not $NoWatch) {
   Set-Footer ' Ctrl+C sai do painel (os containers continuam no ar)'
@@ -698,7 +740,7 @@ else {
 }
 
 # ===========================================================================
-# 7) Resumo final (fora do painel)
+# 8) Resumo final (fora do painel)
 # ===========================================================================
 Ok 'Ambiente no ar.'
 docker compose -f $ComposeFile ps
@@ -713,7 +755,7 @@ Write-Host '  Painel: os logs acima sao os dos 3 servicos (healthcheck silenciad
 Write-Host '  Parar tudo: docker compose -f deploy/docker-compose.yml down' -ForegroundColor DarkGray
 
 # ===========================================================================
-# 8) Tunel opcional p/ webhook Asaas
+# 9) Tunel opcional p/ webhook Asaas
 # ===========================================================================
 if ($Tunnel) {
   $cf = Get-Command cloudflared -ErrorAction SilentlyContinue
