@@ -1,9 +1,10 @@
 import { validateEnv } from '../../config/env.schema';
 import { JwtService } from '../../common/auth/jwt.service';
+import { __setSecurityEventPoolForTests } from '../audit/security-events';
 import { InMemoryAuthRepository, PgAuthRepository } from './auth.repository';
-import { assertMfaEncKeyConfig, AuthService } from './auth.service';
+import { assertMfaEncKeyConfig, AuthService, ROTATION_GRACE_MS } from './auth.service';
 import { AuthError } from './auth.types';
-import { decryptSecret, deriveEncKey, encryptSecret, totpCode } from './crypto';
+import { decryptSecret, deriveEncKey, encryptSecret, sha256Hex, totpCode } from './crypto';
 
 // ---------------------------------------------------------------------------
 // Correções D2-1..D2-4: concorrência (o teste sequencial de reuse.spec.ts não
@@ -41,6 +42,22 @@ function activeTokens(repo: InMemoryAuthRepository): Array<{ id: string; familyI
   return [...repo.refreshTokens.values()].filter((t) => t.status === 'ACTIVE').map((t) => ({ id: t.id, familyId: t.familyId }));
 }
 
+/**
+ * Captura os eventos de segurança (fire-and-forget) num pool fake — permite
+ * provar que a corrida benigna NÃO emite o evento de reuso (REUSE_DETECTED).
+ */
+function captureSecurityEvents() {
+  const calls: Array<{ type: string; meta: string }> = [];
+  const pool = {
+    query: jest.fn(async (_sql: string, params?: unknown[]) => {
+      calls.push({ type: String(params?.[0]), meta: String(params?.[4]) });
+      return { rows: [], rowCount: 1 };
+    }),
+  };
+  __setSecurityEventPoolForTests(pool);
+  return { calls };
+}
+
 // ===========================================================================
 // D2-1 — refresh rotation não atômica
 // ===========================================================================
@@ -71,24 +88,31 @@ describe('D2-1 rotação de refresh token é atômica (CAS)', () => {
     expect(Math.max(...emitted.map((e) => e.activeAtInsert), 0)).toBeLessThanOrEqual(1);
     // Nunca dois sucessos concorrentes.
     expect(ok.length).toBeLessThanOrEqual(1);
-    // O perdedor SEMPRE cai no caminho de reuso já existente (OAuth BCP §4.14.2).
+    // O perdedor da corrida recebe 401 seco (`INVALID_TOKEN`): dentro da janela
+    // de graça é corrida benigna e ele NÃO revoga a família (self-DoS).
     expect(errs).toHaveLength(2 - ok.length);
-    for (const e of errs) expect((e.reason as AuthError).code).toBe('REUSE_DETECTED');
+    for (const e of errs) expect((e.reason as AuthError).code).toBe('INVALID_TOKEN');
   });
 
-  it('depois da race a família fica inteira revogada (nenhuma sobra de token válido)', async () => {
+  it('depois da race a família NÃO é revogada: só o filho do vencedor fica ACTIVE', async () => {
     const { repo, svc, login } = await makeServiceAndLogin('race2@example.com');
+    const revokeFamily = jest.spyOn(repo, 'revokeFamilySessions');
 
-    await Promise.allSettled([svc.refresh(login.refreshToken), svc.refresh(login.refreshToken)]);
+    const settled = await Promise.allSettled([svc.refresh(login.refreshToken), svc.refresh(login.refreshToken)]);
 
-    // O perdedor dispara `revokeFamily` — inclusive o filho que o vencedor emitiu.
-    expect(activeTokens(repo)).toHaveLength(0);
+    // Antes, o perdedor disparava `revokeFamily` e derrubava o filho que o
+    // vencedor acabou de emitir (self-DoS). Com a janela de graça a família
+    // sobrevive: o perdedor só leva 401 e a sessão do vencedor continua viva.
+    expect(revokeFamily).not.toHaveBeenCalled();
     const familyId = [...repo.refreshTokens.values()][0].familyId;
     const family = [...repo.refreshTokens.values()].filter((t) => t.familyId === familyId);
-    expect(family.every((t) => t.status !== 'ACTIVE')).toBe(true);
+    expect(family.filter((t) => t.status === 'ACTIVE')).toHaveLength(1);
     const sessions = [...repo.sessions.values()].filter((s) => s.familyId === familyId);
-    expect(sessions.every((s) => s.status !== 'ACTIVE')).toBe(true);
-    expect(repo.outbox.map((o) => o.type)).toContain('auth.session.revoked.v1');
+    expect(sessions).toHaveLength(1);
+    expect(sessions.every((s) => s.status === 'ACTIVE')).toBe(true);
+    expect(repo.outbox.map((o) => o.type)).not.toContain('auth.session.revoked.v1');
+    const loser = settled.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect((loser.reason as AuthError).code).toBe('INVALID_TOKEN');
   });
 
   it('SQL: o UPDATE de rotação carrega a guarda `AND status = ACTIVE` e devolve null no perdedor', async () => {
@@ -127,6 +151,136 @@ describe('D2-1 rotação de refresh token é atômica (CAS)', () => {
     expect(loser).toBeNull();
     expect(query).toHaveBeenCalledTimes(2);
     expect(seen[0]).toBe("UPDATE auth.refresh_tokens SET status = 'ROTATED', rotated_at = $2 WHERE id = $1 AND status = 'ACTIVE' RETURNING *");
+  });
+});
+
+// ===========================================================================
+// Janela de graça da rotação (self-DoS): a corrida benigna NÃO revoga a família
+// ===========================================================================
+
+describe('janela de graça da rotação de refresh (self-DoS)', () => {
+  afterEach(() => {
+    // Devolve o singleton da trilha de segurança ao estado lazy (sem pool).
+    __setSecurityEventPoolForTests(undefined);
+  });
+
+  it('(a) perdedor DENTRO da janela: família preservada, sem REUSED e filho do vencedor segue válido', async () => {
+    const { repo, svc, login } = await makeServiceAndLogin('grace@example.com');
+    const audit = captureSecurityEvents();
+    const revokeFamily = jest.spyOn(repo, 'revokeFamilySessions');
+    const revokeTokens = jest.spyOn(repo, 'revokeFamilyTokens');
+
+    const settled = await Promise.allSettled([svc.refresh(login.refreshToken), svc.refresh(login.refreshToken)]);
+
+    const ok = settled.filter((r) => r.status === 'fulfilled') as Array<PromiseFulfilledResult<any>>;
+    const errs = settled.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    expect(ok).toHaveLength(1);
+    expect(errs).toHaveLength(1);
+    // Mesmo contrato HTTP: 401 seco `INVALID_TOKEN` (não `REUSE_DETECTED`).
+    expect((errs[0].reason as AuthError).code).toBe('INVALID_TOKEN');
+    expect((errs[0].reason as AuthError).status).toBe(401);
+
+    // Nada de revogação de família/tokens nem do outbox de sessão revogada...
+    expect(revokeFamily).not.toHaveBeenCalled();
+    expect(revokeTokens).not.toHaveBeenCalled();
+    expect(repo.outbox.map((o) => o.type)).not.toContain('auth.session.revoked.v1');
+    // ...e NENHUM evento de segurança de reuso foi emitido.
+    expect(audit.calls.filter((c) => c.meta.includes('REUSE_DETECTED'))).toHaveLength(0);
+
+    // O token do perdedor continua `ROTATED` (nunca é marcado `REUSED`).
+    const loserRow = (await repo.findRefreshTokenByHash(sha256Hex(login.refreshToken)))!;
+    expect(loserRow.status).toBe('ROTATED');
+
+    // Sessão e filho do vencedor seguem vivos — o usuário NÃO é deslogado.
+    const sessions = [...repo.sessions.values()].filter((s) => s.familyId === loserRow.familyId);
+    expect(sessions).toHaveLength(1);
+    expect(sessions.every((s) => s.status === 'ACTIVE')).toBe(true);
+    expect(activeTokens(repo)).toHaveLength(1);
+    const carried: any = await svc.refresh(ok[0].value.refreshToken);
+    expect(carried.accessToken).toBeTruthy();
+  });
+
+  it('(a2) replay SEQUENCIAL recente (< janela) é a mesma corrida benigna: 401 seco, token segue ROTATED', async () => {
+    const { repo, svc, login } = await makeServiceAndLogin('seq-grace@example.com');
+    const revokeFamily = jest.spyOn(repo, 'revokeFamilySessions');
+    const second: any = await svc.refresh(login.refreshToken); // rotação legítima (vencedor)
+
+    // Mesmo token de novo, imediatamente (caminho A): dentro da janela é a
+    // mesma corrida benigna — aba/dispositivo que não viu a resposta do vencedor.
+    await expect(svc.refresh(login.refreshToken)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+
+    expect(revokeFamily).not.toHaveBeenCalled();
+    expect((await repo.findRefreshTokenByHash(sha256Hex(login.refreshToken)))!.status).toBe('ROTATED');
+    // O filho do vencedor continua válido (família preservada).
+    const again: any = await svc.refresh(second.refreshToken);
+    expect(again.accessToken).toBeTruthy();
+  });
+
+  it('(b) replay com rotação MAIS VELHA que a janela: família revogada + REUSE_DETECTED', async () => {
+    const { repo, svc, login } = await makeServiceAndLogin('old-replay@example.com');
+    const audit = captureSecurityEvents();
+    const second: any = await svc.refresh(login.refreshToken); // rotação legítima (vencedor)
+
+    // Envelhece a rotação além da janela: agora é replay antigo = roubo.
+    const rotatedRow = (await repo.findRefreshTokenByHash(sha256Hex(login.refreshToken)))!;
+    expect(rotatedRow.status).toBe('ROTATED');
+    await repo.updateRefreshToken(rotatedRow.id, { rotatedAt: new Date(Date.now() - ROTATION_GRACE_MS - 1) });
+
+    await expect(svc.refresh(login.refreshToken)).rejects.toMatchObject({ code: 'REUSE_DETECTED' });
+
+    // Comportamento atual preservado: família inteira morre, inclusive o filho.
+    const claims = svc.verifyAccess(login.accessToken);
+    const session = (await repo.findSessionById(claims.sessionId))!;
+    expect(session.status).toBe('REVOKED');
+    expect(session.revokedReason).toBe('REUSE_DETECTED');
+    expect((await repo.findRefreshTokenByHash(sha256Hex(login.refreshToken)))!.status).toBe('REUSED');
+    expect(activeTokens(repo)).toHaveLength(0);
+    expect(repo.outbox.map((o) => o.type)).toContain('auth.session.revoked.v1');
+    await expect(svc.refresh(second.refreshToken)).rejects.toMatchObject({ code: 'REUSE_DETECTED' });
+    // O evento de segurança de reuso FOI emitido (caso não-benigno).
+    expect(audit.calls.filter((c) => c.meta.includes('REUSE_DETECTED')).length).toBeGreaterThan(0);
+  });
+
+  for (const status of ['REVOKED', 'REUSED'] as const) {
+    it(`(c) token com status ${status}: comportamento atual preservado (família revogada)`, async () => {
+      const { repo, svc, login } = await makeServiceAndLogin(`status-${status.toLowerCase()}@example.com`);
+      const revokeFamily = jest.spyOn(repo, 'revokeFamilySessions');
+      const row = (await repo.findRefreshTokenByHash(sha256Hex(login.refreshToken)))!;
+      // `rotatedAt` fresco DE PROPÓSITO: só `ROTATED` conta como corrida
+      // benigna; `REVOKED`/`REUSED` são token explicitamente morto.
+      await repo.updateRefreshToken(row.id, { status, rotatedAt: new Date() });
+
+      await expect(svc.refresh(login.refreshToken)).rejects.toMatchObject({ code: 'REUSE_DETECTED' });
+
+      expect(revokeFamily).toHaveBeenCalledWith(row.familyId, 'REUSE_DETECTED');
+      const claims = svc.verifyAccess(login.accessToken);
+      expect((await repo.findSessionById(claims.sessionId))!.status).toBe('REVOKED');
+      expect(activeTokens(repo)).toHaveLength(0);
+    });
+  }
+
+  it('(d) caminho B: CAS perdido + releitura com ROTATED recente → benigno (sem revogar)', async () => {
+    const { repo, svc, login } = await makeServiceAndLogin('cas-loser@example.com');
+    const audit = captureSecurityEvents();
+    const revokeFamily = jest.spyOn(repo, 'revokeFamilySessions');
+    const row = (await repo.findRefreshTokenByHash(sha256Hex(login.refreshToken)))!;
+
+    // Simula o instante exato entre o CAS perdido e a releitura: outro request
+    // venceu a corrida e gravou `ROTATED` + `rotated_at` fresco. O `rec` lido
+    // pelo serviço ainda diz `ACTIVE` — a decisão tem de usar a releitura.
+    jest.spyOn(repo, 'rotateRefreshToken').mockImplementationOnce(async () => {
+      await repo.updateRefreshToken(row.id, { status: 'ROTATED', rotatedAt: new Date() });
+      return null;
+    });
+
+    await expect(svc.refresh(login.refreshToken)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+
+    expect(revokeFamily).not.toHaveBeenCalled();
+    expect((await repo.findRefreshTokenByHash(sha256Hex(login.refreshToken)))!.status).toBe('ROTATED');
+    const claims = svc.verifyAccess(login.accessToken);
+    expect((await repo.findSessionById(claims.sessionId))!.status).toBe('ACTIVE');
+    expect(repo.outbox.map((o) => o.type)).not.toContain('auth.session.revoked.v1');
+    expect(audit.calls.filter((c) => c.meta.includes('REUSE_DETECTED'))).toHaveLength(0);
   });
 });
 

@@ -1,5 +1,5 @@
 import { InMemoryAuthRepository } from './auth.repository';
-import { AuthService } from './auth.service';
+import { AuthService, ROTATION_GRACE_MS } from './auth.service';
 import { AuthError } from './auth.types';
 import { decryptSecret, deriveEncKey, sha256Hex, totpCode } from './crypto';
 
@@ -71,6 +71,12 @@ describe('auth service (fluxos Fase 2)', () => {
     const first: any = await svc.login({ email: 'user@example.com', password: 'strong-pass-01' });
     const second: any = await svc.refresh(first.refreshToken);
     expect(second.refreshToken).not.toBe(first.refreshToken);
+    // Envelhece a rotação além da janela de graça: replay RECENTE (< 30s) virou
+    // corrida benigna (self-DoS — ver auth-concurrency.spec.ts) e não revoga
+    // mais a família; replay ANTIGO continua sendo roubo e derruba a família.
+    const rotated = (await repo.findRefreshTokenByHash(sha256Hex(first.refreshToken)))!;
+    expect(rotated.status).toBe('ROTATED');
+    await repo.updateRefreshToken(rotated.id, { rotatedAt: new Date(Date.now() - ROTATION_GRACE_MS - 1) });
     // Reuso do token já rotacionado → revoga família.
     await expect(svc.refresh(first.refreshToken)).rejects.toMatchObject({ code: 'REUSE_DETECTED' });
     // Token novo (da família revogada) também morre.

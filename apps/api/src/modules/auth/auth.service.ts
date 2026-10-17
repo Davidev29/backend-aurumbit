@@ -61,6 +61,19 @@ const RECOVERY_TTL_MS = 60 * 60_000; // 60min
 const SESSION_TTL_MS = 30 * 24 * 3600_000;
 const REFRESH_TTL_MS = 30 * 24 * 3600_000;
 
+/**
+ * Janela de graça da rotação do refresh token (proteção contra self-DoS).
+ *
+ * Duas abas/dispositivos podem renovar o MESMO refresh token quase ao mesmo
+ * tempo: o vencedor rotaciona (`ACTIVE` → `ROTATED` + `rotated_at`) e recebe
+ * tokens novos; o perdedor encontra o token já `ROTATED`. Sem a janela, o
+ * perdedor caía no `denyReuse` e revogava a FAMÍLIA INTEIRA — inclusive a
+ * sessão que o vencedor acabou de renovar — deslogando o usuário legítimo.
+ * Dentro desta janela a corrida é benigna: o perdedor recebe só o mesmo 401
+ * `INVALID_TOKEN`, sem revogar nada. Exportada para os testes referenciarem.
+ */
+export const ROTATION_GRACE_MS = 30_000;
+
 /** Resposta genérica anti-enumeração (mesmo shape p/ existente/inexistente). */
 export const GENERIC_OK = { ok: true } as const;
 
@@ -322,10 +335,30 @@ export class AuthService {
   }
 
   /**
-   * Detecção de REUSO (D2-1): o token JÁ estava rotacionado/revogado, ou o
-   * request perdeu a race de rotação (`rotateRefreshToken` devolveu `null`).
-   * Mesmo tratamento nos dois casos — reuso de refresh token é indistinguível de
-   * roubo, então a família inteira morre (OAuth 2.0 Security BCP, §4.14.2).
+   * Corrida benigna de rotação: duas abas/dispositivos renovam o MESMO refresh
+   * token quase ao mesmo tempo. O vencedor rotaciona (`ACTIVE` → `ROTATED` +
+   * `rotatedAt` fresco); o perdedor encontra a linha `ROTATED` com `rotatedAt`
+   * dentro da janela de graça. Pela resposta HTTP é indistinguível de replay,
+   * mas o `rotatedAt` separa os dois: corrida recente NÃO revoga a família (a
+   * revogação derrubaria a sessão que o vencedor acabou de renovar), NÃO marca
+   * `REUSED` e NÃO emite evento de reuso — só devolve o mesmo 401 `INVALID_TOKEN`.
+   *
+   * Só `ROTATED` conta: `REVOKED` (logout/revogação explícita) e `REUSED`
+   * (replay já classificado como roubo) são apresentações de um token
+   * explicitamente morto, não corrida de rotação. Fora da janela `ROTATED`
+   * também deixa de ser corrida: replay de rotação antiga é tratado como roubo
+   * e derruba a família inteira (OAuth 2.0 Security BCP, §4.14.2).
+   */
+  private isBenignRotationRace(rec: { status: string; rotatedAt: Date | null }): boolean {
+    return rec.status === 'ROTATED' && rec.rotatedAt !== null && +this.now() - +rec.rotatedAt <= ROTATION_GRACE_MS;
+  }
+
+  /**
+   * Detecção de REUSO (D2-1): o token já estava revogado/reusado, ou a rotação
+   * é antiga demais para ser corrida benigna (ver `isBenignRotationRace`) —
+   * reuso aqui é indistinguível de roubo, então a família inteira morre (OAuth
+   * 2.0 Security BCP, §4.14.2). A corrida benigna recente NÃO passa por aqui:
+   * recebe 401 seco sem revogar nada.
    * @returns nunca — sempre lança `REUSE_DETECTED` (401).
    */
   private async denyReuse(rec: { id: string; familyId: string }, actorId?: string | null): Promise<never> {
@@ -348,8 +381,15 @@ export class AuthService {
     if (!rec) throw new AuthError('INVALID_TOKEN', 401, 'Sessão inválida.');
     const session = await this.repo.findSessionById(rec.sessionId);
 
-    // Reuso: token já rotacionado/revogado ou sessão revogada por reuso → revoga a família.
-    if (rec.status === 'ROTATED' || rec.status === 'REVOKED' || rec.status === 'REUSED') {
+    // Token já rotacionado/revogado/reusado. `ROTATED` dentro da janela de
+    // graça é a corrida benigna de outra aba/dispositivo renovando o MESMO
+    // token: 401 seco sem revogar a família. Fora da janela (ou status
+    // REVOKED/REUSED) é reuso/roubo → `denyReuse` derruba a família inteira.
+    if (rec.status === 'ROTATED') {
+      if (this.isBenignRotationRace(rec)) throw new AuthError('INVALID_TOKEN', 401, 'Sessão inválida.');
+      return this.denyReuse(rec, session?.identityId);
+    }
+    if (rec.status === 'REVOKED' || rec.status === 'REUSED') {
       return this.denyReuse(rec, session?.identityId);
     }
     if (!session || session.status !== 'ACTIVE') {
@@ -371,9 +411,19 @@ export class AuthService {
     // o vencedor. Sem ela, dois `POST /v1/auth/refresh` com o MESMO token liam
     // `ACTIVE`, ambos rotacionavam e ambos criavam um token filho — 2 refresh
     // tokens válidos na mesma família (o UNIQUE(token_hash) não segura, pois
-    // `randomTokenHex(32)` dá hashes disjuntos). Perdedor (`null`) = reuso.
+    // `randomTokenHex(32)` dá hashes disjuntos).
     const rotated = await this.repo.rotateRefreshToken(rec.id, this.now());
-    if (!rotated) return this.denyReuse(rec, session.identityId);
+    if (!rotated) {
+      // O `rec` foi lido ANTES da corrida e ainda diz `ACTIVE`: relê o estado
+      // FRESCO para distinguir a corrida benigna (outro request rotacionou o
+      // MESMO token há instantes — 401 seco, sem revogar a família) do reuso
+      // de um token morto (denyReuse). Releitura `null` (token sumiu): segue
+      // no `denyReuse` como antes.
+      const fresh = await this.repo.findRefreshTokenByHash(hash);
+      if (!fresh) return this.denyReuse(rec, session.identityId);
+      if (this.isBenignRotationRace(fresh)) throw new AuthError('INVALID_TOKEN', 401, 'Sessão inválida.');
+      return this.denyReuse(fresh, session.identityId);
+    }
     // E7 (Fase 9): rotação legítima — trilha best-effort (decisão inalterada).
     void emitSecurityEvent(getSecurityEventPool(), {
       type: 'TOKEN_ROTATED',
