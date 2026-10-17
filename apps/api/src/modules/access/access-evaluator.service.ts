@@ -60,12 +60,34 @@ export class AccessEvaluatorService {
   }
 
   /**
-   * Varredura do lado licensing (expires_at/grace_until < now). O stub Fase 1
-   * de `licensing.licenses` não tem colunas de vigência e este método retorna
-   * skipped nesse caso (probe em information_schema); quando a Fase 3
-   * licensing adicionar as colunas, o sweep idempotente passa a valer sem
-   * mudar chamadores. Sem licensingPool → skipped.
-   */
+ * Varredura do lado licensing. DOIS bugs que a deixavam sempre `skipped`
+ * (nunca rodou em produção desde a Fase 3):
+ * 1) a probe procurava `expires_at`/`grace_until` (SNAKE_CASE), mas as
+ *    colunas reais são camelCase `"expiresAt"`/`"graceUntil"`
+ *    (`prisma/licensing/schema.prisma:35-36`) → `cols=0`;
+ * 2) o UPDATE comparava `status = 'ACTIVE'`, mas o valor persistido é
+ *    minúsculo (`'active'`, gravado em `issueLicense`) → 0 linhas.
+ *
+ * A probe agora verifica as DUAS colunas por NOME (contar 2 não prova que
+ * são as certas) e é explícita quanto ao schema (`licensing`, o mesmo
+ * `search_path` do role `app_licensing`).
+ *
+ * DECISÃO: NÃO grava `status = 'expired'`. `status` é o lifecycle CRU —
+ * o próprio schema documenta `pending_payment | active | suspended |
+ * revoked (+ grace/expired derivados na leitura)`. Fabricar 'expired' ali
+ * quebra os gates que testam o status CRU:
+ * - `offline-token.service.ts:58` (`status !== 'active'`) → cairia em
+ *   LICENSE_INACTIVE genérico ANTES do check de datas, trocando a mensagem
+ *   correta `EXPIRED` ("licença expirada") por "licença com status expired";
+ * - `devices.service.ts:267` e `:525` (`lic.status !== 'active'`) →
+ *   `LICENSE_INACTIVE` no lugar do `EXPIRED` de `:534`.
+ * Como `effectiveStatus` (license-keys.ts) já deriva expired/grace na
+ * LEITURA de todo caminho de leitura, o sweep é um DETECTOR: conta o que
+ * está vencido além da graça, sem fabricar estado — idempotente por natureza.
+ * `FROM licenses` sem prefixo resolve `licensing.licenses` pelo search_path
+ * do role (verificado: `search_path=licensing` em pg_db_role_setting) —
+ * prefixo de schema seria redundante e acoparia o código a um schema fixo.
+ */
   async evaluateLicenses(
     now = new Date(),
   ): Promise<{ evaluatedAt: string; skipped: boolean; toExpired: number; reason?: string }> {
@@ -73,27 +95,33 @@ export class AccessEvaluatorService {
     if (!this.licensingPool) {
       return { evaluatedAt: iso, skipped: true, toExpired: 0, reason: 'sem licensingPool' };
     }
-    let cols = 0;
+    let cols: string[] = [];
     try {
       const probe = await this.licensingPool.query(
-        `SELECT count(*)::int AS n FROM information_schema.columns
-         WHERE table_name = 'licenses' AND column_name IN ('expires_at', 'grace_until')`,
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = $1 AND table_name = 'licenses' AND column_name IN ('expiresAt', 'graceUntil')`,
+        ['licensing'],
       );
-      cols = Number((probe.rows[0] as { n: number } | undefined)?.n ?? 0);
+      cols = (probe.rows as Array<{ column_name: string }>).map((r) => r.column_name);
     } catch {
       return { evaluatedAt: iso, skipped: true, toExpired: 0, reason: 'probe information_schema falhou' };
     }
-    if (cols < 2) {
-      return { evaluatedAt: iso, skipped: true, toExpired: 0, reason: 'licensing sem colunas de vigência (stub Fase 1)' };
+    if (!cols.includes('expiresAt') || !cols.includes('graceUntil')) {
+      return {
+        evaluatedAt: iso,
+        skipped: true,
+        toExpired: 0,
+        reason: 'licensing sem colunas de vigência camelCase (stub Fase 1)',
+      };
     }
     try {
       const r = await this.licensingPool.query(
-        `UPDATE licenses SET status = 'EXPIRED', "updatedAt" = now()
-         WHERE status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < $1
-           AND (grace_until IS NULL OR grace_until < $1)`,
+        `SELECT count(*)::int AS n FROM licenses
+         WHERE status = 'active' AND "expiresAt" IS NOT NULL AND "expiresAt" < $1
+           AND ("graceUntil" IS NULL OR "graceUntil" < $1)`,
         [iso],
       );
-      return { evaluatedAt: iso, skipped: false, toExpired: r.rowCount ?? 0 };
+      return { evaluatedAt: iso, skipped: false, toExpired: Number((r.rows[0] as { n: number } | undefined)?.n ?? 0) };
     } catch {
       return { evaluatedAt: iso, skipped: true, toExpired: 0, reason: 'sweep licensing falhou (schema incompatível?)' };
     }
