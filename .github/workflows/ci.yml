@@ -147,6 +147,10 @@ jobs:
         run: |
           set -e
           cp .env.example .env
+          # D2-4: o fail-fast de env rejeita `TROCAR_*` — sem segredo real a API
+          # fica em crash-loop e o /health/ready nunca fica ok (era o vermelho
+          # do e2e-compose-efemero). O script é idempotente e não imprime valores.
+          bash deploy/scripts/gen-dev-env.sh
           bash deploy/scripts/pgbouncer-userlist.sh
           docker compose -f deploy/docker-compose.yml up --build -d
           docker compose -f deploy/docker-compose.yml ps
