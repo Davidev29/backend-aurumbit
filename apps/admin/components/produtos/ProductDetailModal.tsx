@@ -12,6 +12,7 @@ import {
   Copy,
   Cpu,
   Info,
+  MonitorSmartphone,
   Pencil,
   Plus,
   Ticket,
@@ -27,6 +28,9 @@ import { TabPanel, Tabs } from "@/components/ui/Tabs";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { Field, Input } from "@/components/ui/Field";
 import { SkeletonTable } from "@/components/ui/skeleton";
+import { ProductLicensesPanel } from "@/components/licencas/ProductLicensesPanel";
+import { PlatformIcons } from "./PlatformPicker";
+import { deliveryModeLabel } from "@/lib/platforms";
 import { useCan } from "@/lib/auth/permissions";
 import { useToast } from "@/lib/toast";
 import { apiPost } from "@/lib/api/client";
@@ -41,8 +45,15 @@ import type {
 } from "@/lib/types";
 import { ArchiveDialog } from "./ArchiveDialog";
 import { ChangePriceDialog } from "./ChangePriceDialog";
+import { EditProductDialog } from "./EditProductDialog";
 
-type TabId = "overview" | "plans" | "history" | "gallery" | "promo";
+/**
+ * Abas do detalhe. `licenses` (estado ATUAL das chaves) e `history` (trilha
+ * append-only do que aconteceu) são coisas DIFERENTES e ambas ficam: o
+ * operador precisa das duas para responder "quantas chaves vencidas existem
+ * agora?" e "quem suspendeu esta chave em março?".
+ */
+type TabId = "overview" | "plans" | "licenses" | "history" | "gallery" | "promo";
 
 /** Badge de estado do produto (ícone + texto, nunca só cor — DS §9). */
 export function ProductStatusBadge({ status }: { status: ProductView["status"] }) {
@@ -69,25 +80,57 @@ export function ProductStatusBadge({ status }: { status: ProductView["status"] }
   );
 }
 
-function historyBadge(status: LicenseHistoryEntry["status"]) {
-  const s = String(status).toLowerCase();
-  if (s === "active" || s === "ativa") {
+/**
+ * Badge de estado na trilha de HISTÓRICO.
+ *
+ * Fonte da verdade = `currentStatus` (o estado efetivo AGORA, derivado do
+ * relógio pelo backend), com `status` da entrada como fallback para linhas
+ * legadas. `derivedFromClock` acende o cue "vigência" — sem ele, o operador lê
+ * "Ativa" numa emissão de 2024 e conclui que o dado está errado, quando na
+ * verdade é o relógio falando.
+ *
+ * O tipo antes era `"active" | "revoked" | "expired"`, o que não cobria `grace`,
+ * `suspended` nem `pending_payment` — esses caíam no fallback cru e apareciam
+ * como texto solto (`grace`) no lugar de um badge. Agora os 6 estados efetivos
+ * + `replaced` têm tom e ícone.
+ */
+function historyBadge(entry: LicenseHistoryEntry) {
+  const raw = String(entry.currentStatus ?? entry.status ?? "").toLowerCase();
+  const derived = entry.derivedFromClock === true;
+  const cue = derived ? " (vigência)" : "";
+  if (raw === "active" || raw === "ativa") {
     return (
-      <Badge tone="ok" state="Ativa">
+      <Badge tone="ok" state={`Ativa${cue}`}>
         <CircleCheck size={13} strokeWidth={1.75} aria-hidden="true" />
         Ativa
       </Badge>
     );
   }
-  if (s === "revoked" || s === "revogada") {
+  if (raw === "grace") {
     return (
-      <Badge tone="danger" state="Revogada">
+      <Badge tone="warn" state={`Em graça${cue}`}>
+        <TriangleAlert size={13} strokeWidth={1.75} aria-hidden="true" />
+        Em graça
+      </Badge>
+    );
+  }
+  if (raw === "suspended" || raw === "suspensa") {
+    return (
+      <Badge tone="warn" state={`Suspensa${cue}`}>
+        <Ban size={13} strokeWidth={1.75} aria-hidden="true" />
+        Suspensa
+      </Badge>
+    );
+  }
+  if (raw === "revoked" || raw === "revogada") {
+    return (
+      <Badge tone="danger" state={`Revogada${cue}`}>
         <CircleX size={13} strokeWidth={1.75} aria-hidden="true" />
         Revogada
       </Badge>
     );
   }
-  if (s === "replaced" || s === "substituida" || s === "substituída") {
+  if (raw === "replaced" || raw === "substituida" || raw === "substituída") {
     return (
       <Badge tone="info" state="Substituída">
         <Info size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -95,16 +138,24 @@ function historyBadge(status: LicenseHistoryEntry["status"]) {
       </Badge>
     );
   }
-  if (s === "expired" || s === "expirada") {
+  if (raw === "expired" || raw === "expirada") {
     return (
-      <Badge tone="neutral" state="Expirada" icon={Archive}>
+      <Badge tone="neutral" state={`Expirada${cue}`} icon={Archive}>
         Expirada
       </Badge>
     );
   }
+  if (raw === "pending_payment" || raw === "pending") {
+    return (
+      <Badge tone="info" state={`Pagamento pendente${cue}`}>
+        <Info size={13} strokeWidth={1.75} aria-hidden="true" />
+        Pagamento pendente
+      </Badge>
+    );
+  }
   return (
-    <Badge tone="neutral" state={String(status)}>
-      {String(status)}
+    <Badge tone="neutral" state={String(entry.currentStatus ?? entry.status)}>
+      {String(entry.currentStatus ?? entry.status)}
     </Badge>
   );
 }
@@ -446,24 +497,48 @@ function isBonusTagged(h: LicenseHistoryEntry): boolean {
   return /bônus|bonus/i.test(`${h.reason ?? ""} ${h.ownerLabel ?? ""}`);
 }
 
-/** Texto de expiração da linha (sempre visível quando conhecido). */
+/**
+ * Texto de expiração da linha (COM HORA — `formatDateTimeInTZ`).
+ *
+ * Antes usava `formatDateInTZ`, que corta o dia: a trilha escondia o momento
+ * exato em que a vigência acaba. O backend já entrega ISO-8601 com hora e a
+ * tolerância é de 3 dias — o corte no dia hides essa precisão.
+ */
 function expiryText(h: LicenseHistoryEntry): string | null {
-  if (h.expiresAt) return `expira ${formatDateInTZ(h.expiresAt)}`;
+  if (h.expiresAt) return `expira ${formatDateTimeInTZ(h.expiresAt)}`;
   if ((h.kind ?? "").toLowerCase() === "lifetime") return "sem expiração";
   return null;
+}
+
+/** Rótulo do evento que originou a linha (trilha append-only do outbox). */
+function eventLabel(h: LicenseHistoryEntry): string | null {
+  if (!h.eventType) return null;
+  const map: Record<string, string> = {
+    LicenseIssued: "emissão",
+    LicenseRenewed: "renovação",
+    LicenseExtended: "prorrogação",
+    LicenseResumed: "reativação",
+    LicenseRevoked: "revogação",
+    LicenseSuspended: "suspensão",
+  };
+  return map[h.eventType] ?? h.eventType;
 }
 
 /** Histórico de licenças em linhas compactas (chave + motivo / estado + data). */
 function LicenseRows({ history }: { history: LicenseHistoryEntry[] }) {
   return (
     <ul aria-label="Histórico de licenças" className="m-0 divide-y divide-line1 p-0 list-none rounded-base border border-line1 bg-bg1 px-2.5">
-      {history.map((h) => {
+      {history.map((h, i) => {
         const modality = modalityBadge(h);
         const expiry = expiryText(h);
         const bonus = isBonusTagged(h);
+        const event = eventLabel(h);
         const motive = h.reason || (h.replacedBy ? `→ ${h.replacedBy}` : null);
+        // `occurredAt` (quando o evento aconteceu) > `endedAt` (quando a licença
+        // terminou) — `occurredAt` é o campo correto para ordenar a trilha.
+        const when = h.occurredAt ?? h.endedAt;
         return (
-          <li key={h.licenseId} className="flex items-center gap-2 py-1.5">
+          <li key={`${h.licenseId}-${h.eventType ?? "evt"}-${i}`} className="flex items-center gap-2 py-1.5">
             <div className="min-w-0 flex-1">
               <p className="m-0 truncate font-mono tnum text-[0.85em] leading-5 text-text1" title={h.replacedBy ? `Substituída por ${h.replacedBy}` : undefined}>
                 {h.keyMasked}
@@ -473,9 +548,14 @@ function LicenseRows({ history }: { history: LicenseHistoryEntry[] }) {
                   {motive}
                 </p>
               )}
-              {(modality || expiry || bonus) && (
+              {(modality || expiry || bonus || event) && (
                 <p className="m-0 mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 leading-4">
                   {modality}
+                  {event && (
+                    <Badge tone="neutral" state={`Evento: ${h.eventType}`} icon={false} className="px-1.5 py-px">
+                      {event}
+                    </Badge>
+                  )}
                   {bonus && (
                     <Badge tone="warn" state="Relacionada a bônus" className="px-1.5 py-px">
                       Bônus
@@ -487,9 +567,13 @@ function LicenseRows({ history }: { history: LicenseHistoryEntry[] }) {
                 </p>
               )}
             </div>
-            <span className="shrink-0 self-center">{historyBadge(h.status)}</span>
-            <span className="w-20 shrink-0 self-center text-right text-[11px] text-text2">
-              {h.endedAt ? <time dateTime={h.endedAt}>{formatDateInTZ(h.endedAt)}</time> : "Vigente"}
+            <span className="shrink-0 self-center">{historyBadge(h)}</span>
+            <span className="w-28 shrink-0 self-center text-right text-[11px] text-text2">
+              {when ? (
+                <time dateTime={when}>{formatDateTimeInTZ(when)}</time>
+              ) : (
+                "Vigente"
+              )}
             </span>
           </li>
         );
@@ -960,6 +1044,7 @@ export function ProductDetailModal({
   const [reloadNonce, setReloadNonce] = useState(0);
   const [changePricePlan, setChangePricePlan] = useState<PlanView | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -983,7 +1068,11 @@ export function ProductDetailModal({
         }
       });
     Promise.resolve()
-      .then(() => listLicenseHistory(productCode))
+      // `scope:"product"`: diz ao BFF que o ref é product code, então ele vai
+      // direto ao fan-out das licenças em vez de sondar o ref como licenseId e
+      // depender de um 404 do upstream para se corrigir (ida-e-volta inútil +
+      // log de erro falso em toda abertura do modal).
+      .then(() => listLicenseHistory(productCode, { scope: "product" }))
       .then((res) => {
         if (!cancelled) setHistory(Array.isArray(res) ? res : res.data);
       })
@@ -1028,6 +1117,7 @@ export function ProductDetailModal({
   const TABS: Array<{ id: TabId; label: string }> = [
     { id: "overview", label: "Visão geral" },
     { id: "plans", label: planRows.length > 0 ? `Planos (${vigentes.length})` : "Planos" },
+    { id: "licenses", label: "Licenças" },
     { id: "history", label: history.length > 0 ? `Histórico (${history.length})` : "Histórico" },
     { id: "gallery", label: product.gallery.length > 0 ? `Galeria (${product.gallery.length})` : "Galeria" },
     { id: "promo", label: "Promo" },
@@ -1109,6 +1199,40 @@ export function ProductDetailModal({
               title={historico.length > 0 ? `${historico.length} no histórico` : "Preço imutável por linha"}
             />
           </dl>
+          <section
+            aria-label="Plataformas e entrega"
+            className="mb-2 rounded-base border border-line1 bg-bg2 px-2.5 py-2"
+          >
+            <p className="m-0 mb-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-text2">
+              <span aria-hidden="true" className="inline-flex">
+                <MonitorSmartphone size={12} strokeWidth={1.75} />
+              </span>
+              Plataformas
+              <span className="font-normal normal-case tracking-normal text-text2">
+                · {deliveryModeLabel(product.deliveryMode ?? "OFFLINE")}
+              </span>
+              <span className="ml-auto">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditOpen(true)}
+                  disabled={!canManage || archived}
+                  title={
+                    archived
+                      ? "Produto arquivado não é editável"
+                      : canManage
+                        ? "Editar nome, slug, descrição, máquinas, plataformas e entrega"
+                        : "Requer permissão product.manage"
+                  }
+                >
+                  <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
+                  Editar
+                </Button>
+              </span>
+            </p>
+            <PlatformIcons ids={product.platforms ?? []} />
+          </section>
           <div className="mb-2">
             <ActiveClientsInline productCode={product.code} />
           </div>
@@ -1175,10 +1299,17 @@ export function ProductDetailModal({
         </TabPanel>
       )}
 
+      {tab === "licenses" && (
+        <TabPanel label="Estado atual das licenças do produto">
+          <ProductLicensesPanel productCode={product.code} onChanged={refresh} />
+        </TabPanel>
+      )}
+
       {tab === "history" && (
-        <TabPanel label="Licenças e histórico do produto">
+        <TabPanel label="Trilha de histórico das licenças do produto">
           <p className="mt-0 mb-1.5 text-callout text-text2">
-            Preservado p/ auditoria — a troca nunca apaga o vínculo anterior.
+            Trilha de auditoria (append-only) — a troca nunca apaga o vínculo anterior. Para o estado
+            atual das chaves, veja a aba <strong className="text-text1">Licenças</strong>.
           </p>
           {history.length === 0 ? (
             <EmptyState title="Sem histórico" message="Nenhuma licença emitida para este produto." />
@@ -1224,6 +1355,24 @@ export function ProductDetailModal({
             setNotice(`Produto arquivado · trilha ${auditId}.`);
             refresh();
             onClose();
+          }}
+        />
+      )}
+      {editOpen && (
+        <EditProductDialog
+          product={product}
+          onClose={() => setEditOpen(false)}
+          onSaved={(saved, mode) => {
+            // O BFF devolve o produto completo já normalizado → a visão é
+            // atualizada no lugar (sem refazer fetch do modal e sem recarregar
+            // a página). `onChanged` só avisa a LISTA por trás.
+            setProduct(saved);
+            if (mode === "stub") {
+              setNotice(
+                "API_INTERNAL_URL ausente — alteração só na memória desta sessão (dados sintéticos).",
+              );
+            }
+            onChanged?.();
           }}
         />
       )}

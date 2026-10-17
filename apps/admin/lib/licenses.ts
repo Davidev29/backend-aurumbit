@@ -2,6 +2,8 @@ import { apiPost } from "./api/client";
 import type {
   AdjustMachinesRequest,
   BonusGrantRequest,
+  ExtendLicenseRequest,
+  LicenseEffectiveStatus,
   LicenseRevealResponse,
   RenewRequest,
   RevokeRequest,
@@ -66,4 +68,52 @@ export function revokeLicense(licenseId: string, req: RevokeRequest): Promise<{ 
     req,
     { headers: idempotencyHeaders() },
   );
+}
+
+/**
+ * Prorrogação IN-PLACE: estende a MESMA licença (preserva id, `key_hash` e os
+ * vínculos de máquina que o cliente já tem) — é o resgate da chave vencida sem
+ * trocar a chave. `months` 1..12 (meses-calendário UTC), `reason` >= 10.
+ *
+ * NÃO bumpa `token_version` (prorrogar soma direito, nunca tira). 409 do
+ * upstream: `revoked` | `pending_payment` | sem `expiresAt` (vitalícia).
+ */
+export function extendLicense(
+  licenseId: string,
+  req: ExtendLicenseRequest,
+): Promise<{ license: LicenseStatusSummary; previousExpiresAt: string }> {
+  return apiPost(`/api/licenses/${encodeURIComponent(licenseId)}/extend`, req, {
+    headers: idempotencyHeaders(),
+  });
+}
+
+/** Suspensão (estado de admin; a chave continua do cliente e pode voltar). 409 em revoked/expired/pending_payment. */
+export function suspendLicense(
+  licenseId: string,
+  reason: string,
+): Promise<LicenseStatusSummary> {
+  return apiPost(`/api/licenses/${encodeURIComponent(licenseId)}/suspend`, { reason }, {
+    headers: idempotencyHeaders(),
+  });
+}
+
+/** Reativação de suspensa. 409 em qualquer estado ≠ `suspended`. */
+export function resumeLicense(licenseId: string, reason: string): Promise<LicenseStatusSummary> {
+  return apiPost(`/api/licenses/${encodeURIComponent(licenseId)}/resume`, { reason }, {
+    headers: idempotencyHeaders(),
+  });
+}
+
+/**
+ * Subconjunto do `MaskedLicense` que a UI precisa depois de uma mutação —
+ * declarado aqui (e não importado de `types`) p/ o retorno das mutações ficar
+ * explícito: o backend devolve a licença inteira, mas a tela só recarrega a
+ * lista, não reconstrói objeto a partir disto.
+ */
+export interface LicenseStatusSummary {
+  id: string;
+  status: LicenseEffectiveStatus | (string & {});
+  keyMasked: string;
+  expiresAt: string | null;
+  graceUntil: string | null;
 }
