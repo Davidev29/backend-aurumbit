@@ -1,8 +1,8 @@
 // Filas/agendamento da retenção LGPD (Fase 6, PROJECT.md §4).
 // - 5 políticas (1 job cada) com repeat diário BullMQ (`repeat: { pattern }`).
-// - Sem import estático de `bullmq` (apps/api não o declara): o scheduler
-//   tenta `require('bullmq')` e cai p/ timers nativos com warn quando ausente
-//   — mesmo padrão de `billing/webhook.queue.ts` e `finance/projections.queue.ts`.
+// - Driver explícito (`common/queue/queue-driver.ts`, achado N1): o repeat só é
+//   registrado com `QUEUE_DRIVER=bullmq`; com `memory` (default) o scheduler
+//   usa timers nativos e o driver aparece no log do boot — nunca em silêncio.
 // - Execução real vive em `retention.service.ts` (dry-run default) com
 //   métricas `retention.*` (ver `retention.metrics.ts`).
 // - TODO(Fase 6-hardening): purge real com `DELETE` limitado + batch

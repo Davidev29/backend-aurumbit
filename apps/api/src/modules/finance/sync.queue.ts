@@ -5,12 +5,18 @@
  * - Consumidor: `apps/workers/src/queues/finance.sync.ts` → aplica via
  *   endpoint interno `POST /v1/finance/internal/sync`; retry exponencial
  *   5x + DLQ `finance.dlq` (replay manual preserva o eventId).
- * Sem import estático de `bullmq` aqui (mesmo padrão de
- * `billing/webhook.queue.ts`): factory tenta `require('bullmq')` e cai
- * p/ no-op com warn quando ausente — o relay NUNCA depende do Redis.
+ * Driver de fila explícito (`common/queue/queue-driver.ts`, achado N1): com
+ * `QUEUE_DRIVER=bullmq` a Queue é real; com `memory` (default) a fila é
+ * in-memory e o driver é REGISTRADO no boot — nunca mais degradação silenciosa.
+ * Em qualquer caso o relay NUNCA depende do Redis.
  */
 
 import { z } from 'zod';
+import {
+  announceQueueDriver,
+  createRedisConnection,
+  requireBullMqQueueCtor,
+} from '../../common/queue/queue-driver';
 
 export const FINANCE_SYNC_QUEUE = 'finance.sync';
 export const FINANCE_DLQ = 'finance.dlq';
@@ -72,36 +78,15 @@ export class InMemoryFinanceSyncQueue implements FinanceSyncQueuePort {
   }
 }
 
-function loadBullMQQueueCtor():
-  (new (name: string, opts: { connection: unknown }) => FinanceSyncQueuePort) | null {
-  try {
-    // require lazy p/ não quebrar `nest build` sem a dep (ver topo).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('bullmq') as {
-      Queue?: new (name: string, opts: { connection: unknown }) => FinanceSyncQueuePort;
-    };
-    return mod?.Queue ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Factory do provider `FINANCE_SYNC_QUEUE_PORT`. Com `REDIS_URL` + bullmq
- * instalado retorna Queue real (`finance.sync`); senão, no-op com warn.
+ * Factory do provider `FINANCE_SYNC_QUEUE_PORT`. Com `QUEUE_DRIVER=bullmq`
+ * retorna Queue real (`finance.sync`); com `memory` (default) retorna no-op.
  */
 export function createFinanceSyncQueue(): FinanceSyncQueuePort {
-  const Ctor = process.env.REDIS_URL ? loadBullMQQueueCtor() : null;
-  if (Ctor) {
+  if (announceQueueDriver(FINANCE_SYNC_QUEUE) === 'bullmq') {
+    const Ctor = requireBullMqQueueCtor<FinanceSyncQueuePort>(FINANCE_SYNC_QUEUE);
     // ioredis lazy: Queue só conecta no 1º add (seguro no boot/build).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Redis = require('ioredis');
-    const connection = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-    });
-    connection.on('error', () => undefined);
-    return new Ctor(FINANCE_SYNC_QUEUE, { connection });
+    return new Ctor(FINANCE_SYNC_QUEUE, { connection: createRedisConnection(FINANCE_SYNC_QUEUE) });
   }
   return new InMemoryFinanceSyncQueue();
 }

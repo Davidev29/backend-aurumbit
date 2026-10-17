@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  announceQueueDriver,
+  createRedisConnection,
+  requireBullMqQueueCtor,
+} from '../../common/queue/queue-driver';
 
 // Filas da automação financeira (PROJECT.md §5):
 // - `finance.bill-pay`: `jobId = finance:bill-pay:<idempotencyKey>`;
@@ -6,6 +11,9 @@ import { z } from 'zod';
 // - Retry exponencial 5x + DLQ `finance.dlq` (replay manual preserva o id).
 // - Workers nunca escrevem PG direto: aplicam via endpoints internos da
 //   API (`POST /v1/finance/internal/automation/...`).
+// - Driver explícito (`common/queue/queue-driver.ts`, achado N1): o no-op
+//   in-memory só vale no default `QUEUE_DRIVER=memory`; com `bullmq` as
+//   Queues são reais e o driver é registrado no boot.
 
 export const FINANCE_AUTOMATION_QUEUES = {
   billPay: 'finance.bill-pay',
@@ -92,41 +100,16 @@ export class InMemoryFinanceAutomationQueue implements FinanceAutomationQueuePor
   }
 }
 
-function loadBullMQCtor(): (new (
-  name: string,
-  opts: { connection: unknown },
-) => {
-  add(name: string, data: unknown, opts: unknown): Promise<unknown>;
-}) | null {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('bullmq') as {
-      Queue?: new (name: string, opts: { connection: unknown }) => {
-        add(name: string, data: unknown, opts: unknown): Promise<unknown>;
-      };
-    };
-    return mod?.Queue ?? null;
-  } catch {
-    return null;
-  }
-}
+type BullMqQueueLike = { add(name: string, data: unknown, opts: unknown): Promise<unknown> };
 
 class BullMQFinanceAutomationQueue implements FinanceAutomationQueuePort {
-  private readonly queues = new Map<string, { add(n: string, d: unknown, o: unknown): Promise<unknown> }>();
+  private readonly queues = new Map<string, BullMqQueueLike>();
 
-  private q(queue: string): { add(n: string, d: unknown, o: unknown): Promise<unknown> } {
+  private q(queue: string): BullMqQueueLike {
     const existing = this.queues.get(queue);
     if (existing) return existing;
-    const Ctor = loadBullMQCtor();
-    if (!Ctor) throw new Error('bullmq indisponível');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Redis = require('ioredis');
-    const connection = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-    });
-    connection.on('error', () => undefined);
-    const q = new Ctor(queue, { connection });
+    const Ctor = requireBullMqQueueCtor<BullMqQueueLike>(queue);
+    const q = new Ctor(queue, { connection: createRedisConnection(queue) });
     this.queues.set(queue, q);
     return q;
   }
@@ -142,16 +125,13 @@ class BullMQFinanceAutomationQueue implements FinanceAutomationQueuePort {
 }
 
 /**
- * Factory do provider `FINANCE_AUTOMATION_QUEUE_PORT`. Com `REDIS_URL` +
- * bullmq instalado retorna Queues reais; senão, no-op (inline já executou).
+ * Factory do provider `FINANCE_AUTOMATION_QUEUE_PORT`. Com
+ * `QUEUE_DRIVER=bullmq` retorna Queues reais; com `memory` (default) retorna
+ * no-op (inline já executou).
  */
 export function createFinanceAutomationQueue(): FinanceAutomationQueuePort {
-  if (process.env.REDIS_URL && loadBullMQCtor()) {
-    try {
-      return new BullMQFinanceAutomationQueue();
-    } catch {
-      return new InMemoryFinanceAutomationQueue();
-    }
+  if (announceQueueDriver('finance.automation') === 'bullmq') {
+    return new BullMQFinanceAutomationQueue();
   }
   return new InMemoryFinanceAutomationQueue();
 }

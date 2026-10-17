@@ -1,4 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  announceQueueDriver,
+  createRedisConnection,
+  requireBullMqQueueCtor,
+} from '../../common/queue/queue-driver';
 import { RetentionMetrics } from './retention.metrics';
 import { RETENTION_QUEUE, allRetentionJobs, retentionJobOptions, type RetentionJobName } from './retention.queues';
 import { runRetentionPolicy, type RetentionPolicyResult, type RetentionSqlRunner } from './retention.service';
@@ -6,8 +11,9 @@ import { runRetentionPolicy, type RetentionPolicyResult, type RetentionSqlRunner
 // Agendador da retenção (Fase 6).
 // - Produção: 1 repeat BullMQ diário por política (`retention.daily`,
 //   `repeat: { pattern: '30 3 * * *', tz: 'America/Sao_Paulo' }`).
-//   O registro do repeat tenta `require('bullmq')` e cai p/ timers nativos
-//   com warn quando ausente (mesmo padrão das filas billing/finance).
+//   O registro do repeat usa o driver explícito
+//   (`common/queue/queue-driver.ts`, achado N1): com `QUEUE_DRIVER=memory`
+//   (default) nenhum repeat é registrado e o driver aparece no boot.
 // - Execução default é dry-run (`RETENTION_DRY_RUN=0` p/ purge real de 1
 //   batch — TODO wiring com Pools reais por domínio; sem `DATABASE_URL_*`
 //   o tick é no-op registrado, nunca fantasma).
@@ -54,25 +60,30 @@ export class RetentionCron implements OnModuleInit, OnModuleDestroy {
     return { results, dryRun };
   }
 
-  /** Registra os repeats BullMQ diários (produção com Redis; warn sem). */
+  /** Registra os repeats BullMQ diários (driver `bullmq`; `memory` = no-op). */
   async registerRepeats(): Promise<{ registered: boolean; queue: string; jobs: RetentionJobName[] }> {
     const jobs = allRetentionJobs();
+    // Driver explícito (common/queue/queue-driver.ts, achado N1): com `memory`
+    // (default) nenhum repeat é registrado e o driver é registrado no boot.
+    if (announceQueueDriver(RETENTION_QUEUE) !== 'bullmq') {
+      return { registered: false, queue: RETENTION_QUEUE, jobs };
+    }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Queue } = require('bullmq') as { Queue?: new (name: string, opts: { connection: unknown }) => { add(n: string, d: unknown, o: unknown): Promise<unknown> } };
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const Redis = require('ioredis');
-      if (!process.env.REDIS_URL || !Queue) throw new Error('sem REDIS_URL/bullmq');
-      const connection = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: true });
-      connection.on('error', () => undefined);
-      const queue = new Queue(RETENTION_QUEUE, { connection });
+      const Ctor = requireBullMqQueueCtor<{
+        add(n: string, d: unknown, o: unknown): Promise<unknown>;
+      }>(RETENTION_QUEUE);
+      const queue = new Ctor(RETENTION_QUEUE, { connection: createRedisConnection(RETENTION_QUEUE) });
       for (const job of jobs) {
         await queue.add(job, { policy: job, dryRun: isDryRun() }, retentionJobOptions(job));
       }
       return { registered: true, queue: RETENTION_QUEUE, jobs };
-    } catch {
+    } catch (e) {
       this.logger.warn(
-        JSON.stringify({ event: 'retention.repeat.skip', reason: 'sem bullmq/REDIS_URL (timers nativos)', queue: RETENTION_QUEUE }),
+        JSON.stringify({
+          event: 'retention.repeat.skip',
+          reason: e instanceof Error ? e.message : String(e),
+          queue: RETENTION_QUEUE,
+        }),
       );
       return { registered: false, queue: RETENTION_QUEUE, jobs };
     }

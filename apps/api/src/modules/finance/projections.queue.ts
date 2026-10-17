@@ -2,13 +2,20 @@
  * Projeções — fila `finance.projection.compute` (Fase 5, lado API/produtor).
  * - `jobId = scope:ref:hash` (dedupe BullMQ; polling do 202 por jobId).
  * - Retry exponencial 5x + DLQ `finance.dlq` (replay preserva o jobId).
- * Sem import estático de `bullmq` (apps/api não o declara): factory tenta
- * `require('bullmq')` e cai p/ in-memory com warn quando ausente — o 202
- * NUNCA depende do Redis (o snapshot é recomputado inline no próximo GET
- * ou via endpoint interno). Mesmo padrão de `webhook.queue.ts`.
+ * Driver de fila explícito (`common/queue/queue-driver.ts`, achado N1): com
+ * `QUEUE_DRIVER=bullmq` a Queue é real; com `memory` (default) a fila é
+ * in-memory e o driver é REGISTRADO no boot — nunca mais degradação silenciosa.
+ * Em qualquer caso o 202 NUNCA depende do Redis (o snapshot é recomputado
+ * inline no próximo GET ou via endpoint interno). Mesmo padrão de
+ * `webhook.queue.ts`.
  */
 
 import { z } from 'zod';
+import {
+  announceQueueDriver,
+  createRedisConnection,
+  requireBullMqQueueCtor,
+} from '../../common/queue/queue-driver';
 
 export const FINANCE_PROJECTION_QUEUE = 'finance.projection.compute';
 export const FINANCE_DLQ = 'finance.dlq';
@@ -71,31 +78,13 @@ export class InMemoryProjectionQueue implements ProjectionQueuePort {
   }
 }
 
-function loadBullMQQueueCtor():
-  (new (name: string, opts: { connection: unknown }) => ProjectionQueuePort) | null {
-  try {
-    // require lazy p/ não quebrar `nest build` sem a dep (ver topo).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('bullmq') as {
-      Queue?: new (name: string, opts: { connection: unknown }) => ProjectionQueuePort;
-    };
-    return mod?.Queue ?? null;
-  } catch {
-    return null;
-  }
-}
-
+/** Ctor carregado por `requireBullMqQueueCtor` só no driver `bullmq`. */
 export function createProjectionQueue(): ProjectionQueuePort {
-  const Ctor = process.env.REDIS_URL ? loadBullMQQueueCtor() : null;
-  if (Ctor) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Redis = require('ioredis');
-    const connection = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
+  if (announceQueueDriver(FINANCE_PROJECTION_QUEUE) === 'bullmq') {
+    const Ctor = requireBullMqQueueCtor<ProjectionQueuePort>(FINANCE_PROJECTION_QUEUE);
+    return new Ctor(FINANCE_PROJECTION_QUEUE, {
+      connection: createRedisConnection(FINANCE_PROJECTION_QUEUE),
     });
-    connection.on('error', () => undefined);
-    return new Ctor(FINANCE_PROJECTION_QUEUE, { connection });
   }
   return new InMemoryProjectionQueue();
 }

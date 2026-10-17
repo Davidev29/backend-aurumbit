@@ -118,6 +118,17 @@ const envSchema = z
       }),
     SWAGGER_PATH: z.string().min(1).optional(),
     OPENAPI_SPEC_PATH: z.string().min(1).optional(),
+    // Driver das filas BullMQ da API (achado N1). `memory` (default) = fila
+    // in-memory e nada vai ao Redis (o boot registra o driver em produção como
+    // ERROR); `bullmq` = Queue real, exige Redis de pé. Ligar junto com o
+    // wiring dos workers (decisão D-B: "não ativar o pipeline").
+    QUEUE_DRIVER: z
+      .string()
+      .optional()
+      .transform((v) => v?.trim().toLowerCase())
+      .refine((v) => v === undefined || ['memory', 'bullmq'].includes(v), {
+        message: 'QUEUE_DRIVER deve ser memory|bullmq',
+      }),
   })
   .superRefine((val, ctx) => {
     // Placeholders rejeitados em qualquer ambiente (D2-4). O default de teste

@@ -5,14 +5,19 @@
  * - Consumidor: `apps/workers/src/queues/billing.apply.ts` → aplica via
  *   endpoint interno `POST /v1/billing/webhooks/apply`; retry exponencial
  *   5x + DLQ `billing.dlq` (replay manual preserva o eventId).
- * Sem import estático de `bullmq` aqui (apps/api não o declara): o
- * factory tenta `require('bullmq')` e cai p/ no-op com warn quando
- * ausente — o ack 200 do webhook NUNCA depende do Redis (o receipt
- * RECEIVED persiste; reconciliação cobre o gap). TODO(orquestrador):
- * declarar `bullmq` em apps/api p/ enqueue real em produção.
+ * Driver de fila explícito (`common/queue/queue-driver.ts`, achado N1): com
+ * `QUEUE_DRIVER=bullmq` a Queue é real; com `memory` (default) a fila é
+ * in-memory e o driver é REGISTRADO no boot — nunca mais degradação silenciosa.
+ * Em qualquer caso o ack 200 do webhook não depende do Redis (o receipt
+ * RECEIVED persiste; reconciliação cobre o gap).
  */
 
 import { z } from 'zod';
+import {
+  announceQueueDriver,
+  createRedisConnection,
+  requireBullMqQueueCtor,
+} from '../../common/queue/queue-driver';
 
 export const BILLING_WEBHOOK_QUEUE = 'billing.webhook.apply';
 export const BILLING_DLQ = 'billing.dlq';
@@ -76,37 +81,16 @@ export class InMemoryWebhookQueue implements WebhookQueuePort {
   }
 }
 
-function loadBullMQQueueCtor():
-  (new (name: string, opts: { connection: unknown }) => WebhookQueuePort) | null {
-  try {
-    // require lazy p/ não quebrar `nest build` sem a dep (ver topo).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('bullmq') as {
-      Queue?: new (name: string, opts: { connection: unknown }) => WebhookQueuePort;
-    };
-    return mod?.Queue ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Factory do provider `WEBHOOK_QUEUE`. Com `REDIS_URL` + bullmq instalado
- * retorna Queue real (`billing.webhook.apply`); senão, no-op com warn —
- * o controller continua 200 (PROJECT.md §5: ack <2s, nunca bloqueia).
+ * Factory do provider `WEBHOOK_QUEUE`. Com `QUEUE_DRIVER=bullmq` retorna Queue
+ * real (`billing.webhook.apply`); com `memory` (default) retorna no-op — o
+ * controller continua 200 (PROJECT.md §5: ack <2s, nunca bloqueia).
  */
 export function createWebhookQueue(): WebhookQueuePort {
-  const Ctor = process.env.REDIS_URL ? loadBullMQQueueCtor() : null;
-  if (Ctor) {
+  if (announceQueueDriver(BILLING_WEBHOOK_QUEUE) === 'bullmq') {
+    const Ctor = requireBullMqQueueCtor<WebhookQueuePort>(BILLING_WEBHOOK_QUEUE);
     // ioredis lazy: Queue só conecta no 1º add (seguro no boot/build).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Redis = require('ioredis');
-    const connection = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-    });
-    connection.on('error', () => undefined);
-    return new Ctor(BILLING_WEBHOOK_QUEUE, { connection });
+    return new Ctor(BILLING_WEBHOOK_QUEUE, { connection: createRedisConnection(BILLING_WEBHOOK_QUEUE) });
   }
   return new InMemoryWebhookQueue();
 }
