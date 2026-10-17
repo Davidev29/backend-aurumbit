@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "FONTE UNICA do catalogo de plataformas do produto (T1 do CORRECTION-PLAN-02).",
+    "Editar SEMPRE aqui e rodar `pnpm catalog:sync`; o CI reprova drift com `pnpm catalog:check`.",
+    "Artefatos gerados: libs/contracts/src/products.catalog.generated.ts,",
+    "apps/api/src/modules/products/platform-catalog.generated.ts, apps/admin/lib/platforms.generated.ts,",
+    "apps/portal/lib/platforms.generated.ts. Consumidor direto: tools/build-tag-icons.py.",
+    "id: slug ESTAVEL — vai para products.platforms TEXT[] (renomear exige migration de dado).",
+    "monochrome: marca de uma cor so (invisivel no tema dark) -> gera a variante -dark.",
+    "assetFile: nome do arquivo em ASSETS/tags/ que vira <id>.png no public/ dos fronts."
+  ],
+  "platforms": [
+    {
+      "id": "windows",
+      "label": "Windows",
+      "shortLabel": "Windows",
+      "monochrome": false,
+      "assetFile": "windows icon.png"
+    },
+    {
+      "id": "macos",
+      "label": "macOS",
+      "shortLabel": "macOS",
+      "monochrome": false,
+      "assetFile": "mac os icon.png"
+    },
+    {
+      "id": "linux",
+      "label": "Linux",
+      "shortLabel": "Linux",
+      "monochrome": false,
+      "assetFile": "linux icon.png"
+    },
+    {
+      "id": "web",
+      "label": "Web",
+      "shortLabel": "Web",
+      "monochrome": false,
+      "assetFile": "web icon.jfif"
+    },
+    {
+      "id": "apple",
+      "label": "Apple (iOS/iPadOS)",
+      "shortLabel": "Apple",
+      "monochrome": true,
+      "assetFile": "apple icon.png"
+    }
+  ],
+  "deliveryModes": ["OFFLINE", "HYBRID"]
+}

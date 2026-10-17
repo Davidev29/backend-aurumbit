@@ -31,6 +31,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: gates:check (cobertura de tarefas por workspace)
         run: pnpm gates:check
+      - name: catalog:check (drift da fonte única das plataformas + ícones órfãos)
+        run: pnpm catalog:check
       - run: pnpm turbo run lint --continue
 
   typecheck:

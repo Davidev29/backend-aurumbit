@@ -12,6 +12,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "gates:check": "node tools/check-gates.mjs",
+    "catalog:sync": "node tools/sync-platform-catalog.mjs",
+    "catalog:check": "node tools/sync-platform-catalog.mjs --check",
     "test:e2e": "npm --prefix apps/api run test:e2e",
     "knowledge:build": "node docs/knowledge/build.js",
     "knowledge:ask": "node docs/knowledge/query.js",
