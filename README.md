@@ -1,6 +1,20 @@
 # Aurum Bit — Ecossistema de Produtos, Licenças e Cobranças
 
+[![Status](https://img.shields.io/badge/status-Fases%201%E2%80%939%20entregues-brightgreen)](./.planning/STATE.md)
+[![API](https://img.shields.io/badge/API-v1-blue)](./docs/API.md)
+[![Tests](https://img.shields.io/badge/tests-475%2F475-brightgreen)](./docs/CI-VERDE.md)
+[![Spec](https://img.shields.io/badge/OpenAPI-3.1-orange)](./docs/openapi.yaml)
+[![Docs](https://img.shields.io/badge/swagger-%2Fdocs-informational)](http://localhost:3000/docs)
+
 > Monólito modular NestJS · Postgres único `aurumbit` com 9 schemas por domínio (Fase 9) · Outbox + BullMQ/Redis · Asaas Sandbox-first · Resend transacional · Admin Next.js + Portal público
+
+## ⚡ TL;DR (comece aqui)
+
+- **API** (dev): `http://localhost:3000` · (prod): `https://api.aurumbit.com` · prefixo de negócio `/v1`.
+- **Swagger UI**: `/docs` (dev) · `/docs-json` · `/docs-yaml` (em prod exige `SWAGGER_ENABLED=true`).
+- **Health**: `GET /health/live` (sempre 200) · `GET /health/ready`.
+- **Integrar um programa (app Win/Mac/Web/App) em 5 passos**: veja [§15 — Integração de Produtos](#15-integra%C3%A7%C3%A3o-de-produtos--para-programas-gerenciados-e-parceiros).
+- **Regra de ouro**: a API decide; a UI (e o app) só reflete. Sem cobrança, sem licença.
 
 O Aurum Bit é a plataforma que vende, licencia, cobra e sustenta os produtos Aurum (Windows / Mac / Web / App). Este repositório contém **tudo que roda o negócio**: API, workers assíncronos, painel administrativo, portal público com área do cliente, banco único `aurumbit` com 9 schemas por domínio (roles por domínio, PgBouncer), deploy single-VPS com TLS e backup com restore testado.
 
@@ -34,6 +48,7 @@ Admin  :3001 (operação) ──BFF───┼──► API NestJS :3000 (/v1) 
 12. [Testes e qualidade](#12-testes-e-qualidade)
 13. [Jornada Fases 1–9 e roadmap 10](#13-jornada-fases-19-e-roadmap-10)
 14. [Documentação](#14-documentação)
+15. [Integração de Produtos — para programas gerenciados e parceiros](#15-integração-de-produtos--para-programas-gerenciados-e-parceiros)
 
 ---
 
@@ -313,7 +328,9 @@ Inventário completo e auditado por leitura direta do código: [`.planning/ENDPO
 > **Nota de acurácia:** `access/check` e `check-batch` **exigem Bearer JWT** no
 > código atual (não são públicas server-to-server). As divergências entre este
 > resumo e o código estão registradas em [`docs/API.md`](docs/API.md) §14; a
-> referência de integração `v1` está em [`docs/API.md`](docs/API.md).
+> referência de integração `v1` está em [`docs/API.md`](docs/API.md) e no
+> [§15 — Integração de Produtos](#15-integra%C3%A7%C3%A3o-de-produtos--para-programas-gerenciados-e-parceiros)
+> deste README.
 
 ---
 
@@ -421,6 +438,134 @@ Qualidade contínua: `lint → typecheck → test → build → prisma validate 
 - **Operação:** [`docs/RUNBOOKS/deploy.md`](docs/RUNBOOKS/deploy.md) · `env-prod.md` · `auth/billing/finance/licensing/health/correlation/webhook-replay/clone-ready.md`
 - **Compliance:** [`docs/LGPD.md`](docs/LGPD.md) · [`docs/SECURITY.md`](docs/SECURITY.md) · [`docs/SLOs.md`](docs/SLOs.md)
 - **Histórico:** [`.planning/PHASE-1-REPORT.md`](.planning/PHASE-1-REPORT.md) … `PHASE-7-REPORT.md` · [`ROADMAP.md`](.planning/ROADMAP.md) · [`STATE.md`](.planning/STATE.md) · [`REQUIREMENTS.md`](.planning/REQUIREMENTS.md)
+
+
+---
+
+## 15. Integração de Produtos — para programas gerenciados e parceiros
+
+> **Para quem é este guia:** apps Win/Mac/Web/App (fora deste repo) que precisam
+> ativar uma chave, vincular a máquina e validar licença; BFF do portal/admin;
+> integrações server-to-server. A fonte detalhada é [`docs/API.md`](docs/API.md)
+> e a spec interativa é o **Swagger UI em `/docs`** (`/docs-json`, `/docs-yaml`).
+
+### 15.1 TL;DR — 5 passos para integrar um app
+
+```text
+1) POST /v1/licenses/activate-by-key   { key, app_instance_id, label?, ip? }
+   -> { licenseId, device_hash, offlineToken, off_exp, token_version, keyMasked, ... }
+2) Guardar { licenseId, device_hash, offlineToken } em armazenamento seguro do SO
+   (nunca em texto plano no registry/config). Relógio monotônico local.
+3) Online: POST /v1/licenses/{licenseId}/validate   { device_hash, ip?, country?, token_iat?, ctr? }
+   -> HTTP 200 SEMPRE; o corpo diz allow/deny (não trate 200 como sucesso cego)
+4) Offline: validar o JWT localmente até off_exp (teto 7 dias) — ver §15.7
+5) Nunca derivar device_hash no cliente: o segredo é só do servidor (HMAC).
+```
+
+**As 5 regras que nunca mudam** (herdadas de `PROJECT.md`, refletidas no código):
+
+1. **Sem cobrança, sem licença** — a licença nasce apenas em `PaymentConfirmed`.
+2. **Re-entrega não duplica** — `eventId`/`Idempotency-Key` são chaves únicas.
+3. **Fora de ordem não regride** — evento antigo não tira estado terminal.
+4. **Offline tem teto** — `off_exp = min(iat + 7d, expires_at + 7d)`; graça de 3d vence mesmo offline.
+5. **A API decide; o app só reflete** — `check-access` é a autoridade, nunca o cliente.
+
+### 15.2 Endereços e prefixo
+
+| Ambiente | Base URL |
+|---|---|
+| Local (Docker) | `http://localhost:3000` |
+| Produção | `https://api.aurumbit.com` |
+
+Prefixo de negócio: `/v1`. Fora do prefixo: `/health/*`, `/metrics`, `/admin/queues`,
+`/webhooks/resend`, `/docs*`.
+
+### 15.3 Autenticação (4 modos)
+
+| Modo | Quando usar | Como enviar |
+|---|---|---|
+| **App / device** (público + rate-limit) | `activate-by-key`, `validate`, `offline-token` | sem token; `device_hash` é a credencial (HMAC server-side) |
+| **Bearer JWT** (usuário) | portal/admin, `access/check`, checkout | `Authorization: Bearer <accessToken>` (15 min) + sessão `sid` |
+| **Admin stub** (operação) | endpoints `🛡` | `x-role: admin` (ou `x-service-token`) + `x-mfa: verified` onde exigido |
+| **Internal key** (workers) | endpoints `🔑` | `x-internal-key: <INTERNAL_WEBHOOK_KEY>` (fail-closed 503 se ausente) |
+
+> Programas desktop **não dependem de CORS** — faça requisições de processo nativo.
+
+### 15.4 Endpoints de integração (cheat sheet)
+
+| Ação | Método · Rota | Auth | Rate limit |
+|---|---|---|---|
+| Ativar por chave | `POST /v1/licenses/activate-by-key` | 🔓 | 10/h por ator |
+| Validar online | `POST /v1/licenses/{id}/validate` | 🔓 | 120/min por IP |
+| Token offline | `GET /v1/licenses/{id}/offline-token?device_hash=` | 🔓 | 120/min por IP |
+| Checar acesso | `GET /v1/access/check` | 🔒 Bearer | — |
+| Checar acesso (lote) | `POST /v1/access/check-batch` | 🔒 Bearer | — |
+| Catálogo de produtos | `GET /v1/products` | 🔓 | — |
+| Planos de um produto | `GET /v1/products/{code}/plans` | 🔓 | — |
+| Checkout | `POST /v1/billing/checkout` | 🔒 Bearer | — |
+| Polling checkout | `GET /v1/billing/checkout/{orderId}` | 🔒 Bearer | — |
+| Health | `GET /health/live` · `GET /health/ready` | 🔓 | nunca limitado |
+
+### 15.5 Exemplo mínimo (curl)
+
+```bash
+# 1) Ativar
+curl -s -X POST http://localhost:3000/v1/licenses/activate-by-key \
+  -H 'Content-Type: application/json' \
+  -d '{"key":"AURUM-XXXX-XXXX-XXXX","app_instance_id":"inst-001","label":"Meu App","ip":"203.0.113.10"}'
+
+# 2) Validar (online) — sempre HTTP 200
+curl -s -X POST http://localhost:3000/v1/licenses/<LICENSE_ID>/validate \
+  -H 'Content-Type: application/json' \
+  -d '{"device_hash":"<hex64>","ip":"203.0.113.10","country":"BR"}'
+
+# 3) Token offline
+curl -s "http://localhost:3000/v1/licenses/<LICENSE_ID>/offline-token?device_hash=<hex64>"
+```
+
+### 15.6 Erros comuns (contrato estável)
+
+| Código | Significado | Ação do app |
+|---|---|---|
+| `KEY_INVALID` (404) | chave não existe (anti-enumeração) | mostrar "chave inválida" genérico |
+| `LICENSE_INACTIVE` (403) | suspensa/revogada/expirada | bloquear + pedir reativação |
+| `DEVICE_LIMIT` (409) | limite de máquinas atingido | oferecer desvincular máquina |
+| `DEVICE_BLOCKED` (403) | dispositivo bloqueado | suporte |
+| `CLONE_SUSPECT` (403) | possível clonagem | exigir revalidação online |
+| `OFFLINE_EXPIRED` | `off_exp` vencido | exigir conexão |
+| `CHANNEL_MISMATCH` | canal (WEB/DESKTOP) não permitido | negar uso naquele canal |
+| `RATE_LIMITED` (429) | limite excedido | respeitar `Retry-After` |
+
+### 15.7 Offline — como validar localmente
+
+O token offline é um JWT com claims `{ lic_exp, grace_until, off_exp, ch, tv, ch }`.
+Regras (o app implementa, a API só emite):
+
+- `now ≤ lic_exp` e `now ≤ off_exp` → **ALLOW**
+- `lic_exp < now ≤ grace_until` e `now ≤ off_exp` → **ALLOW degradado** (banner, sem destrutiva)
+- `now > grace_until` → **DENY EXPIRED** (mesmo se `≤ off_exp`)
+- `now > off_exp` → **DENY OFFLINE_EXPIRED** (exige online)
+
+Teto: `off_exp = min(iat + 7d, expires_at + 7d)`. Renovação em graça mantém continuidade
+(`starts_at = max(now, expires_anterior)`). Revogação = bump `token_version` (invalida JWTs + offline no próximo online).
+
+### 15.8 Boas práticas para integradores
+
+- Envie `x-correlation-id` (UUID) em toda escrita; a API ecoa no response header.
+- Dinheiro sempre em **centavos** (int, nunca float).
+- Status persistido é minúsculo (`active`, `grace`, ...); `reason` de decisão é MAIÚSCULO.
+- Não cacheie decisão de acesso além de 60s; `channel` faz parte da chave de cache.
+- Webhook Asaas sempre responde `200` (idempotente por `eventId`); não reenvie em loop.
+- Nunca logue chave em claro, e-mail, CPF ou senha.
+- Evolução forward-compatible: ignore campos desconhecidos; nunca renomeie/remova.
+
+### 15.9 Onde aprofundar
+
+- Guia completo (auth, envio dos programas, divergências): [`docs/API.md`](docs/API.md)
+- Contrato de ativação: [`docs/ACTIVATION.md`](docs/ACTIVATION.md)
+- Ciclo de vida offline: [`docs/produtos-offline.md`](docs/produtos-offline.md)
+- Spec OpenAPI 3.1: [`docs/openapi.yaml`](docs/openapi.yaml) · Swagger UI `/docs`
+- Arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ---
 

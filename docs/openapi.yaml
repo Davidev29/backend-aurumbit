@@ -33,6 +33,36 @@ info:
       `POST /v1/finance/payables/{id}/mark-paid` **exigem** `Idempotency-Key`
       (mín. 8 chars; ausente/curta ⇒ `400 IDEMPOTENCY_REQUIRED`) e ainda não
       estão nesta spec — admin/finance estão em `docs/API.md` §8.8.
+    ## Integração de Produtos (programas gerenciados)
+    Guia rápido para apps Win/Mac/Web/App que precisam ativar chave, vincular
+    máquina e validar licença. A autoridade é sempre a API; o app só reflete.
+
+    Fluxo mínimo:
+    1. `POST /v1/licenses/activate-by-key` { key, app_instance_id, label?, ip? }
+       -> { licenseId, device_hash, offlineToken, off_exp, token_version, keyMasked, ... }
+    2. Guardar { licenseId, device_hash, offlineToken } em storage seguro do SO.
+    3. Online: `POST /v1/licenses/{licenseId}/validate` { device_hash, ip?, country?, token_iat?, ctr? }
+       -> HTTP 200 SEMPRE; o corpo diz allow/deny (não trate 200 como sucesso cego).
+    4. Offline: validar o JWT localmente até `off_exp` (teto 7 dias) — ver README §15.7.
+    5. Nunca derivar `device_hash` no cliente (HMAC server-side).
+
+    Autenticação de programa: as rotas de app (`activate-by-key`, `validate`,
+    `offline-token`) são `@Public` e protegidas por rate-limit por IP; a
+    credencial é o `device_hash` vinculado à licença. Rotas administrativas
+    exigem Bearer JWT ou `x-internal-key`.
+
+    Erros comuns: `KEY_INVALID` (404), `LICENSE_INACTIVE` (403),
+    `DEVICE_LIMIT` (409), `DEVICE_BLOCKED` (403), `CLONE_SUSPECT` (403),
+    `CHANNEL_MISMATCH`, `OFFLINE_EXPIRED`, `RATE_LIMITED` (429 com `Retry-After`).
+
+    Boas práticas: envie `x-correlation-id`; dinheiro em centavos; status
+    persistido em minúsculo e `reason` de decisão em MAIÚSCULO; não cacheie
+    decisão de acesso além de 60s (`channel` faz parte da chave de cache);
+    evolução forward-compatible (ignore campos desconhecidos).
+
+    Aprofunde em README §15, `docs/API.md`, `docs/ACTIVATION.md` e
+    `docs/produtos-offline.md`.
+
   contact:
     name: Aurum Bit — Arquitetura
   license:
