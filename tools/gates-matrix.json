@@ -7,18 +7,5 @@
     "lint": "all",
     "test": "all"
   },
-  "exemptions": [
-    {
-      "package": "@aurum/database",
-      "task": "build",
-      "reason": "Pacote sem NENHUM importador (código morto) e sem toolchain utilizável: o factory importa clientes Prisma gerados (node_modules/.prisma/<dominio>) que nunca são gerados no repo/CI, e `prisma generate` falha neste install (o CLI tenta `pnpm add prisma@6.19.3`, divergindo do 6.8.0 de deploy/scripts/migrate-all.sh — viola a regra 5 do docs/CI-VERDE.md). main/types apontam para ./src/index.ts (consumo por fonte): não há artefato de build. Decisão D-5 do CORRECTION-PLAN-02.",
-      "review_by": "D-5"
-    },
-    {
-      "package": "@aurum/database",
-      "task": "typecheck",
-      "reason": "Mesmo bloqueio do build: src/client.factory.ts:1-9 importa node_modules/.prisma/<dominio> (gerados por `prisma generate`/migrate deploy, inexistentes em checkout limpo) => TS2307 ×9. Gate real da camada de dados hoje é prisma validate + migrações (deploy/scripts/prisma-validate.sh). Decisão D-5 do CORRECTION-PLAN-02.",
-      "review_by": "D-5"
-    }
-  ]
+  "exemptions": []
 }
