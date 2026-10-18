@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+const path = require("path");
 const isDev = process.env.NODE_ENV === "development";
 
 const SECURITY_HEADERS = [
@@ -30,14 +31,27 @@ const SECURITY_HEADERS = [
   },
 ];
 
+/** Raiz do monorepo — tracing root do standalone (T4). */
+const REPO_ROOT = path.join(__dirname, "../..");
+
 const nextConfig = {
   reactStrictMode: true,
   // Standalone só fora do Windows: o trace-copy do Next cria symlinks e o
   // build local no Windows (sem privilégio de symlink) falha com EPERM.
   // No Linux (Docker/CI) o standalone é gerado normalmente para o runner.
   // Override: FORCE_STANDALONE=1 força standalone em qualquer plataforma.
+  // T4: tracing root no RAIZ do monorepo. O Next 14.2 lê
+  // `experimental.outputFileTracingRoot` (o top-level existe no schema mas o
+  // 14.2 ignora; mantido p/ o Next 15). Sem valor explícito o Next usaria o
+  // lockfile mais próximo (o `pnpm-lock.yaml` da raiz por sorte) e o runner
+  // não embarcaria o `@aurum-bit/contracts` (workspace:*) — require quebra em
+  // runtime. Explícito não depende de sorte.
   ...(process.platform !== "win32" || process.env.FORCE_STANDALONE === "1"
-    ? { output: "standalone" }
+    ? {
+        output: "standalone",
+        experimental: { outputFileTracingRoot: REPO_ROOT },
+        outputFileTracingRoot: REPO_ROOT,
+      }
     : {}),
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
