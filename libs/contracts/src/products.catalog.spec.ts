@@ -2,11 +2,12 @@
  * Invariantes da FONTE ÚNICA do catálogo (`products.catalog.json`) e do
  * artefato gerado do contrato.
  *
- * O que este teste NÃO cobre de propósito: os gerados dos apps (`admin`,
- * `portal`, `apps/api`) e os PNGs de `public/tags` — quem cobre é
- * `pnpm catalog:check` (`tools/sync-platform-catalog.mjs --check`), que roda no
- * job de lint do CI (o turbo não vê arquivo fora do pacote no hash do cache,
- * então o gate do gate é o script, não o teste).
+ * O que este teste NÃO cobre de propósito: os PNGs de `public/tags` — quem
+ * cobre é `pnpm catalog:check` (`tools/sync-platform-catalog.mjs --check`), que
+ * roda no job de lint do CI (o turbo não vê arquivo fora do pacote no hash do
+ * cache, então o gate do gate é o script, não o teste). Os apps consomem o
+ * pacote via `workspace:*` — o `catalog:check` também reprova artefato legado
+ * por app (`platforms.generated.ts`) que alguém reintroduza.
  */
 import { describe, expect, it } from "vitest";
 import catalog from "./products.catalog.json";
@@ -17,7 +18,13 @@ import {
   CATALOG_PLATFORM_LABELS,
   CATALOG_PLATFORM_SHORT_LABELS,
 } from "./products.catalog.generated";
-import { DELIVERY_MODES, PLATFORM_IDS, PLATFORM_LABELS, PLATFORM_SHORT_LABELS } from "./products";
+import {
+  DELIVERY_MODES,
+  MONOCHROME_PLATFORMS,
+  PLATFORM_IDS,
+  PLATFORM_LABELS,
+  PLATFORM_SHORT_LABELS,
+} from "./products";
 
 const platforms = catalog.platforms;
 
@@ -64,6 +71,7 @@ describe("catálogo de plataformas (fonte única)", () => {
     expect(PLATFORM_IDS).toEqual(CATALOG_PLATFORM_IDS);
     expect(PLATFORM_LABELS).toEqual(CATALOG_PLATFORM_LABELS);
     expect(PLATFORM_SHORT_LABELS).toEqual(CATALOG_PLATFORM_SHORT_LABELS);
+    expect(MONOCHROME_PLATFORMS).toEqual(CATALOG_MONOCHROME_PLATFORMS);
     expect(DELIVERY_MODES).toEqual(CATALOG_DELIVERY_MODES);
   });
 });

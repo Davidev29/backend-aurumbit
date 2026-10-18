@@ -39,6 +39,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@aurum-bit/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -97,6 +100,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@aurum-bit/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
       '@nestjs/common':
         specifier: ^11.1.0
         version: 11.2.7(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -200,6 +206,9 @@ importers:
 
   apps/portal:
     dependencies:
+      '@aurum-bit/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
       '@hookform/resolvers':
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.90.0(@types/react@18.3.3)(react@18.3.1))

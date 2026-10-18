@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@aurum-bit/contracts": "workspace:*",
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "lucide-react": "^1.55.0",
