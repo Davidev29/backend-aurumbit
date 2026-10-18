@@ -423,6 +423,17 @@ evidence:          tabela antes/depois (§7) sem regressão
 
 **Rollback da Onda 5:** revert do commit — não há migração de dados nem mudança de contrato; as imagens são reconstruídas da fonte.
 
+**Execução (2026-10-17, Trilha B disparada por D-1) — branch `feat/t4-workspace-deps-prune`, PR próprio; evidência completa em `CORRECTION-EXECUTION-02` §7.**
+
+| ID | Status | Evidência (resumo) |
+|---|---|---|
+| **T4-1** | done | `prune.mdx` + `docker.mdx` do turbo 2.11.7 instalado lidos antes de tocar config (standalone ≥ 2.11.5; `out/json`/`out/full`); Docker 29.7.2; recon de prune local |
+| **T4-2** | done | `workspace:*` + imports reais em api/admin/portal; 3 gerados por app removidos; `turbo test` ganha `dependsOn ^build`; jest da api ignora `dist` do contrato; typecheck 12/12, test 11/11 (api 664/664, contracts 5/5, workers 5+7), lint+build 21/21 (0 erros) |
+| **T4-3** | done (desvio registrado) | Next 14.2 lê `experimental.outputFileTracingRoot` (top-level existe no schema mas é ignorado — mantido p/ Next 15); `apps/admin/package-lock.json` legado (2.393 linhas) sequestrava o `findRootDir` do Next → removido. Standalone aninhado nas 2 apps + boot 200 |
+| **T4-4** | done | 4 Dockerfiles em pnpm + `turbo prune --docker` (binário turbo 2.11.7 pinado + SHA256); `TODO(T1)` morto; vazamento de `*.tsbuildinfo` fechado (`.dockerignore` + `find -delete`); imagens: api 521MB, workers 333MB, admin 288MB, portal 318MB |
+| **T4-5** | done | compose isolado (projeto `t4-smoke`, nomes/portas deslocados via `!override`): 8 containers healthy, `/health/live` + `/health/ready` ok, `/metrics` ok, admin `/login` 200, portal `/` 200 com rótulos do catálogo renderizados no SSR |
+| **T4-6** | done (desvio registrado) | gerador **mantido e encolhido** p/ 1 artefato — JSON não emite union literal em runtime (não muda o contrato de tipos); `checkConsumers()` novo no `catalog:check`/`sync`: reprova artefato legado re-introduzido e app sem `workspace:*` (3 controles negativos literais em CORRECTION-EXECUTION-02 §7.6) |
+
 ---
 
 ### Onda 6 — T5 · Cobertura ampliada (escopo decidido em D-3)
