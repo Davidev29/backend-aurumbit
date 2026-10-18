@@ -16,11 +16,33 @@ export async function GET(req: NextRequest) {
   }
   if (API_INTERNAL_URL && !session.startsWith("stub-")) {
     try {
-      const upstream = await fetch(`${API_INTERNAL_URL}/v1/billing/subscriptions?mine=1`, {
+      const upstream = await fetch(`${API_INTERNAL_URL}/v1/billing/subscriptions/mine`, {
         headers: { Authorization: `Bearer ${session}` },
       });
-      const data = await upstream.json().catch(() => ({}));
-      return NextResponse.json(data, { status: upstream.status });
+      const data = (await upstream.json().catch(() => ({}))) as unknown;
+      if (!upstream.ok) return NextResponse.json(data, { status: upstream.status });
+
+      const rows = Array.isArray(data) ? data : [];
+      const mapped = rows.map((r: Record<string, unknown>) => {
+        const status = String(r.status ?? "DRAFT");
+        const mappedStatus =
+          status === "ACTIVE"
+            ? "ACTIVE"
+            : status === "CANCELLED"
+              ? "CANCELLED"
+              : "TRIAL";
+        return {
+          id: r.id,
+          planName: r.planRef ?? r.plan_ref ?? "Plano",
+          status: mappedStatus,
+          amount: 0,
+          currency: "BRL",
+          nextDue: r.currentPeriodEnd ?? r.current_period_end ?? r.createdAt ?? r.created_at,
+          externalId: r.id,
+          productName: r.planRef ?? r.plan_ref ?? undefined,
+        };
+      });
+      return NextResponse.json(mapped);
     } catch {
       return NextResponse.json(
         { code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível." },

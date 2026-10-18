@@ -16,11 +16,29 @@ export async function GET(req: NextRequest) {
   }
   if (API_INTERNAL_URL && !session.startsWith("stub-")) {
     try {
-      const upstream = await fetch(`${API_INTERNAL_URL}/v1/billing/invoices?mine=1`, {
+      const upstream = await fetch(`${API_INTERNAL_URL}/v1/billing/invoices/mine`, {
         headers: { Authorization: `Bearer ${session}` },
       });
-      const data = await upstream.json().catch(() => ({}));
-      return NextResponse.json(data, { status: upstream.status });
+      const data = (await upstream.json().catch(() => ({}))) as unknown;
+      if (!upstream.ok) return NextResponse.json(data, { status: upstream.status });
+
+      // Mapeia a fatura do billing (snake/camel misto do PG) para o shape do portal.
+      const rows = Array.isArray(data) ? data : [];
+      const mapped = rows.map((r: Record<string, unknown>) => ({
+        id: r.id,
+        amount: r.amountCents ?? r.amount_cents ?? 0,
+        currency: "BRL",
+        status: r.status,
+        dueDate: r.dueDate ?? r.due_date,
+        paidAt: r.paidAt ?? r.paid_at ?? null,
+        externalId: r.orderId ?? r.order_id ?? r.id,
+        provider: "ASAAS",
+        correlationId: r.id,
+        productName: r.productId ?? r.product_id ?? undefined,
+        planName: r.planRef ?? r.plan_ref ?? undefined,
+        downloadUrl: undefined,
+      }));
+      return NextResponse.json(mapped);
     } catch {
       return NextResponse.json(
         { code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível." },

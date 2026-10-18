@@ -19,7 +19,29 @@ export async function GET(req: NextRequest) {
       const upstream = await fetch(`${API_INTERNAL_URL}/v1/customers/me`, {
         headers: { Authorization: `Bearer ${session}` },
       });
-      const data = await upstream.json().catch(() => ({}));
+      const data = (await upstream.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!upstream.ok) return NextResponse.json(data, { status: upstream.status });
+
+      // Perfil recém-criado pode vir sem e-mail/nome (cadastro só cria identidade).
+      // Completa a partir do domínio auth para a tela de perfil não nascer vazia.
+      if (
+        typeof data.email !== "string" ||
+        data.email === "" ||
+        typeof data.name !== "string" ||
+        data.name === ""
+      ) {
+        const identRes = await fetch(`${API_INTERNAL_URL}/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${session}` },
+        });
+        const ident = (await identRes.json().catch(() => ({}))) as { email?: string };
+        if (identRes.ok && typeof ident.email === "string") {
+          if (typeof data.email !== "string" || data.email === "") data.email = ident.email;
+          if (typeof data.name !== "string" || data.name === "")
+            data.name = ident.email.split("@")[0] ?? "";
+          if (typeof data.displayName !== "string" || data.displayName === "")
+            data.displayName = data.name;
+        }
+      }
       return NextResponse.json(data, { status: upstream.status });
     } catch {
       return NextResponse.json(

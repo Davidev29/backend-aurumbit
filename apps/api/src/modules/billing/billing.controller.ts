@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, ServiceUnavailableException, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthPrincipal } from '../../common/auth/jwt-payload';
 import { AdminStubGuard } from '../access/admin.guard';
 import {
   CancelDto,
@@ -52,6 +54,18 @@ export class BillingController {
       limit: q.limit,
       cursor: q.cursor,
     });
+  }
+
+  @Get('invoices/mine')
+  getMyInvoices(@CurrentUser() user?: AuthPrincipal) {
+    if (!user?.identityId) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Não autenticado.' });
+    return this.billing.listMyInvoices(user.identityId);
+  }
+
+  @Get('subscriptions/mine')
+  getMySubscriptions(@CurrentUser() user?: AuthPrincipal) {
+    if (!user?.identityId) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Não autenticado.' });
+    return this.billing.listMySubscriptions(user.identityId);
   }
 
   @Get('invoices/:id')

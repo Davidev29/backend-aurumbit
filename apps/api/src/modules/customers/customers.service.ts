@@ -93,11 +93,33 @@ export class CustomersService {
 
   // --- me ---
 
+  // Cria o perfil PF sob demanda (mesmo comportamento do patchMe): um
+  // titular recém-registrado ainda não tem CustomerProfile e, sem isso, as
+  // telas da área logada (perfil/checkout) falhavam com 404 antes mesmo de
+  // o usuário poder comprar. O e-mail/nome são preenchidos depois (patch ou
+  // sync de billing); aqui nasce um perfil PROSPECT mínimo.
   getMe(identityId: string): CustomerProfile {
-    const profile = [...this.profiles.values()].find(
+    let profile = [...this.profiles.values()].find(
       (p) => p.kind === 'PF' && p.identityId === identityId,
     );
-    if (!profile) throw new NotFoundException('CustomerProfile PF não encontrado');
+    if (!profile) {
+      profile = {
+        id: randomUUID(),
+        kind: 'PF',
+        identityId,
+        organizationId: null,
+        status: 'PROSPECT',
+        name: '',
+        email: '',
+        vigenciaInicio: null,
+        vigenciaFim: null,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      this.assertProfileInvariant(profile);
+      this.profiles.set(profile.id, profile);
+      this.emit('customer', profile.id, 'customer.created.v1', { kind: 'PF', identityId });
+    }
     return profile;
   }
 

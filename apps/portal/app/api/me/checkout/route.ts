@@ -81,11 +81,31 @@ export async function POST(req: NextRequest) {
       headers: { Authorization: `Bearer ${session}` },
     });
     if (!me.ok) return NextResponse.json(me.data, { status: me.status });
-    const profile = me.data as { id: string; email?: string; name?: string };
+    const profile = me.data as { id: string; identityId?: string; email?: string; name?: string };
+
+    // Perfil recém-criado pode vir sem e-mail/nome (cadastro só cria identidade).
+    // Completa a partir do domínio auth para o espelho de billing não nascer vazio.
+    let profileEmail = profile.email ?? "";
+    let profileName = profile.name ?? "";
+    if (!profileEmail || !profileName) {
+      const ident = await upstreamJson(`${base}/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${session}` },
+      });
+      if (ident.ok) {
+        const id = ident.data as { email?: string };
+        if (!profileEmail && typeof id.email === "string") profileEmail = id.email;
+        if (!profileName && typeof id.email === "string") profileName = id.email.split("@")[0] ?? "";
+      }
+    }
+
+    // `userId` do billing customer = identityId do titular (convenção do
+    // licensing: ownerId = identityId). Mantém coerência com listMyInvoices
+    // e com issue-from-payment (ownerUserId).
+    const billingUserId = (profile.identityId as string | undefined) || profile.id;
     const mirror = await upstreamJson(`${base}/v1/billing/customers/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session}` },
-      body: JSON.stringify({ userId: profile.id, email: profile.email, name: profile.name }),
+      body: JSON.stringify({ user_id: billingUserId, email: profileEmail, name: profileName }),
     });
     if (!mirror.ok) return NextResponse.json(mirror.data, { status: mirror.status });
     const billingCustomer = mirror.data as { id: string };
@@ -102,13 +122,13 @@ export async function POST(req: NextRequest) {
         ...(incomingKey ? { "Idempotency-Key": incomingKey } : {}),
       },
       body: JSON.stringify({
-        orderId,
-        customerId: billingCustomer.id,
-        productId: plan.productCode,
-        planRef: plan.id,
-        billingInterval: plan.billingInterval,
-        amountCents: totalCents,
-        paymentMethod: body.paymentMethod,
+        order_id: orderId,
+        customer_id: billingCustomer.id,
+        product_id: plan.productCode,
+        plan_ref: plan.id,
+        billing_interval: plan.billingInterval,
+        amount_cents: totalCents,
+        payment_method: body.paymentMethod,
       }),
     });
     if (!order.ok) return NextResponse.json(order.data, { status: order.status });

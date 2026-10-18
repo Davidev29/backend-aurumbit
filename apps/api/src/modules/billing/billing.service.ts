@@ -468,6 +468,39 @@ export class BillingService {
   }
 
   /**
+   * Faturas do titular (leitura customer). Resolve o billing customer a partir
+   * da identidade (JWT) e devolve as invoices vinculadas; sem perfil de billing
+   * (ainda não comprou) → [] honesto, sem vazar existência.
+   */
+  async listMyInvoices(userId: string): Promise<unknown[]> {
+    let customer: { id: string } | null = null;
+    try {
+      customer = (await this.getCustomer(userId)) as { id: string };
+    } catch {
+      return [];
+    }
+    const { rows } = await this.pool.query(
+      `SELECT ${INVOICE_COLS} FROM invoices WHERE "customerId" = $1 ORDER BY "createdAt" DESC LIMIT 100`,
+      [customer.id],
+    );
+    return rows;
+  }
+
+  async listMySubscriptions(userId: string): Promise<unknown[]> {
+    let customer: { id: string } | null = null;
+    try {
+      customer = (await this.getCustomer(userId)) as { id: string };
+    } catch {
+      return [];
+    }
+    const { rows } = await this.pool.query(
+      `SELECT ${SUBSCRIPTION_COLS} FROM subscriptions WHERE "customerId" = $1 ORDER BY "createdAt" DESC LIMIT 100`,
+      [customer.id],
+    );
+    return rows;
+  }
+
+  /**
    * Lista subscriptions (leitura admin). Paginação keyset ordenada
    * ("createdAt", id); cursor = id opaco (nunca offset); teto 100.
    */

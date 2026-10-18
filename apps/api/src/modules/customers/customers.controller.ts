@@ -12,6 +12,8 @@ import {
   Post,
 } from '@nestjs/common';
 import { CustomersService } from './customers.service';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthPrincipal } from '../../common/auth/jwt-payload';
 import {
   CreateOrganizationDto,
   InviteMemberDto,
@@ -36,13 +38,13 @@ export class CustomersController {
   }
 
   @Get('me')
-  getMe(@Headers('x-identity-id') identityId?: string) {
-    return this.customers.getMe(this.identityOrThrow(identityId));
+  getMe(@CurrentUser() user?: AuthPrincipal, @Headers('x-identity-id') headerId?: string) {
+    return this.customers.getMe(this.identityOrThrow(user?.identityId ?? headerId));
   }
 
   @Patch('me')
-  patchMe(@Headers('x-identity-id') identityId?: string, @Body() dto?: PatchMeDto) {
-    return this.customers.patchMe(this.identityOrThrow(identityId), dto ?? {});
+  patchMe(@CurrentUser() user?: AuthPrincipal, @Headers('x-identity-id') headerId?: string, @Body() dto?: PatchMeDto) {
+    return this.customers.patchMe(this.identityOrThrow(user?.identityId ?? headerId), dto ?? {});
   }
 
   @Post('upgrade-to-pj')
