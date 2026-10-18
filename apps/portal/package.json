@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@aurum-bit/contracts": "workspace:*",

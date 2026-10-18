@@ -19,18 +19,6 @@
       "task": "typecheck",
       "reason": "Mesmo bloqueio do build: src/client.factory.ts:1-9 importa node_modules/.prisma/<dominio> (gerados por `prisma generate`/migrate deploy, inexistentes em checkout limpo) => TS2307 ×9. Gate real da camada de dados hoje é prisma validate + migrações (deploy/scripts/prisma-validate.sh). Decisão D-5 do CORRECTION-PLAN-02.",
       "review_by": "D-5"
-    },
-    {
-      "package": "@aurum/admin",
-      "task": "test",
-      "reason": "apps/admin sem infra de teste (vitest) — plano CORRECTION-PLAN-02, task T5-2",
-      "review_by": "T5-2"
-    },
-    {
-      "package": "@aurum/portal",
-      "task": "test",
-      "reason": "apps/portal sem infra de teste (vitest) — plano CORRECTION-PLAN-02, task T5-2",
-      "review_by": "T5-2"
     }
   ]
 }
