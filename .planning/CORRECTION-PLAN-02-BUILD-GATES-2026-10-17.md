@@ -446,6 +446,16 @@ evidence:          tabela antes/depois (§7) sem regressão
 
 Controle negativo obrigatório em cada item do T5: (T5-1) erro de lint injetado reprova; (T5-2) mudar a semântica do portal (`unknown` → dentro da lista) reprova o teste; (T5-3) quebrar um spec de propósito reprova o job.
 
+**Execução (2026-10-17, onda T5) — direto em `main` (D-4); evidência completa em `CORRECTION-EXECUTION-02` §8.**
+
+| ID | Status | Evidência (resumo) |
+|---|---|---|
+| **T5-1** | done (desvio de forma) | `lint` em api/workers via script `eslint src --ext .ts` **sem** `eslint.config.*` por app: a flat config única da raiz resolve subindo a árvore (criar cópia por app seria duplicação). Matriz sem as 2 isenções → `lint` **12/12**, 0 erros; warnings contados: api 7 (`unused` disable pré-existentes), workers 0, admin 23 / portal 9 (pré-existentes). NC: erro de sintaxe injetado → `Parsing error` **exit 1** |
+| **T5-2** | done (desvio de forma) | **sem `vitest.config.ts`** — o default do vitest cobre `**/*.spec.ts` (padrão das libs). `lib/platforms.spec.ts`: admin **8** + portal **15** testes travando fail-soft/ordem canônica/fallbacks/ícones; `test` **12/12**. NC1 (ordem canônica removida) → **2 falhas**; NC2 (desconhecido entra) → **5 falhas**; restaurado 8/8 e 15/15 |
+| **T5-3** | done | **E-1 resolvido na raiz**: `process.env.AUTH_REPO ??= 'memory'` no `setup-e2e.ts` (os specs usam `.seed()` dos repos em memória; sem a var o `GuardsModule` injeta `PgSessionLookup`, sem `.seed`). Passo e2e no job `unit` do CI (já tem postgres+redis). Antes: 18 failed / 24 passed → depois: **exit 0, 42 passed + 2 skipped** (local com env do CI). NC: assert quebrado → `1 failed` **exit 1**, restaurado |
+
+**Achado incidental (F-1, corrigido no mesmo commit):** `password.spec.ts` (Argon2id real) estourava o default de 5s do Jest quando o portão local roda 46 tarefas (2 `next build`); isolado sempre passou (664/664). Timeout de 30s com o motivo escrito no arquivo — nenhum assert rebaixado.
+
 ---
 
 ## 5. Fluxo agêntico

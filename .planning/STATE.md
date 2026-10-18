@@ -83,3 +83,19 @@
   api 664/664, contracts 5/5. Pendente: **D-5** (decisão do dono), **E-1** (18 falhas
   pré-existentes do `test:e2e` — pré-requisito do T5-3) e **T5** (lint api/workers, vitest
   admin/portal, D8-8 `test:e2e` no CI).
+- Correção 02, onda T5 executada em 2026-10-17 (direto em `main`, D-4; log em
+  `CORRECTION-EXECUTION-02` §8): **T5-1** lint em api/workers (`eslint src --ext .ts`,
+  flat config única da raiz — sem cópia por app) + matriz sem as 2 isenções → lint
+  **12/12**, 0 erros (warnings contados: api 7 unused-disable pré-existentes, workers 0;
+  admin 23 / portal 9 pré-existentes); **T5-2** vitest nos 2 fronts (sem
+  `vitest.config.ts` — o default cobre `*.spec.ts`): portal 15 + admin 8 testes travando
+  fail-soft/canonização/fallbacks; `test` 12/12; NC1 → 2 falhas, NC2 → 5 falhas,
+  restaurado verde; **T5-3** `test:e2e` no job `unit` do CI + **E-1 resolvido na raiz**
+  (`AUTH_REPO ??= 'memory'` no `setup-e2e.ts`: sem a var o GuardsModule injetava
+  `PgSessionLookup` sem `.seed`) — antes 18 failed/24 passed, depois **42 passed +
+  2 skipped exit 0**; NC com assert quebrado → exit 1. Achado incidental **F-1**:
+  Argon2id (`password.spec.ts`) estourava o default de 5s do Jest sob o portão de 46
+  tarefas (isolado sempre 664/664); timeout de 30s documentado no spec, nenhum assert
+  rebaixado → portão **46/46 exit 0**. **PR #1 (T4) mergeado por rebase** (`main @
+  b4ecaaf`, CI 9/9) antes do push do T5. **Única pendência: D-5** (`libs/database`:
+  deletar / ligar / manter isento — decisão do dono).

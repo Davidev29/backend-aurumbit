@@ -11,14 +11,16 @@ bash deploy/scripts/prisma-validate.sh          # 9/9 schemas
 pnpm gates:check                                # cobertura de gates por workspace (turbo não pode ser "fantasma")
 pnpm catalog:check                              # catálogo de plataformas: drift do artefato + workspace:* + ícone órfão
 pnpm turbo run lint typecheck test build --continue   # 12/12 workspaces, inclui as 4 apps
+pnpm test:e2e                                   # api: AppModule real via HTTP — 42 testes (repos em memória)
 bash -n deploy/scripts/*.sh                     # sintaxe de todos os scripts
 "$BIN/trivy.exe" fs --severity HIGH,CRITICAL --exit-code 1 --no-progress .   # mesmo binário do CI
 gitleaks detect --redact --exit-code=2 --no-git # mesma versão do CI (8.24.3)
 ```
 
 Nenhum push com portão local vermelho. Exceção só para gates que exigem
-Docker/rede (e2e, clone-ready) — esses são validados no primeiro CI e
-corrigidos em follow-up imediato, nunca "depois".
+Docker/rede (e2e-compose, clone-ready) — esses são validados no primeiro CI e
+corrigidos em follow-up imediato, nunca "depois". O `test:e2e` (HTTP, sem Docker)
+roda local **e** no CI — não é exceção.
 
 ## 2. Regras que não se violam
 
@@ -76,6 +78,11 @@ corrigidos em follow-up imediato, nunca "depois".
     reprova PNG faltando e PNG **órfão** em `apps/{admin,portal}/public/tags`,
     e sai com `2` quando a própria fonte é inválida (id/chave/modo). Editar gerado
     à mão é sempre erro — o próximo `--check` reprova.
+14. **Teste e2e roda no modo de teste, não "quase produção".** `apps/api/test/setup-e2e.ts`
+    fixa `AUTH_REPO=memory` (`??=`): os specs usam os repositórios em memória
+    (`.seed()`); apontar os guards para PG real quebra com
+    `sessions.seed is not a function` (E-1 — 18 falhas). O job `unit` roda
+    `pnpm test:e2e`: suíte e2e verde faz parte do push (42 testes; 2 skips por design).
 
 ## 3. Veredito
 

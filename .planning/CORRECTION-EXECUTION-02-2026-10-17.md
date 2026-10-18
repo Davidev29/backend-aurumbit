@@ -1,4 +1,4 @@
-# Execução da Correção 02 — Gates de build + fonte única do catálogo (Ondas 1–5)
+# Execução da Correção 02 — Gates de build + fonte única do catálogo (Ondas 1–6)
 
 **Data:** 2026-10-17 · **Plano:** `CORRECTION-PLAN-02-BUILD-GATES-2026-10-17.md` · **Decisões:** D-1 (Trilha A → B), D-2 (JSON fonte única + TS gerado), D-3 (escopo extra = Onda 6/T5), D-4 (commits atômicos + push por onda)
 
@@ -182,7 +182,7 @@ modos contracts/api/admin/portal == OFFLINE,HYBRID
 | # | Item | Estado |
 |---|---|---|
 | **D-5** | `libs/database`: deletar, ligar de verdade ou manter isento | **AGUARDANDO USUÁRIO** (isenção viva, `review_by` registrado) |
-| **E-1** | Suite `test:e2e` do `apps/api` **já falhava antes** desta correção: `test/access.check.e2e-spec.ts` → `TypeError: sessions.seed is not a function`; 18 falhas / 24 passes de 44 (medido no início da sessão). O CI **não** roda essa suite hoje — rodar sem corrigir deixaria vermelho; é o T5-3 (D8-8) que a liga no CI, então **corrigir E-1 é pré-requisito do T5-3** | Aberto (fora do escopo T0–T3 por decisão) |
+| **E-1** | ~~Suite `test:e2e` do `apps/api` **já falhava antes** desta correção...~~ **RESOLVIDO (T5-3)**: os specs usam os repos em memória via `.seed()`, mas sem `AUTH_REPO` o `GuardsModule` injetava `PgSessionLookup` (sem `.seed`) → `TypeError: sessions.seed is not a function` (18 failed / 24 passed de 44). Fix: `process.env.AUTH_REPO ??= 'memory'` no `setup-e2e.ts` + passo no job `unit` do CI | **Fechado** — 42 passed + 2 skipped, exit 0 (local com env do CI; §8.3) |
 | **E-2** | Ações do GitHub avisam depreciação do Node 20 (forçado p/ Node 24) | Informativo; sem ação nesta correção |
 | **E-3** | `trivy`/`gitleaks` locais exigem binário; aqui só rodam no CI | Regra 8 do CI-VERDE registra o "reproduzir local com o binário exato" |
 | **E-4** | ~~`turbo prune`/Trilha B (T4) ainda não iniciada~~ | **Fechado** — T4 executada em 2026-10-17 (branch `feat/t4-workspace-deps-prune`, PR próprio; evidência em §7) |
@@ -276,8 +276,47 @@ Controles negativos (saída literal):
 
 ---
 
-## 8. Handoff para as próximas ondas
+## 8. Onda 6 — T5 · Cobertura ampliada (escopo D-3)
 
-- ~~**T4 (Trilha B, agora `ready` por D-1):** ...~~ **T4 CONCLUÍDA** (§7): `workspace:*` + imports reais; 3 gerados por app removidos; tracing root explícito (lição: Next 14.2 lê `experimental`) + lock npm legado do admin removido; 4 Dockerfiles pnpm + `turbo prune --docker` (TODO(T1) morto, turbo pinado + SHA256); smoke completo em compose isolado. CI do PR observado antes de qualquer merge.
-- **T5 (Onda 6):** T5-1 lint api/workers; T5-2 vitest admin/portal (com controle negativo da semântica fail-soft); T5-3 `test:e2e` no CI — **destravar antes o E-1**.
+Direto em `main` (D-4, como T0–T3); base `b4ecaaf` (T4 mergeado, CI 9/9).
+
+### 8.1 T5-1 — lint em api/workers (N-B3 fechado)
+
+- `apps/api/package.json` e `apps/workers/package.json` ganham `"lint": "eslint src --ext .ts"` (mesmo script das libs; a flat config é **única na raiz** — o ESLint resolve subindo a árvore, então não foi criado `eslint.config.*` por app; desvio de forma registrado).
+- `tools/gates-matrix.json`: removidas as 2 isenções `lint` de api/workers (a matriz cobra `lint` de todo `apps/*` e `libs/*`; "isenção cumprida reprova").
+- Prova: `pnpm turbo run lint` → **12/12 exit 0**. Warnings contados e reportados (sem rebaixar regra): api **7** (diretivas `eslint-disable` "unused" de `@typescript-eslint/no-require-imports`, mantidas de propósito para quando as regras ligarem), workers **0**; admin 23 / portal 9 pré-existentes; **0 erros**.
+- NC: `const __nc_t5: = 1;` injetado em `apps/api/src/main.ts` → `62:15 error Parsing error: Type expected`, **exit 1**; restaurado (diff vazio) → verde.
+
+### 8.2 T5-2 — vitest nos dois fronts (fail-soft travado por teste)
+
+- Scripts `"test": "vitest run --passWithNoTests"` (padrão das libs; **sem** `vitest.config.ts` — o default cobre `lib/*.spec.ts`; desvio de forma registrado).
+- `apps/portal/lib/platforms.spec.ts` (**15 testes**): `normalizePlatforms` (desconhecido descartado; não-array/`null` → `[]`; só-desconhecidos → `[]`, nunca "todas"; dedup+trim+case; ordem canônica), `normalizeDeliveryMode` (desconhecido → `OFFLINE`), `operatingSystemsFrom` (vazio → `undefined`; `apple` → `iOS`; ordem canônica), `deliveryModeLabel`/`Reassurance`, `platformIconSrc` (dark só na monocromática), `joinPtBr` (0/1/2/3 itens).
+- `apps/admin/lib/platforms.spec.ts` (**8 testes**): `normalizePlatformIds` (prévia = o que o backend grava), `platformLabel` nunca lança p/ id legado, `deliveryModeLabel` com fallback, `DELIVERY_MODE_OPTIONS` exaustivo, `PRODUCT_PLATFORMS` com `src` local e `darkSrc` só na monocromática.
+- Prova: `pnpm turbo run test` → **12/12** (admin 8/8, portal 15/15).
+- Controles negativos (semântica quebrada de propósito):
+  - NC1 — `return Array.from(seen)` (perde a ordem canônica): **2 failed** (ordem canônica + `operatingSystemsFrom`);
+  - NC2 — guard `PLATFORM_ID_SET` removido + retorno sem filtro (desconhecido entra): **5 failed** (descarta slug, só-desconhecidos, ordem, os 2 de OS);
+  - restaurado (`git restore`, diff vazio) → **15/15** e **8/8** verdes.
+
+### 8.3 T5-3 — `test:e2e` no CI (D8-8) e o E-1 resolvido na raiz
+
+Diagnóstico medido (não suposição): os specs e2e usam os repositórios em memória via `.seed()`; `guards.module.ts:36` escolhe `InMemorySessionLookup` **somente** com `AUTH_REPO=memory` — sem a variável, injeta `PgSessionLookup` (sem `.seed`) → `TypeError: sessions.seed is not a function` (18 failed / 24 passed de 44).
+
+- `apps/api/test/setup-e2e.ts`: `process.env.AUTH_REPO ??= 'memory';` (setupFiles roda antes dos imports; `??=` respeita um `AUTH_REPO` explícito).
+- `.github/workflows/ci.yml` — job `unit` (que já tem services postgres+redis): passo **"e2e (AppModule real via HTTP, repos em memória)"** → `pnpm test:e2e` com o mesmo `DATABASE_URL`/`REDIS_URL` do job. YAML validado localmente (js-yaml: 6 steps no job).
+- Prova local com o env do CI (sem `AUTH_REPO` no shell): **exit 0 — 7 suites / 42 passed + 2 skipped** (skip por design: `security-event.e2e.ts` exige `DATABASE_URL_AUDIT`; o health aceita 200|503). Antes: 18 failed / 24 passed.
+- NC: `.expect(200)` → `.expect(418)` no `health.e2e-spec.ts` → **1 failed, exit 1**; restaurado (diff vazio) → verde.
+- **E-1: fechado** — era falta do modo de teste no setup e2e, não 18 testes quebrados.
+
+### 8.4 F-1 (achado incidental) — Argon2id x timeout de 5s no portão local
+
+O portão documentado roda 46 tarefas juntas (2 `next build` em paralelo); o teste "sal único" de `password.spec.ts` (Argon2id real, caro de propósito) estourou o default de 5s do Jest uma vez (arquivo levou 28.31s sob contenção) e passou isolado (60 suites/664). Correção: `jest.setTimeout(30_000)` com o motivo escrito no spec — **nenhum assert/regra rebaixado**. Re-run do portão: **46/46 exit 0**, api **664/664**.
+
+---
+
+## 9. Handoff / estado final
+
+- **T4 CONCLUÍDA e mergeada** (PR #1, rebase; `main @ b4ecaaf`; CI do PR 9/9 verde, incluindo `e2e-compose-efemero` em 2m28s com as 4 imagens novas). Evidência em §7.
+- **T5 CONCLUÍDA** (§8): lint **12/12** (N-B3 fechado), vitest nos 2 fronts (23 testes novos + 3 NCs) e `test:e2e` no CI com **E-1 resolvido na raiz** (18 failed → 42 passed/2 skipped). CI de `main` observado após o push.
+- **Única pendência aberta: D-5** (`libs/database`: deletar / ligar de verdade / manter isento — decisão do dono; isenção viva com `review_by: D-5` na matriz).
 - **Regra que fica:** qualquer artefato derivado nasce com script determinístico + `--check` no CI (regra 13 do CI-VERDE, agora com exemplo vivo).
