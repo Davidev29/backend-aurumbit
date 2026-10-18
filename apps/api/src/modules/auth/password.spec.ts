@@ -1,5 +1,11 @@
 import { hashPassword, sha256Hex, verifyPassword } from './crypto';
 
+// Argon2id é caro de propósito (CPU/memória). O portão local roda este spec
+// junto de 2 `next build` + 44 tarefas do turbo: 5s (default do Jest) estoura
+// por contenção, não por defeito — isolado passa em ~1s (664/664). 30s segue
+// capaz de pegar um hang real sem flakear sob carga.
+jest.setTimeout(30_000);
+
 describe('password (Argon2id preferencial, scrypt fallback)', () => {
   it('roundtrip: hash + verify OK', async () => {
     const h = await hashPassword('correct-horse-11');
