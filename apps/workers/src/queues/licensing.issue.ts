@@ -79,6 +79,7 @@ type Ctx = {
     productId: string | null;
     planRef: string | null;
     billingInterval: string | null;
+    promotionId: string | null;
     status: string;
   };
   ownerUserId: string;
@@ -156,6 +157,7 @@ export async function handleLicensingIssueJob(
         ownerId: ctx.ownerUserId,
         productId: ctx.invoice.productId,
         planId: ctx.invoice.planRef,
+        promotionId: ctx.invoice.promotionId ?? undefined,
         billingInterval: ctx.invoice.billingInterval,
         paidAt: ctx.payment.paidAt,
         amountCents: ctx.payment.amountCents,

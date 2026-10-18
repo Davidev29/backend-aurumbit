@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { Pool, PoolClient } from 'pg';
 import { LICENSING_POOL } from './licensing-pool.provider';
 import { emitSecurityEvent, getSecurityEventPool } from '../audit/security-events';
@@ -791,6 +791,7 @@ export class LicensesService {
       paidAt: string;
       amountCents: number;
       features?: Array<{ code?: unknown; channel?: unknown }>;
+      promotionId?: string;
       actor: string;
     },
     now = new Date(),
@@ -800,6 +801,18 @@ export class LicensesService {
     if (Number.isNaN(startsAt.getTime())) throw new BadRequestException('paidAt inválido (ISO-8601).');
     const features = normalizeFeatureSnapshot(input.features);
     const { expiresAt, graceUntil } = calcExpiry(startsAt, kind);
+
+    let promoBasePrefix: string | null = null;
+    let promoBaseHash: string | null = null;
+    if (input.promotionId) {
+      const pr = await this.pool.query(
+        `SELECT "keyBasePrefix", "keyBaseHash" FROM promotions WHERE id = $1`,
+        [input.promotionId],
+      );
+      const prow = pr.rows[0] as { keyBasePrefix: string | null; keyBaseHash: string | null } | undefined;
+      promoBasePrefix = prow?.keyBasePrefix ?? null;
+      promoBaseHash = prow?.keyBaseHash ?? null;
+    }
 
     const client = await this.pool.connect();
     try {
@@ -821,21 +834,34 @@ export class LicensesService {
         return { duplicate: true };
       }
       // 2. Emissão (mesma base do issueLicense, startsAt = paidAt).
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const key = generateLicenseKey();
+      const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+      for (let attempt = 0; attempt < 5; attempt++) {
+        let key: string;
+        if (promoBasePrefix && promoBaseHash) {
+          const hex = createHash('sha256').update(promoBaseHash + ':' + input.ownerId + ':' + attempt).digest('hex');
+          let suffix = '';
+          for (let i = 0; i < 4; i++) {
+            const byte = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+            suffix += ALPHABET[byte % ALPHABET.length];
+          }
+          key = promoBasePrefix + suffix;
+        } else {
+          key = generateLicenseKey();
+        }
         const keyHash = sha256Hex(key);
         try {
           const { rows } = await client.query(
             `INSERT INTO licenses (id, "ownerType", "ownerId", "ownerLabel", "productId", "planId", "contractItemId",
               kind, status, key_hash, key_prefix, key_last4, key_enc, "tokenVersion",
-              "issuedAt", "startsAt", "expiresAt", "graceUntil", features, "createdAt", "updatedAt")
-             VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,'active',$8,$9,$10,$11,1,now(),$12,$13,$14,$15,now(),now())
+              "issuedAt", "startsAt", "expiresAt", "graceUntil", features, "promotionId", "createdAt", "updatedAt")
+             VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,'active',$8,$9,$10,$11,1,now(),$12,$13,$14,$15,$16,now(),now())
              RETURNING ${SELECT_COLS}`,
             [
               randomUUID(), input.ownerType, input.ownerId, input.ownerLabel ?? null,
               input.productId, input.planId ?? null, kind, keyHash, key.slice(6, 10), key.slice(-4),
               encryptLicenseKey(key), startsAt, expiresAt, graceUntil,
               features.length > 0 ? JSON.stringify(features) : null,
+              input.promotionId ?? null,
             ],
           );
           const row = rows[0] as LicenseRow;
@@ -857,6 +883,28 @@ export class LicensesService {
             amountCents: input.amountCents,
             actor: input.actor,
           });
+          if (input.promotionId) {
+            const promoRes = await client.query(
+              `SELECT "commissionPercent" FROM promotions WHERE id = $1`,
+              [input.promotionId],
+            );
+            const commissionPercent = (promoRes.rows[0] as { commissionPercent: number } | undefined)?.commissionPercent ?? 0;
+            const commissionCents = Math.round((input.amountCents * commissionPercent) / 100);
+            await client.query(
+              `INSERT INTO promotion_activations (id, "promotionId", "licenseId", "customerId", "keyHash", "keyMasked", "amountPaidCents", "commissionCents", "commissionStatus", "activatedAt")
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'PENDING',now())`,
+              [
+                randomUUID(),
+                input.promotionId,
+                row.id,
+                input.ownerId,
+                sha256Hex(key),
+                `AURUM-••••-••••-${row.key_last4}`,
+                input.amountCents,
+                commissionCents,
+              ],
+            );
+          }
           await client.query('COMMIT');
           return { duplicate: false, license: this.toMasked(row, now), key };
         } catch (e) {

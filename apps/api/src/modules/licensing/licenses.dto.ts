@@ -80,6 +80,11 @@ export class IssueLicenseDto {
   @ValidateNested({ each: true })
   @Type(() => LicenseFeatureSnapshot)
   features?: LicenseFeatureSnapshot[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  promotionId?: string;
 }
 
 export class RenewLicenseDto {
@@ -154,6 +159,11 @@ export class IssueTrialDto {
   @ValidateNested({ each: true })
   @Type(() => LicenseFeatureSnapshot)
   features?: LicenseFeatureSnapshot[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  promotionId?: string;
 }
 
 export class LicenseReasonDto {
@@ -293,4 +303,9 @@ export class IssueFromPaymentDto {
   @ValidateNested({ each: true })
   @Type(() => LicenseFeatureSnapshot)
   features?: LicenseFeatureSnapshot[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  promotionId?: string;
 }

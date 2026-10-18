@@ -13,6 +13,8 @@ import { LicensingFlowService } from './licensing-flow.service';
 import { OfflineTokenController } from './offline-token.controller';
 import { OfflineTokenService } from './offline-token.service';
 import { ProductLicensesController } from './product-licenses.controller';
+import { PromotionsController } from './promotions.controller';
+import { PromotionsService } from './promotions.service';
 import { RevealRateLimitGuard } from './reveal.guard';
 
 // Fase 3 — Licensing core (emissão/renovação/suspensão/revogação/reveal).
@@ -32,6 +34,7 @@ import { RevealRateLimitGuard } from './reveal.guard';
     LicensingController,
     LicenseQueryController,
     ProductLicensesController,
+    PromotionsController,
     DevicesController,
     OfflineTokenController,
     ActivationController,
@@ -46,6 +49,7 @@ import { RevealRateLimitGuard } from './reveal.guard';
     LicensingFlowService,
     DevicesService,
     OfflineTokenService,
+    PromotionsService,
   ],
 })
 export class LicensingModule {}

@@ -145,14 +145,14 @@ export class BillingService {
       try {
         const { rows } = await this.pool.query(
           `INSERT INTO invoices (id, number, "customerId", "subscriptionId", "orderId", "asaasInvoiceId",
-             status, "billingInterval", "productId", "planRef", "amountCents", "discountCents", "fineCents", "interestCents", "dueDate", "idempotencyKey",
+             status, "billingInterval", "productId", "planRef", "promotionId", "amountCents", "discountCents", "fineCents", "interestCents", "dueDate", "idempotencyKey",
              "createdAt", "updatedAt")
-           VALUES ($1,$2,$3,$4,$5,$6,'DRAFT',$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),now())
+           VALUES ($1,$2,$3,$4,$5,$6,'DRAFT',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),now())
            RETURNING ${INVOICE_COLS}`,
           [
             randomUUID(), number, dto.customerId, dto.subscriptionId ?? null,
             dto.orderId ?? null, dto.asaasInvoiceId ?? null, dto.billingInterval ?? null,
-            dto.productId ?? null, dto.planRef ?? null, dto.amountCents,
+            dto.productId ?? null, dto.planRef ?? null, dto.promotionId ?? null, dto.amountCents,
             dto.discountCents ?? 0, dto.fineCents ?? 0, dto.interestCents ?? 0,
             dto.dueDate, idempotencyKey ?? null,
           ],
@@ -330,6 +330,7 @@ export class BillingService {
         billingInterval: dto.billingInterval,
         productId: dto.productId,
         planRef: dto.planRef,
+        promotionId: dto.promotionId,
         dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
       },
       `checkout:${dto.orderId}`,
@@ -406,6 +407,7 @@ export class BillingService {
         productId: invoice.productId ?? null,
         planRef: invoice.planRef ?? null,
         billingInterval: invoice.billingInterval ?? null,
+        promotionId: (invoice as { promotionId?: string | null }).promotionId ?? null,
         status: invoice.status,
       },
       ownerUserId: customer.userId,

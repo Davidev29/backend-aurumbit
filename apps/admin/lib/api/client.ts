@@ -17,11 +17,24 @@ export class ApiClientError extends Error {
  * - Em 401 tenta `POST /api/auth/refresh` UMA vez e repete a requisição.
  */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let orgHeader: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem("aurum-org");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const orgId = parsed?.state?.orgId ?? parsed?.orgId;
+        if (orgId) orgHeader = { "x-org-id": String(orgId) };
+      }
+    } catch {
+      // ignore
+    }
+  }
   const doFetch = async (): Promise<Response> =>
     fetch(path, {
       ...init,
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+      headers: { "Content-Type": "application/json", ...orgHeader, ...(init.headers ?? {}) },
     });
 
   let res = await doFetch();

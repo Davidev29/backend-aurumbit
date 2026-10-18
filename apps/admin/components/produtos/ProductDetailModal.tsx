@@ -1093,7 +1093,7 @@ export function ProductDetailModal({
 
   if (loading) {
     return (
-      <Dialog open onClose={onClose} title="Detalhe do produto" size="md" material="glass" initialFocus="close">
+      <Dialog open onClose={onClose} title="Detalhe do produto" size="xl" material="glass" initialFocus="close">
         <SkeletonTable rows={4} label="Carregando produto" />
       </Dialog>
     );
@@ -1101,7 +1101,7 @@ export function ProductDetailModal({
 
   if (!product) {
     return (
-      <Dialog open onClose={onClose} title="Detalhe do produto" size="md" material="glass" initialFocus="close">
+      <Dialog open onClose={onClose} title="Detalhe do produto" size="xl" material="glass" initialFocus="close">
         <ErrorState message={error ?? "Produto não encontrado."} />
       </Dialog>
     );
@@ -1128,7 +1128,7 @@ export function ProductDetailModal({
       open
       onClose={onClose}
       title={`Produto — ${product.name}`}
-      size="md"
+      size="xl"
       material="glass"
       initialFocus="close"
       fixedContent={

@@ -84,6 +84,7 @@ model Invoice {
   // Permitem ao worker montar issue-from-payment sem ler outro domínio.
   productId String? // opaco cross-schema: products.Product.id
   planRef   String? // opaco cross-schema: products.ProductPlan.id
+  promotionId String? // opaco cross-schema: licensing.Promotion.id (promo de desconto)
   amountCents    Int
   discountCents  Int       @default(0)
   fineCents      Int       @default(0)

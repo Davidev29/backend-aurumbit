@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { apiUrlFor } from "@/lib/api/upstream";
+import { apiUrlFor, upstreamAuthHeaders } from "@/lib/api/upstream";
 
 const API_INTERNAL_URL = apiUrlFor("finance");
 
@@ -10,12 +10,6 @@ function newKey(): string {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-/**
- * BFF `POST /api/finance/receivables/auto` → Nest
- * `POST /v1/finance/receivables/auto` (exige `finance.manage`, só admin).
- * Cria o recebível e emite a cobrança Asaas automaticamente.
- * Repassa `Idempotency-Key` (PROJECT §5); gera uma se ausente.
- */
 export async function POST(req: NextRequest) {
   const session = req.cookies.get("aurum_session")?.value ?? "";
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -23,21 +17,23 @@ export async function POST(req: NextRequest) {
   const orgId = req.headers.get("x-org-id") ?? "";
 
   if (API_INTERNAL_URL) {
-    const upstream = await fetch(`${API_INTERNAL_URL}/v1/finance/receivables/auto`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": key,
-        ...(orgId ? { "x-org-id": orgId } : {}),
-        ...(session ? { Cookie: `aurum_session=${session}` } : {}),
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await upstream.json().catch(() => ({}));
-    return NextResponse.json(data, { status: upstream.status });
+    try {
+      const headers = upstreamAuthHeaders(session);
+      headers["Content-Type"] = "application/json";
+      headers["Idempotency-Key"] = key;
+      if (orgId) headers["x-org-id"] = orgId;
+      const upstream = await fetch(`${API_INTERNAL_URL}/v1/finance/receivables/auto`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      const data = await upstream.json().catch(() => ({}));
+      return NextResponse.json(data, { status: upstream.status });
+    } catch {
+      return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível. Tente novamente." }, { status: 502 });
+    }
   }
 
-  // Stub frontend-first (sem backend): recebível + cobrança sintética.
   const id = `ar-stub-${newKey().slice(0, 8)}`;
   return NextResponse.json(
     {

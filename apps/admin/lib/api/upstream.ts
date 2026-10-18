@@ -11,8 +11,8 @@
 
 /** URL do Nest por domínio (indefinida = stub de demonstração). */
 export function apiUrlFor(domain: "billing" | "finance"): string | undefined {
-  if (domain === "billing") return process.env.API_BILLING_URL || undefined;
-  return process.env.API_FINANCE_URL || undefined;
+  if (domain === "billing") return process.env.API_BILLING_URL || process.env.API_INTERNAL_URL || undefined;
+  return process.env.API_FINANCE_URL || process.env.API_INTERNAL_URL || undefined;
 }
 
 export function upstreamHeaders(session?: string): Record<string, string> {

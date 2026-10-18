@@ -45,6 +45,9 @@ model License {
   // Feature codes congelados no momento da emissão (opaco p/ offline-token `feat`).
   features     Json?
 
+  // Promoção de origem (desconto/comissão de influenciador). Opaco cross-schema? Não — vive no mesmo schema licensing.
+  promotionId String?
+
   status    String   @default("pending_payment") // pending_payment | active | suspended | revoked (+ grace/expired derivados na leitura)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
@@ -102,6 +105,61 @@ model OutboxEvent {
   createdAt   DateTime @default(now())
 
   @@map("outbox_events")
+  @@schema("licensing")
+}
+
+// Promoção comercial (bonificação ou desconto) com rastreio de influenciador/comissão.
+model Promotion {
+  id          String   @id @default(cuid())
+  productId   String
+  // BONUS (sem login/cadastro — trial/demo) | DISCOUNT (exige login; aplica % off no produto)
+  type        String   @default("BONUS")
+  // Código parcial distribuído (faltam 4 dígitos): ex. AURUM-XXXX-XXXX-****
+  promoCode   String   @unique
+  // Prefixo base da chave (15 chars) e hash da chave completa original (para derivar sufixo único).
+  keyBasePrefix String?
+  keyBaseHash   String?
+  // Desconto aplicado ao produto (apenas type=DISCOUNT). 0..100
+  discountPercent Int    @default(0)
+  // Influenciador / fonte
+  influencerName         String?
+  influencerPlatformUrl  String?
+  influencerSource       String?
+  // Comissão líquida sobre o valor pago (apenas type=DISCOUNT). 0..100
+  commissionPercent      Int    @default(0)
+  // Validade em horas (null = vitalícia)
+  expiresInHours Int?
+  maxDevices     Int    @default(1)
+  note           String?
+  status         String   @default("ACTIVE") // ACTIVE | PAUSED | EXPIRED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt @default(now())
+
+  activations PromotionActivation[]
+
+  @@index([productId, status])
+  @@map("promotions")
+  @@schema("licensing")
+}
+
+model PromotionActivation {
+  id             String   @id @default(cuid())
+  promotionId    String
+  promotion      Promotion @relation(fields: [promotionId], references: [id])
+  licenseId      String?
+  customerId     String?  // AurumBit account identity
+  // Chave completa gerada (4 dígitos derivados da parcial)
+  keyHash        String?
+  keyMasked      String?
+  // Valor pago e comissão calculada
+  amountPaidCents Int     @default(0)
+  commissionCents Int     @default(0)
+  commissionStatus String @default("PENDING") // PENDING | SETTLED
+  activatedAt    DateTime @default(now())
+
+  @@index([promotionId])
+  @@index([customerId])
+  @@map("promotion_activations")
   @@schema("licensing")
 }
 

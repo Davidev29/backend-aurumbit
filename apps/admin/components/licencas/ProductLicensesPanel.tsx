@@ -322,38 +322,30 @@ export function ProductLicensesPanel({
         </p>
       )}
 
-      {/* Filtro por estado com contagem (DS: `aria-pressed` + contagem textual,
-          nunca só cor). */}
-      <div
-        role="group"
-        aria-labelledby="lic-filter-label"
-        className="mb-2 flex flex-wrap gap-1.5"
-      >
-        {FILTERS.map((f) => {
-          const on = filter === f.id;
-          const n = f.id === null ? items.length : (counts.get(f.id) ?? 0);
-          return (
-            <button
-              key={f.id ?? "all"}
-              type="button"
-              aria-pressed={on}
-              onClick={() => {
-                setFilter(f.id);
-                setOffset(0);
-              }}
-              title={f.id === null ? "Mostrar todas as chaves da página" : `Mostrar chaves ${f.label.toLowerCase()}`}
-              className={cn(
-                "min-h-[36px] rounded-full border px-2.5 text-callout font-semibold focus-ring",
-                on
-                  ? "border-accent bg-accentsoft text-text1"
-                  : "border-line2 bg-bg2 text-text2 hover:border-line3 hover:text-text1",
-              )}
-            >
-              {f.label}
-              <span className="ml-1 font-mono tnum text-[0.85em] text-text2">{n}</span>
-            </button>
-          );
-        })}
+      {/* Filtro por estado em SELECT (DS: contagem textual, nunca só cor). */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <label htmlFor="lic-filter-select" className="m-0 text-[11px] font-bold uppercase tracking-wide text-text2">
+          Filtro
+        </label>
+        <select
+          id="lic-filter-select"
+          value={filter ?? ""}
+          onChange={(e) => {
+            setFilter((e.target.value === "" ? null : e.target.value) as LicenseEffectiveStatus | null);
+            setOffset(0);
+          }}
+          className="min-h-[36px] rounded-base border border-line2 bg-bg2 px-2.5 text-callout font-semibold text-text1 focus-ring"
+          aria-labelledby="lic-filter-label"
+        >
+          {FILTERS.map((f) => {
+            const n = f.id === null ? items.length : (counts.get(f.id) ?? 0);
+            return (
+              <option key={f.id ?? "all"} value={f.id ?? ""}>
+                {f.label} ({n})
+              </option>
+            );
+          })}
+        </select>
       </div>
       <p className="mt-0 text-[11px] text-text2">
         Contagens sobre as {items.length} {items.length === 1 ? "chave carregada" : "chaves carregadas"}

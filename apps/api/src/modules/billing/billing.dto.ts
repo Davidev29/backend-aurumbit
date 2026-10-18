@@ -117,6 +117,12 @@ export class CreateInvoiceDto {
   @MaxLength(128)
   @Expose({ name: 'plan_ref' })
   planRef?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  @Expose({ name: 'promotion_id' })
+  promotionId?: string;
 }
 
 export class CancelDto {
@@ -280,4 +286,10 @@ export class CheckoutOrderDto {
   @MaxLength(16)
   @Expose({ name: 'payment_method' })
   paymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  @Expose({ name: 'promotion_id' })
+  promotionId?: string;
 }

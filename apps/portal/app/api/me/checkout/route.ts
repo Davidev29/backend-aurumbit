@@ -53,8 +53,9 @@ export async function POST(req: NextRequest) {
   const incomingKey = req.headers.get("idempotency-key");
   const keyAsOrderId =
     incomingKey && /^[A-Za-z0-9-]{8,64}$/.test(incomingKey) ? `ord-${incomingKey}` : null;
-  const body = (await req.json().catch(() => ({}))) as Partial<CreateCheckoutRequest>;
+  const body = (await req.json().catch(() => ({}))) as Partial<CreateCheckoutRequest> & { promoCode?: string };
   const item = Array.isArray(body.items) ? body.items[0] : undefined;
+  const promoCode = typeof body.promoCode === "string" ? body.promoCode.trim() : "";
   if (!item?.productCode || !item?.planId) {
     return NextResponse.json(
       { code: "EMPTY_CART", message: "Escolha um plano para continuar." },
@@ -75,7 +76,24 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const totalCents = plan.priceCents * qty;
+    let promotionId: string | undefined;
+    let discountPercent = 0;
+    if (promoCode) {
+      const promoRes = await upstreamJson(`${base}/v1/promotions/validate/${encodeURIComponent(promoCode)}`);
+      if (!promoRes.ok) {
+        return NextResponse.json({ code: "PROMO_INVALID", message: "Código promocional inválido." }, { status: 400 });
+      }
+      const promo = promoRes.data as { id?: string; productId?: string; type?: string; discountPercent?: number };
+      if (promo.productId && promo.productId !== plan.productCode) {
+        return NextResponse.json({ code: "PROMO_PRODUCT", message: "Código não válido para este produto." }, { status: 400 });
+      }
+      if (promo.type !== "DISCOUNT") {
+        return NextResponse.json({ code: "PROMO_TYPE", message: "Código não é de desconto." }, { status: 400 });
+      }
+      promotionId = promo.id;
+      discountPercent = Math.max(0, Math.min(100, promo.discountPercent ?? 0));
+    }
+    const totalCents = Math.round(plan.priceCents * qty * (1 - discountPercent / 100));
     // 2. Titular (resolve identity → customers) + espelho billing.
     const me = await upstreamJson(`${base}/v1/customers/me`, {
       headers: { Authorization: `Bearer ${session}` },
@@ -129,6 +147,7 @@ export async function POST(req: NextRequest) {
         billing_interval: plan.billingInterval,
         amount_cents: totalCents,
         payment_method: body.paymentMethod,
+        ...(promotionId ? { promotion_id: promotionId } : {}),
       }),
     });
     if (!order.ok) return NextResponse.json(order.data, { status: order.status });

@@ -128,7 +128,7 @@ export function Dialog({
             className={cn(
               "w-full rounded-modal p-5 overscroll-contain",
               fixed
-                ? "flex flex-col overflow-hidden h-[84vh] max-h-[920px] min-h-[420px]"
+                ? "flex flex-col overflow-hidden h-[70vh] max-h-[760px] min-h-[360px]"
                 : "max-h-[85vh] overflow-y-auto",
               SIZE_CLASS[size],
               material === "glass"
