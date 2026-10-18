@@ -21,18 +21,6 @@
       "review_by": "D-5"
     },
     {
-      "package": "@aurum-bit/api",
-      "task": "lint",
-      "reason": "apps/api sem eslint configurado (N-B3) — plano CORRECTION-PLAN-02, task T5-1",
-      "review_by": "T5-1"
-    },
-    {
-      "package": "@aurum-bit/workers",
-      "task": "lint",
-      "reason": "apps/workers sem eslint configurado (N-B3) — plano CORRECTION-PLAN-02, task T5-1",
-      "review_by": "T5-1"
-    },
-    {
       "package": "@aurum/admin",
       "task": "test",
       "reason": "apps/admin sem infra de teste (vitest) — plano CORRECTION-PLAN-02, task T5-2",
