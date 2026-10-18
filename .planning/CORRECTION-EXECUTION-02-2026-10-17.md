@@ -1,4 +1,4 @@
-# Execução da Correção 02 — Gates de build + fonte única do catálogo (Ondas 1–4)
+# Execução da Correção 02 — Gates de build + fonte única do catálogo (Ondas 1–5)
 
 **Data:** 2026-10-17 · **Plano:** `CORRECTION-PLAN-02-BUILD-GATES-2026-10-17.md` · **Decisões:** D-1 (Trilha A → B), D-2 (JSON fonte única + TS gerado), D-3 (escopo extra = Onda 6/T5), D-4 (commits atômicos + push por onda)
 
@@ -185,7 +185,7 @@ modos contracts/api/admin/portal == OFFLINE,HYBRID
 | **E-1** | Suite `test:e2e` do `apps/api` **já falhava antes** desta correção: `test/access.check.e2e-spec.ts` → `TypeError: sessions.seed is not a function`; 18 falhas / 24 passes de 44 (medido no início da sessão). O CI **não** roda essa suite hoje — rodar sem corrigir deixaria vermelho; é o T5-3 (D8-8) que a liga no CI, então **corrigir E-1 é pré-requisito do T5-3** | Aberto (fora do escopo T0–T3 por decisão) |
 | **E-2** | Ações do GitHub avisam depreciação do Node 20 (forçado p/ Node 24) | Informativo; sem ação nesta correção |
 | **E-3** | `trivy`/`gitleaks` locais exigem binário; aqui só rodam no CI | Regra 8 do CI-VERDE registra o "reproduzir local com o binário exato" |
-| **E-4** | `turbo prune`/Trilha B (T4) ainda não iniciada | D-1: começa com T0–T3 verdes |
+| **E-4** | ~~`turbo prune`/Trilha B (T4) ainda não iniciada~~ | **Fechado** — T4 executada em 2026-10-17 (branch `feat/t4-workspace-deps-prune`, PR próprio; evidência em §7) |
 
 ---
 
@@ -200,8 +200,84 @@ modos contracts/api/admin/portal == OFFLINE,HYBRID
 
 ---
 
-## 7. Handoff para as próximas ondas
+## 7. Onda 5 — T4 · Unificação real (workspace + Docker pnpm/prune)
 
-- **T4 (Trilha B, agora `ready` por D-1):** `workspace:*` em api/admin/portal + imports reais; gerados dos apps removidos; Next com `outputFileTracingRoot`; 4 Dockerfiles migrados p/ pnpm + `turbo prune --docker` (matar o `TODO(T1)`); PR próprio com prova de `docker compose build` — **PRÉ-REQUISITO: ler `docs/` do turbo 2.11.7 instalado (regra do AGENTS.md) antes de tocar config**.
+Branch `feat/t4-workspace-deps-prune` (PR próprio, D-1); base `0fa813e` (CI verde, 9/9).
+
+### 7.1 T4-1 — regra do turbo instalado (AGENTS.md)
+
+- Lidos `prune.mdx` e `docker.mdx` do turbo **2.11.7 instalado** (versão do repo) antes de tocar config:
+  - `turbo prune <pkg> --docker` → `out/json/` (manifests + `pnpm-lock.yaml` podado) e `out/full/` (fontes do pacote e deps);
+  - standalone binário exige **≥ 2.11.5** → pinado 2.11.7 com verificação de `SHA256SUMS` e asserção do tar (`= turbo`).
+- Docker local 29.7.2; recon do prune antes de escrever os Dockerfiles: `out/json` = manifests + lockfile podado; `out/full` = apps + libs + raiz, **sem** `tsconfig.base.json` (não é package.json → COPY explícito no builder).
+
+### 7.2 T4-2 — fim das cópias por app (consumidores reais do pacote)
+
+| Claim | Arquivo (pós-mudança) | Antes → Depois |
+|---|---|---|
+| Apps declaram o contrato | `apps/api/package.json:17`, `apps/admin/package.json:13`, `apps/portal/package.json:13` | (ausente) → `"@aurum-bit/contracts": "workspace:*"` |
+| Borda da API | `apps/api/src/modules/products/dto.ts:22` | import de `./platform-catalog.generated` → `@aurum-bit/contracts` (reexports públicos do módulo mantidos: `PRODUCT_PLATFORM_IDS`/`PRODUCT_DELIVERY_MODES`) |
+| Admin | `apps/admin/lib/platforms.ts:15` | idem (`PRODUCT_PLATFORMS` derivado do pacote, mesma ordem canônica) |
+| Portal | `apps/portal/lib/platforms.ts` | idem |
+| Export que só o admin tinha | `libs/contracts/src/products.ts:47` | `MONOCHROME_PLATFORMS` (catálogo agora expõe os 3 literais) |
+| Gerados por app removidos | `apps/api/src/modules/products/platform-catalog.generated.ts`, `apps/admin/lib/platforms.generated.ts`, `apps/portal/lib/platforms.generated.ts` | 3 arquivos deletados (fim das cópias) |
+| `turbo test` espera o build das deps | `turbo.json:9` | `"test": { "dependsOn": ["^build"] }` — o unit da api importa o `dist` do contrato via link do workspace |
+| Jest da api não recompila o dist do contrato | `apps/api/package.json:65` | `transformIgnorePatterns` com `libs[\\/]contracts[\\/]dist/` → 0 avisos do ts-jest |
+
+Verificação (portão local completo pós-mudanças, log literal): `pnpm turbo run lint typecheck test build --continue` → **`Tasks: 42 successful, 42 total` / `SUITE_EXIT=0`**; api `60 passed / 664 passed`; contracts `1 passed / 5 passed`; workers `tests 5 / pass 5` + `tests 7 / pass 7`; lint **0 erros** (warnings pré-existentes: admin 23, portal 9). Gatilho de execução: `pnpm catalog:check` → `catalog:check OK — 5 plataformas, 2 modos, 1 artefato, consumidores via workspace:*, ícones dos 2 fronts completos.`
+
+### 7.3 T4-3 — tracing root do standalone (e o lockfile que o sequestrava)
+
+O 1º build Docker saiu **assimétrico**: standalone do admin no layout antigo (`server.js` na raiz) e o do portal aninhado. O config serializado no `server.js` de cada um provou a causa:
+
+| app | `config.outputFileTracingRoot` (nosso) | `config.experimental.outputFileTracingRoot` (efetivo) |
+|---|---|---|
+| admin | `/app` | **`/app/apps/admin`** (default auto-detectado) |
+| portal | `/app` | `/app` (auto-detectado na raiz) |
+
+Causa raiz: no **Next 14.2** o top-level `outputFileTracingRoot` existe no schema mas nenhum código o lê para o trace (`next/dist/build/index.js` usa `config.experimental.outputFileTracingRoot`); sem valor explícito o Next chama `findRootDir` e usa o **lockfile mais próximo** — o `apps/admin/package-lock.json` legado (restaurado numa auditoria antiga p/ o Dockerfile npm) parava a busca em `apps/admin`; o portal "deu sorte" (sem lockfile local, subiu até o `pnpm-lock.yaml` da raiz). Correção em 2 frentes:
+
+- `apps/admin/next.config.js:57` e `apps/portal/next.config.js:57` — `output`/`experimental: { outputFileTracingRoot: REPO_ROOT }` + top-level mantido p/ Next 15 (`REPO_ROOT = path.join(__dirname, "../..")`).
+- `git rm apps/admin/package-lock.json` — 2.393 linhas de lock npm num workspace pnpm, sem referência viva.
+
+Prova (rebuild `--no-cache`): `/app/apps/admin/server.js` (4.560B) presente e `/app/libs/` traçado; `id -un` → `nextjs` nas 2 imagens; boot dos 2 standalone: admin `/login` **200**, `/` **307**; portal `/` **200**, `/checkout` **200**; SSR do portal renderiza o catálogo (HTML contém `Windows` e `macOS`); grep nos chunks server: **0** ocorrências de `aurum-bit/contracts` → webpack bundleou o pacote (não há `require` do pacote em runtime; por isso `libs/contracts` no standalone só leva `package.json`).
+
+### 7.4 T4-4 — 4 Dockerfiles: pnpm + `turbo prune --docker`
+
+Padrão único nos 4 (`apps/{api,workers,admin,portal}/Dockerfile`): `base` (node:22-alpine + pnpm 9.0.0) → `prepare` (turbo 2.11.7 verificado por SHA256 + `turbo prune --docker`) → `deps` (`out/json` + `pnpm install --frozen-lockfile`) → `builder` (`out/full` + `tsconfig.base.json` + `turbo run build --filter=<pkg>`) → `runner` (`pnpm install --prod` p/ api/workers; standalone do Next p/ admin/portal; todos **non-root**). `TODO(T1)` morto.
+
+O caminho revelou (e fechou com prova) um vazamento silencioso:
+
+- **`*.tsbuildinfo` no prune**: o `.gitignore` fica **fora** do contexto Docker, então o prune copiava os `.tsbuildinfo` do working tree; o tsc incremental então **pulava a emissão** do `contracts` (imagem com 6 `.d.ts` e sem `dist/index.js`) e a api quebrava em runtime (`MODULE_NOT_FOUND .../contracts/dist/index.js`). Fix: `.dockerignore` com `**/*.tsbuildinfo`/`**/.turbo/`/`**/*.log` + `RUN find . -name '*.tsbuildinfo' -delete` antes do prune. Prova: rebuild limpo → `libs/contracts/dist` com 21 arquivos / 7 `.js`.
+- **`tsconfig.base.json` não entra no prune** (não é package.json) → COPY explícito nos 4 builders.
+
+Runtime das imagens (smoke direto): api resolve o contrato (`plataformas: windows,macos,linux,web,apple` / `modos: OFFLINE,HYBRID`), usuário `nestjs`, 521MB; workers `dist/main.js`, 333MB; admin 288MB; portal 318MB (antes: admin 701MB com `npm i`).
+
+### 7.5 T4-5 — compose completo em stack isolada (sem tocar a stack do dev)
+
+A stack de dev estava no ar com dados. A prova usou um **projeto compose isolado** (`-p t4-smoke`) com override efêmero: `!override` em `ports`/`env_file` (no merge do compose estas listas **concatenam** — a porta do dev continuaria bindada), imagens próprias `t4-smoke/*:local` e env clone `.env.t4-smoke` (`.env` + `MFA_ENC_KEY` gerada por `deploy/scripts/gen-dev-env.sh`; o `.env` do usuário não foi tocado). Caminho idêntico ao job `e2e-ephemeral` do CI.
+
+Resultado literal: `up --build -d` exit 0; **8/8 containers healthy**; `/health/live` → `{"status":"ok"}`; `/health/ready` → `{"status":"ok","postgres":"up","redis":"up","dlq":{"pending":0,"perQueue":{},"warn":false}}`; `/metrics` contém `http_requests_total`; admin `/login` → 200, `/` → 307; portal `/` → 200 (HTML com `Windows`/`macOS`), `/checkout` → 200. `down -v` do projeto isolado e `docker ps` confirmando a stack de dev intacta.
+
+### 7.6 T4-6 — `catalog:check` vira invariantes de arquitetura (desvio registrado)
+
+**Desvio:** o plano dizia "remover `sync-platform-catalog.mjs`/gerados; `catalog:check` vira só invariantes". O gerador foi **mantido e encolhido p/ 1 artefato** (o JSON não emite union literal em runtime — o contrato tipado continua derivado), e o `catalog:check` ganhou `checkConsumers()`, que passa a **cobrar a Trilha B**: (1) artefato legado por app re-introduzido → REPROVA; (2) app sem `"@aurum-bit/contracts": "workspace:*"` → REPROVA.
+
+Controles negativos (saída literal):
+
+| # | Provocação | Resultado |
+|---|---|---|
+| NC1 | append de linha no `products.catalog.generated.ts` | `catalog:check REPROVADO ... exit=1` (drift linha-a-linha) |
+| NC2 | remover a dep do `apps/portal/package.json` | `- CONSUMER: apps/portal/package.json deve declarar "@aurum-bit/contracts": "workspace:*" (tem: ausente) ... exit=1` |
+| NC3 | recriar `apps/api/.../platform-catalog.generated.ts` vazio | `- CONSUMER: apps/api/src/modules/products/platform-catalog.generated.ts é ARTEFATO LEGADO — o app deve importar @aurum-bit/contracts; apague ... exit=1` |
+| — | restaurado (git checkout + re-edição) | `catalog:check OK — 5 plataformas, 2 modos, 1 artefato, consumidores via workspace:* ... exit=0` |
+
+> **Nota de execução (não escondida):** o NC2 restaurou com `git checkout -- apps/portal/package.json`, que apagou junto a alteração **ainda não commitada** da dep; o arquivo foi re-editado (diff byte-idêntico: `index 17a4ada..5b2df01`) e o lockfile confere (importer `apps/portal` com `@aurum-bit/contracts: specifier workspace:*`). Depois disso: `catalog:check OK`.
+
+---
+
+## 8. Handoff para as próximas ondas
+
+- ~~**T4 (Trilha B, agora `ready` por D-1):** ...~~ **T4 CONCLUÍDA** (§7): `workspace:*` + imports reais; 3 gerados por app removidos; tracing root explícito (lição: Next 14.2 lê `experimental`) + lock npm legado do admin removido; 4 Dockerfiles pnpm + `turbo prune --docker` (TODO(T1) morto, turbo pinado + SHA256); smoke completo em compose isolado. CI do PR observado antes de qualquer merge.
 - **T5 (Onda 6):** T5-1 lint api/workers; T5-2 vitest admin/portal (com controle negativo da semântica fail-soft); T5-3 `test:e2e` no CI — **destravar antes o E-1**.
 - **Regra que fica:** qualquer artefato derivado nasce com script determinístico + `--check` no CI (regra 13 do CI-VERDE, agora com exemplo vivo).

@@ -55,7 +55,7 @@ npm --prefix apps/workers run build && npm --prefix apps/admin run build
 - **Reveal chave:** `POST /v1/licenses/:id/reveal {reason}` (license.read+MFA+10/h+audit).
 - **Backup:** `bash deploy/scripts/backup-check.sh` (exige 1 DB `aurumbit` + 9 schemas; restore probe semanal).
 - **Carga:** `node deploy/load/smoke.js --base http://localhost:3000` (live/ready/metrics + p99 check-access TODO k6).
-- **Catálogo de plataformas (fonte única):** editar `libs/contracts/src/products.catalog.json` e rodar `pnpm catalog:sync` (deriva contrato/API/admin/portal); arte nova vai em `ASSETS/tags/*` → `python tools/build-tag-icons.py`. O CI reprova drift e ícone órfão com `pnpm catalog:check`.
+- **Catálogo de plataformas (fonte única):** editar `libs/contracts/src/products.catalog.json` e rodar `pnpm catalog:sync` (deriva o artefato do contrato; api/admin/portal importam `@aurum-bit/contracts` via `workspace:*` — sem cópia por app); arte nova vai em `ASSETS/tags/*` → `python tools/build-tag-icons.py`. O CI reprova drift, artefato legado por app e ícone órfão com `pnpm catalog:check`.
 
 ## 4. Endpoints — o que cada um faz
 

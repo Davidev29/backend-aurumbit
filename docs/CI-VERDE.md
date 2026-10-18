@@ -9,7 +9,7 @@
 ```bash
 bash deploy/scripts/prisma-validate.sh          # 9/9 schemas
 pnpm gates:check                                # cobertura de gates por workspace (turbo não pode ser "fantasma")
-pnpm catalog:check                              # catálogo de plataformas: drift dos gerados + ícone órfão
+pnpm catalog:check                              # catálogo de plataformas: drift do artefato + workspace:* + ícone órfão
 pnpm turbo run lint typecheck test build --continue   # 12/12 workspaces, inclui as 4 apps
 bash -n deploy/scripts/*.sh                     # sintaxe de todos os scripts
 "$BIN/trivy.exe" fs --severity HIGH,CRITICAL --exit-code 1 --no-progress .   # mesmo binário do CI
@@ -68,9 +68,12 @@ corrigidos em follow-up imediato, nunca "depois".
 13. **Gerado à mão se compara, não se confia.** Artefato derivado de uma fonte
     única é gerado por script determinístico e conferido por `--check` no CI;
     divergência reprova apontando arquivo e linha. Exemplo vivo: o catálogo de
-    plataformas tem UMA fonte (`libs/contracts/src/products.catalog.json`) e 4
-    artefatos gerados (`pnpm catalog:sync`); `pnpm catalog:check` (job lint)
-    reprova drift, PNG faltando e PNG **órfão** em `apps/{admin,portal}/public/tags`,
+    plataformas tem UMA fonte (`libs/contracts/src/products.catalog.json`) e 1
+    artefato derivado (`libs/contracts/src/products.catalog.generated.ts`,
+    `pnpm catalog:sync`); api/admin/portal consomem via dependência `workspace:*`
+    do pacote — `pnpm catalog:check` (job lint) cobra o drift do artefato, que os
+    apps **não** voltem a ter cópia/gerado local e que declarem `workspace:*`,
+    reprova PNG faltando e PNG **órfão** em `apps/{admin,portal}/public/tags`,
     e sai com `2` quando a própria fonte é inválida (id/chave/modo). Editar gerado
     à mão é sempre erro — o próximo `--check` reprova.
 

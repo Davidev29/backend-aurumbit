@@ -63,3 +63,23 @@
   Pendente: **D-5** (`libs/database` isento — decidir deletar/ligar), **E-1** (18
   falhas pré-existentes em `test:e2e` do api — destravar antes do T5-3), T4 (Trilha B,
   dispara com tudo verde) e T5.
+- Correção 02, onda T4 (Trilha B) executada em 2026-10-17 (branch `feat/t4-workspace-deps-prune`,
+  PR próprio; log completo em `CORRECTION-EXECUTION-02` §7): apps api/admin/portal viram
+  consumidores reais de `@aurum-bit/contracts` (`workspace:*`) — 3 artefatos gerados por app
+  deletados, contrato ganha `MONOCHROME_PLATFORMS`, `turbo test` espera `^build` (dep de
+  workspace), jest da api ignora o `dist` do contrato; `catalog:check` passa a cobrar a
+  arquitetura (artefato legado reprova, app sem `workspace:*` reprova — 3 controles negativos
+  literais). Next: tracing root explícito (`experimental.outputFileTracingRoot` — o top-level
+  é ignorado no 14.2) + `apps/admin/package-lock.json` legado (2.393 linhas) removido — ele
+  sequestrava o `findRootDir` do Next e quebrava o standalone do admin; standalone aninhado
+  com boot 200 nos 2 fronts. Docker: 4 Dockerfiles em pnpm 9 + `turbo prune --docker`
+  (binário turbo 2.11.7 pinado + SHA256), `TODO(T1)` morto, vazamento de `*.tsbuildinfo`
+  (`.gitignore` fora do contexto Docker → tsc incremental pulava emissão) fechado com
+  `.dockerignore` + `find -delete` antes do prune; imagens non-root: api 521MB / workers
+  333MB / admin 288MB / portal 318MB. Smoke completo em compose isolado (projeto `t4-smoke`,
+  portas/nomes deslocados com `!override`; a stack de dev do dono ficou intacta): 8/8
+  containers healthy, `/health/live` + `/health/ready` ok, `/metrics` ok, admin `/login` 200,
+  portal `/` 200 com o catálogo renderizado no SSR. Portão local 42/42 (`SUITE_EXIT=0`),
+  api 664/664, contracts 5/5. Pendente: **D-5** (decisão do dono), **E-1** (18 falhas
+  pré-existentes do `test:e2e` — pré-requisito do T5-3) e **T5** (lint api/workers, vitest
+  admin/portal, D8-8 `test:e2e` no CI).
