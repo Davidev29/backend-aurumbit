@@ -181,7 +181,7 @@ modos contracts/api/admin/portal == OFFLINE,HYBRID
 
 | # | Item | Estado |
 |---|---|---|
-| **D-5** | `libs/database`: deletar, ligar de verdade ou manter isento | **AGUARDANDO USUÁRIO** (isenção viva, `review_by` registrado) |
+| **D-5** | `libs/database`: deletar, ligar de verdade ou manter isento | **DECIDIDO: deletar** (2026-10-18, escolha do dono) — pacote removido; 4 arquivos tracked, 0 importadores; schemas em `prisma/` e scripts de migração intactos (usam `npx prisma@6.8.0`). Matriz **sem nenhuma isenção viva** |
 | **E-1** | ~~Suite `test:e2e` do `apps/api` **já falhava antes** desta correção...~~ **RESOLVIDO (T5-3)**: os specs usam os repos em memória via `.seed()`, mas sem `AUTH_REPO` o `GuardsModule` injetava `PgSessionLookup` (sem `.seed`) → `TypeError: sessions.seed is not a function` (18 failed / 24 passed de 44). Fix: `process.env.AUTH_REPO ??= 'memory'` no `setup-e2e.ts` + passo no job `unit` do CI | **Fechado** — 42 passed + 2 skipped, exit 0 (local com env do CI; §8.3) |
 | **E-2** | Ações do GitHub avisam depreciação do Node 20 (forçado p/ Node 24) | Informativo; sem ação nesta correção |
 | **E-3** | `trivy`/`gitleaks` locais exigem binário; aqui só rodam no CI | Regra 8 do CI-VERDE registra o "reproduzir local com o binário exato" |
@@ -318,5 +318,5 @@ O portão documentado roda 46 tarefas juntas (2 `next build` em paralelo); o tes
 
 - **T4 CONCLUÍDA e mergeada** (PR #1, rebase; `main @ b4ecaaf`; CI do PR 9/9 verde, incluindo `e2e-compose-efemero` em 2m28s com as 4 imagens novas). Evidência em §7.
 - **T5 CONCLUÍDA** (§8): lint **12/12** (N-B3 fechado), vitest nos 2 fronts (23 testes novos + 3 NCs) e `test:e2e` no CI com **E-1 resolvido na raiz** (18 failed → 42 passed/2 skipped). CI de `main` observado após o push.
-- **Única pendência aberta: D-5** (`libs/database`: deletar / ligar de verdade / manter isento — decisão do dono; isenção viva com `review_by: D-5` na matriz).
+- **D-5 decidido e executado (2026-10-18):** `libs/database` **deletado** a pedido do dono — 0 importadores, toolchain Prisma inexistente; schemas em `prisma/` e scripts de deploy intactos (`npx prisma@6.8.0`). `tools/gates-matrix.json` sem isenções; `gates:check` cobra build/typecheck/lint/test de todos os 11 workspaces restantes. Nada mais pendente.
 - **Regra que fica:** qualquer artefato derivado nasce com script determinístico + `--check` no CI (regra 13 do CI-VERDE, agora com exemplo vivo).

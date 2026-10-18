@@ -39,10 +39,12 @@ roda local **e** no CI — não é exceção.
    nomeados e `FOR UPDATE` sensível — enforcement vai em `ALTER ROLE`, e o
    caminho quente é testado ATRAVÉS do pooler (`pgbouncer-forupdate-check.sh`),
    nunca só direto.
-5. **Versão do Prisma é única.** Pin em `libs/database` = versão do `npx` em
-   `migrate-all.sh`/`prisma-validate.sh`. `previewFeatures` válidas dependem da
-   versão (6.8.0 exige `["multiSchema"]` p/ `@@schema`; `prismaSchemaFolder`
-   não se aplica a 9 datasources independentes).
+5. **Versão do Prisma é única.** Pin em `PRISMA_VERSION` (default `6.8.0`) de
+   `migrate-all.sh` / `prisma-validate.sh` / `migrate-diff-check.sh`, sempre via
+   `npx prisma@${PRISMA_VERSION}`. O pacote `libs/database` foi removido em D-5
+   (código morto, 0 importadores) — o pin não mora mais em package.json.
+   `previewFeatures` válidas dependem da versão (6.8.0 exige `["multiSchema"]`
+   p/ `@@schema`; `prismaSchemaFolder` não se aplica a 9 datasources independentes).
 6. **Jobs agendados ≠ jobs de push.** Nightly roda scan completo (gitleaks acha
    o que o diff-scan não vê) e stack completa (migrate+seed+forupdate). Antecipar:
    allowlists versionadas (`.gitleaks.toml`, `.trivyignore` com `exp:` sem espaço

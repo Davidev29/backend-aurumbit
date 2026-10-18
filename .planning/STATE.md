@@ -99,3 +99,10 @@
   rebaixado → portão **46/46 exit 0**. **PR #1 (T4) mergeado por rebase** (`main @
   b4ecaaf`, CI 9/9) antes do push do T5. **Única pendência: D-5** (`libs/database`:
   deletar / ligar / manter isento — decisão do dono).
+- **D-5 decidido e executado (2026-10-18):** `libs/database` **deletado** (escolha do
+  dono). Antes: 4 arquivos tracked, 0 importadores, factory importava clientes Prisma
+  nunca gerados, `prisma generate` falhava neste install. `prisma/` (9 schemas) e os
+  scripts de migração ficam intactos — o pin do CLI é `PRISMA_VERSION=6.8.0` em
+  `deploy/scripts/*.sh` via `npx`. `tools/gates-matrix.json` com `"exemptions": []`:
+  os 11 workspaces restantes têm build/typecheck/lint/test cobrados, sem dívida.
+  Regra 5 do `docs/CI-VERDE.md` atualizada para o novo dono do pin.
