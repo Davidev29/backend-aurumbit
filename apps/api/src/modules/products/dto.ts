@@ -19,23 +19,22 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
-import { PRODUCT_DELIVERY_MODES, PRODUCT_PLATFORM_IDS } from './platform-catalog.generated';
-
-export { PRODUCT_DELIVERY_MODES, PRODUCT_PLATFORM_IDS };
-export type { ProductDeliveryMode, ProductPlatformId } from './platform-catalog.generated';
+import { DELIVERY_MODES, PLATFORM_IDS } from '@aurum-bit/contracts';
 
 /**
- * Catálogo canônico de plataformas (fail-closed na borda) — artefato GERADO.
+ * Catálogo canônico de plataformas (fail-closed na borda).
  *
- * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` (o contrato zod em
- * `libs/contracts/src/products.ts` valida o mesmo dado). Este arquivo NÃO lista
- * ids à mão: reexporta `./platform-catalog.generated`, produzido por
- * `tools/sync-platform-catalog.mjs` (`pnpm catalog:sync`); o CI reprova drift
- * com `pnpm catalog:check`.
+ * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` — o pacote
+ * `@aurum-bit/contracts` (dependência `workspace:*`) deriva os literais
+ * tipados do JSON. Este arquivo NÃO lista ids à mão nem mantém cópia própria.
  *
  * Os ids são ESTÁVEIS e vão para `products.platforms` — são os mesmos ids do
  * catálogo de ícones (`tools/build-tag-icons.py`). Nunca renomear.
  */
+export const PRODUCT_PLATFORM_IDS = PLATFORM_IDS;
+export type ProductPlatformId = (typeof PRODUCT_PLATFORM_IDS)[number];
+export const PRODUCT_DELIVERY_MODES = DELIVERY_MODES;
+export type ProductDeliveryMode = (typeof PRODUCT_DELIVERY_MODES)[number];
 
 export class CreateProductDto {
   @IsString({ message: 'O código deve ser um texto.' })

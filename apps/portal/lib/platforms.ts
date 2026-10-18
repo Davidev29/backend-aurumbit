@@ -1,20 +1,12 @@
 /**
- * Plataformas do produto + modo de entrega — artefato GERADO + lógica de exibição.
+ * Plataformas do produto + modo de entrega — lógica de exibição.
  *
- * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` — o mesmo dado que a
- * API valida na borda e que o `tools/build-tag-icons.py` usa p/ gerar os PNGs
- * em `apps/portal/public/tags/<id>.png`. Este módulo reexporta
- * `./platforms.generated` (produzido por `tools/sync-platform-catalog.mjs`;
- * rode `pnpm catalog:sync`) e mantém só a lógica de UI. NUNCA edite ids/labels
- * aqui: o CI reprova drift com `pnpm catalog:check` — que também pega ícone
- * órfão em `public/tags`.
- *
- * POR QUE UM GERADO E NÃO O IMPORT DO PACOTE: `apps/portal` não declara
- * dependência de workspace (`apps/portal/package.json` não lista
- * `@aurum-bit/contracts` e `apps/portal/node_modules/@aurum-bit` não existe),
- * então o import direto é impossível hoje. Quando o portal linkar o pacote,
- * troque o import por `@aurum-bit/contracts` e apague o gerado (mesmo caminho
- * de `apps/api/modules/products/dto.ts`).
+ * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` — o pacote
+ * `@aurum-bit/contracts` (dependência `workspace:*`) expõe os literais
+ * tipados que a API valida na borda e que o `tools/build-tag-icons.py` usa p/
+ * gerar os PNGs em `apps/portal/public/tags/<id>.png`. Import direto do
+ * pacote: não existe artefato gerado por app. NUNCA edite ids/labels aqui: o
+ * CI reprova drift e ícone órfão com `pnpm catalog:check`.
  *
  * VALIDAÇÃO FAIL-SOFT: o backend já é fail-closed (`PLATFORM_ID_SCHEMA`), mas
  * aqui a entrada pode ser cache velho, API desatualizada ou stub — então
@@ -30,19 +22,19 @@
  * 44px em interativo, cores 100% via `var(--*)`, zero emoji.
  */
 import {
-  DARK_VARIANT,
   DELIVERY_MODES,
+  MONOCHROME_PLATFORMS,
   PLATFORM_IDS,
   PLATFORM_LABELS,
   PLATFORM_SHORT_LABELS,
-  type DeliveryMode,
-  type PlatformId,
-} from "./platforms.generated";
+} from "@aurum-bit/contracts";
 
+export type DeliveryMode = (typeof DELIVERY_MODES)[number];
+export type PlatformId = (typeof PLATFORM_IDS)[number];
 export { DELIVERY_MODES, PLATFORM_IDS, PLATFORM_LABELS, PLATFORM_SHORT_LABELS };
-export type { DeliveryMode, PlatformId };
 
 const PLATFORM_ID_SET = new Set<string>(PLATFORM_IDS);
+const DARK_VARIANT = new Set<string>(MONOCHROME_PLATFORMS);
 
 /**
  * Normaliza `platforms` vindo de API/mock/cache.
@@ -79,7 +71,7 @@ export function normalizeDeliveryMode(raw: unknown): DeliveryMode {
 
 /** Caminho do PNG de plataforma no `public/` (local — não é URL remota). */
 export function platformIconSrc(id: PlatformId, dark: boolean): string {
-  return dark && DARK_VARIANT[id] ? `/tags/${id}-dark.png` : `/tags/${id}.png`;
+  return dark && DARK_VARIANT.has(id) ? `/tags/${id}-dark.png` : `/tags/${id}.png`;
 }
 
 /** Rótulo pt-BR completo da plataforma. */

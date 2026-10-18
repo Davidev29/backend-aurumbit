@@ -1,12 +1,11 @@
 /**
- * Catálogo canônico de plataformas de produto — artefato GERADO + helpers de UI.
+ * Catálogo canônico de plataformas de produto + helpers de UI.
  *
- * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` — o mesmo dado que a
- * API usa na validação fail-closed da borda (`ValidationPipe`) e que o
- * `tools/build-tag-icons.py` usa p/ gerar os PNGs em `public/tags/`.
- * NUNCA edite ids/labels aqui: rode `pnpm catalog:sync` (`tools/sync-platform-catalog.mjs`)
- * e o CI confere com `pnpm catalog:check` — que também reprova ícone órfão em
- * `public/tags` (plataforma que saiu do catálogo não fica servida para sempre).
+ * FONTE ÚNICA: `libs/contracts/src/products.catalog.json` — o pacote
+ * `@aurum-bit/contracts` (dependência `workspace:*`) expõe os literais tipados
+ * que a API usa na validação fail-closed e que o `tools/build-tag-icons.py` usa
+ * p/ gerar os PNGs em `public/tags/`. NUNCA edite ids/labels aqui: o CI reprova
+ * drift e ícone órfão com `pnpm catalog:check`.
  *
  * A ordem do array é a ordem CANÔNICA: o backend reordena por ela, então
  * enviar nesta ordem torna a resposta da API idêntica ao que a UI mostra.
@@ -14,16 +13,39 @@
  * — NÃO renomear sem migration.
  */
 import {
-  PRODUCT_DELIVERY_MODES,
-  PRODUCT_PLATFORM_IDS,
-  PRODUCT_PLATFORMS,
-  type PlatformOption,
-  type ProductDeliveryMode,
-  type ProductPlatformId,
-} from "./platforms.generated";
+  DELIVERY_MODES,
+  MONOCHROME_PLATFORMS,
+  PLATFORM_IDS,
+  PLATFORM_LABELS,
+} from "@aurum-bit/contracts";
 
-export { PRODUCT_DELIVERY_MODES, PRODUCT_PLATFORM_IDS, PRODUCT_PLATFORMS };
-export type { PlatformOption, ProductDeliveryMode, ProductPlatformId };
+export type ProductPlatformId = (typeof PLATFORM_IDS)[number];
+
+/** Canônico, na ordem do backend. `readonly` p/ a UI nunca reordenar por acaso. */
+export const PRODUCT_PLATFORM_IDS = PLATFORM_IDS;
+
+export interface PlatformOption {
+  /** Id estável — vai para `products.platforms`. */
+  id: ProductPlatformId;
+  /** Rótulo pt-BR exibido (fonte única: products.catalog.json). */
+  label: string;
+  /** PNG p/ tema light (`/public/tags/<id>.png`). */
+  src: string;
+  /** Variante p/ tema dark — só as marcas monocromáticas têm. */
+  darkSrc?: string;
+}
+
+const MONOCHROME_ID_SET = new Set<string>(MONOCHROME_PLATFORMS);
+
+export const PRODUCT_PLATFORMS: readonly PlatformOption[] = PLATFORM_IDS.map((id) => ({
+  id,
+  label: PLATFORM_LABELS[id],
+  src: `/tags/${id}.png`,
+  ...(MONOCHROME_ID_SET.has(id) ? { darkSrc: `/tags/${id}-dark.png` } : {}),
+}));
+
+export type ProductDeliveryMode = (typeof DELIVERY_MODES)[number];
+export const PRODUCT_DELIVERY_MODES = DELIVERY_MODES;
 
 /**
  * Ordem canônica (dedup + trim). O backend também normaliza — isto deixa a

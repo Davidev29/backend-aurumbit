@@ -20,12 +20,13 @@ export type BillingInterval = z.infer<typeof BillingIntervalSchema>;
  * O slug é ESTÁVEL e vai para o banco (`products.Product.platforms`): renomear
  * um id exige migration de dado — nunca renomeie por vaidade.
  *
- * As cópias defensivas dos apps (`apps/api/modules/products/dto.ts`,
- * `apps/{admin,portal}/lib/platforms.ts`) também são geradas da MESMA fonte —
- * não existe mais "manter os dois iguais à mão".
+ * CONSUMIDORES: `apps/{api,admin,portal}` declaram `@aurum-bit/contracts` como
+ * dependência `workspace:*` e importam os literais daqui — não existe cópia
+ * gerada por app nem "manter os dois iguais à mão".
  */
 import {
   CATALOG_DELIVERY_MODES,
+  CATALOG_MONOCHROME_PLATFORMS,
   CATALOG_PLATFORM_IDS,
   CATALOG_PLATFORM_LABELS,
   CATALOG_PLATFORM_SHORT_LABELS,
@@ -40,6 +41,12 @@ export const PLATFORM_LABELS: Record<PlatformId, string> = CATALOG_PLATFORM_LABE
 
 /** Versão curta (cards estreitos, onde o rótulo completo não cabe). */
 export const PLATFORM_SHORT_LABELS: Record<PlatformId, string> = CATALOG_PLATFORM_SHORT_LABELS;
+
+/**
+ * Marcas monocromáticas (uma cor só): invisíveis no tema dark — os fronts
+ * carregam a variante `<id>-dark.png` só para estas.
+ */
+export const MONOCHROME_PLATFORMS = CATALOG_MONOCHROME_PLATFORMS;
 
 /**
  * Como o produto é entregue: `OFFLINE` (só no dispositivo, sem rede) ou

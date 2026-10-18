@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@aurum-bit/contracts": "workspace:*",
     "@hookform/resolvers": "^3.10.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",

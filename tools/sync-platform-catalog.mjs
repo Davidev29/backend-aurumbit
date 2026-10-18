@@ -6,11 +6,10 @@
  * FONTE ÚNICA (o único lugar onde o catálogo é escrito à mão):
  *   libs/contracts/src/products.catalog.json
  *
- * ARTEFATOS DERIVADOS (gerados aqui — NUNCA editar à mão):
+ * ARTEFATO DERIVADO (gerado aqui — NUNCA editar à mão):
  *   libs/contracts/src/products.catalog.generated.ts            (contrato)
- *   apps/api/src/modules/products/platform-catalog.generated.ts (borda fail-closed)
- *   apps/admin/lib/platforms.generated.ts                       (admin)
- *   apps/portal/lib/platforms.generated.ts                      (portal/landpage)
+ * Os apps (api/admin/portal) declaram `@aurum-bit/contracts` como dependência
+ * `workspace:*` e importam os literais do PACOTE — não há artefato por app.
  * Consumidor direto da fonte (não passa por artefato):
  *   tools/build-tag-icons.py  → lê o JSON (ids/labels/assetFile/monochrome)
  *
@@ -189,95 +188,8 @@ export type CatalogDeliveryMode = (typeof CATALOG_DELIVERY_MODES)[number];
 `;
 }
 
-function buildApi(catalog) {
-  const ids = catalog.platforms.map((p) => p.id);
-  return `${BANNER}
-
-export const PRODUCT_PLATFORM_IDS = ${arr(ids)} as const;
-export type ProductPlatformId = (typeof PRODUCT_PLATFORM_IDS)[number];
-
-/** OFFLINE = só no dispositivo (legado). HYBRID = offline + sincroniza. */
-export const PRODUCT_DELIVERY_MODES = ${arr(catalog.deliveryModes)} as const;
-export type ProductDeliveryMode = (typeof PRODUCT_DELIVERY_MODES)[number];
-`;
-}
-
-function buildAdmin(catalog) {
-  const ids = catalog.platforms.map((p) => p.id);
-  const options = catalog.platforms.map((p) => {
-    const src = `src: "/tags/${p.id}.png"`;
-    const dark = p.monochrome ? `, darkSrc: "/tags/${p.id}-dark.png"` : '';
-    return `  { id: ${str(p.id)}, label: ${str(p.label)}, ${src}${dark} },`;
-  });
-  return `${BANNER}
-
-export type ProductPlatformId = ${union(ids)};
-
-/** Canônico, na ordem do backend. \`readonly\` p/ a UI nunca reordenar por acaso. */
-export const PRODUCT_PLATFORM_IDS = ${arr(ids)} as const satisfies readonly ProductPlatformId[];
-
-export interface PlatformOption {
-  /** Id estável — vai para \`products.platforms\`. */
-  id: ProductPlatformId;
-  /** Rótulo pt-BR exibido (fonte única: products.catalog.json). */
-  label: string;
-  /** PNG p/ tema light (\`/public/tags/<id>.png\`). */
-  src: string;
-  /** Variante p/ tema dark — só as marcas monocromáticas têm. */
-  darkSrc?: string;
-}
-
-export const PRODUCT_PLATFORMS: readonly PlatformOption[] = [
-${options.join('\n')}
-];
-
-export type ProductDeliveryMode = ${union(catalog.deliveryModes)};
-
-export const PRODUCT_DELIVERY_MODES = ${arr(
-    catalog.deliveryModes,
-  )} as const satisfies readonly ProductDeliveryMode[];
-`;
-}
-
-function buildPortal(catalog) {
-  const ids = catalog.platforms.map((p) => p.id);
-  const monochrome = catalog.platforms.filter((p) => p.monochrome);
-  const darkVariant =
-    monochrome.length === 0 ? '{}' : literalRecord(monochrome.map((p) => [p.id, true]));
-  return `${BANNER}
-
-/** Slugs estáveis — vão para \`products.platforms TEXT[]\`. Renomear = migration. */
-export const PLATFORM_IDS = ${arr(ids)} as const;
-export type PlatformId = (typeof PLATFORM_IDS)[number];
-
-/** Modo de entrega — espelha \`products.delivery_mode\`. Default do banco: \`OFFLINE\`. */
-export const DELIVERY_MODES = ${arr(catalog.deliveryModes)} as const;
-export type DeliveryMode = (typeof DELIVERY_MODES)[number];
-
-/** Rótulos pt-BR da UI (admin + landpage). */
-export const PLATFORM_LABELS: Record<PlatformId, string> = ${literalRecord(
-    catalog.platforms.map((p) => [p.id, p.label]),
-  )};
-
-/** Versão curta p/ onde o rótulo completo não cabe (card da vitrine). */
-export const PLATFORM_SHORT_LABELS: Record<PlatformId, string> = ${literalRecord(
-    catalog.platforms.map((p) => [p.id, p.shortLabel]),
-  )};
-
-/**
- * Só a marca Apple é monocromática (preta) — \`build-tag-icons.py\` gera a
- * variante invertida \`-dark\`. As outras têm cor própria e funcionam nos dois
- * temas sobre \`--bg-2\`.
- */
-export const DARK_VARIANT: Partial<Record<PlatformId, true>> = ${darkVariant};
-`;
-}
-
 const ARTIFACTS = [
   { file: 'libs/contracts/src/products.catalog.generated.ts', build: buildContracts },
-  { file: 'apps/api/src/modules/products/platform-catalog.generated.ts', build: buildApi },
-  { file: 'apps/admin/lib/platforms.generated.ts', build: buildAdmin },
-  { file: 'apps/portal/lib/platforms.generated.ts', build: buildPortal },
 ];
 
 const normalizeEol = (text) => text.replaceAll('\r\n', '\n');
@@ -339,9 +251,53 @@ function checkAssets(catalog) {
   return problems;
 }
 
+/**
+ * Invariantes da Trilha B: os apps consomem o PACOTE (`workspace:*`) e não
+ * mantêm artefato/cópia local do catálogo. Reintroduzir um gerado por app
+ * volta a duplicação que este gate existe p/ impedir.
+ */
+function checkConsumers() {
+  const problems = [];
+  const legacy = [
+    'apps/api/src/modules/products/platform-catalog.generated.ts',
+    'apps/admin/lib/platforms.generated.ts',
+    'apps/portal/lib/platforms.generated.ts',
+  ];
+  for (const file of legacy) {
+    if (existsSync(join(ROOT, file))) {
+      problems.push(`${file} é ARTEFATO LEGADO — o app deve importar @aurum-bit/contracts; apague`);
+    }
+  }
+
+  for (const app of ['api', 'admin', 'portal']) {
+    const pkgRel = `apps/${app}/package.json`;
+    const pkgPath = join(ROOT, pkgRel);
+    if (!existsSync(pkgPath)) {
+      problems.push(`${pkgRel} não existe`);
+      continue;
+    }
+    let pkg;
+    try {
+      pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    } catch (e) {
+      problems.push(`${pkgRel} não é JSON válido: ${e.message}`);
+      continue;
+    }
+    const dep = pkg.dependencies?.['@aurum-bit/contracts'];
+    if (dep !== 'workspace:*') {
+      problems.push(
+        `${pkgRel} deve declarar "@aurum-bit/contracts": "workspace:*" (tem: ${dep ?? 'ausente'}) — sem cópia local do catálogo`,
+      );
+    }
+  }
+
+  return problems;
+}
+
 const catalog = loadCatalog();
 const counts = `${catalog.platforms.length} plataformas, ${catalog.deliveryModes.length} modos`;
 const assetProblems = checkAssets(catalog);
+const consumerProblems = checkConsumers();
 
 if (CHECK) {
   const problems = [];
@@ -358,6 +314,7 @@ if (CHECK) {
     }
   }
   problems.push(...assetProblems.map((p) => `ASSET: ${p}`));
+  problems.push(...consumerProblems.map((p) => `CONSUMER: ${p}`));
 
   if (problems.length > 0) {
     console.error('catalog:check REPROVADO (fonte: libs/contracts/src/products.catalog.json):');
@@ -365,7 +322,9 @@ if (CHECK) {
     console.error('corrija com: pnpm catalog:sync (e python tools/build-tag-icons.py p/ ícones)');
     process.exit(1);
   }
-  console.log(`catalog:check OK — ${counts}, ${ARTIFACTS.length} artefatos, ícones dos 2 fronts completos.`);
+  console.log(
+    `catalog:check OK — ${counts}, ${ARTIFACTS.length} artefato, consumidores via workspace:*, ícones dos 2 fronts completos.`,
+  );
   process.exit(0);
 }
 
@@ -389,4 +348,12 @@ if (assetProblems.length > 0) {
   process.exit(1);
 }
 
-console.log(`catalog:sync OK — ${counts}, ${written} artefato(s) escrito(s), ícones dos 2 fronts completos.`);
+if (consumerProblems.length > 0) {
+  console.error('catalog:sync: catálogo gerado, mas há consumidor fora do contrato da Trilha B:');
+  for (const problem of consumerProblems) console.error(`- ${problem}`);
+  process.exit(1);
+}
+
+console.log(
+  `catalog:sync OK — ${counts}, ${written} artefato(s) escrito(s), consumidores via workspace:*, ícones dos 2 fronts completos.`,
+);
