@@ -82,6 +82,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aurum_test
           REDIS_URL: redis://localhost:6379
+      - name: e2e (AppModule real via HTTP, repos em memória)
+        run: pnpm test:e2e
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aurum_test
+          REDIS_URL: redis://localhost:6379
 
   build:
     name: build
