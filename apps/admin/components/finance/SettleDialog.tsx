@@ -58,7 +58,7 @@ export function SettleDialog({
       const req = {
         motivo: motivo.trim(),
         confirmacao: true,
-        ...(needsAccount && accountId.trim() ? { account_id: accountId.trim() } : {}),
+        ...(needsAccount && accountId.trim() ? { accountId: accountId.trim() } : {}),
       };
       if (kind === "pay") {
         await settlePayable(id, req);

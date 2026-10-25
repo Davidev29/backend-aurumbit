@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { randomUUID } from 'node:crypto';
@@ -21,6 +22,9 @@ export function correlationIdMiddleware(req: Request, res: Response, next: NextF
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(Logger));
+  // Trust proxy: cabeçalho `x-forwarded-for` (usado pelo `GlobalRateLimitGuard`
+  // para identificar o ator/IP) só é válido atrás de proxy reverso/load balancer.
+  (app as NestExpressApplication).set('trust proxy', true);
 
   app.use(helmet(securityHelmetOptions()));
   app.use(correlationIdMiddleware);

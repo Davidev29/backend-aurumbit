@@ -1,17 +1,21 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { AdminStubGuard } from '../access/admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuditReadService } from './audit-read.service';
 import { ListAuditEventsQueryDto } from './audit-query.dto';
 
-// TODO(Fase 2): endpoints do domínio audit. Leitura PG (aditiva):
+// Domínio audit. Leitura PG (aditiva):
 // `GET /v1/audit/events` — trilha append-only (só SELECT, sem UPDATE/DELETE).
+// Requer role `STAFF_ADMIN` no JWT; escritas futuras exigirão MFA step-up.
 // Escreve NOBODY hoje (workstreams futuros emitem p/ cá); vazio honesto.
 @Controller('audit')
+@UseGuards(RolesGuard)
 export class AuditController {
   constructor(private readonly reader: AuditReadService) {}
 
   @Get('events')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   events(@Query() q: ListAuditEventsQueryDto) {
     return this.reader.listEvents({
       actor: q.actor,

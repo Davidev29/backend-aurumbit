@@ -30,9 +30,19 @@ export const GLOBAL_RATE_LIMITS = {
 export type GlobalRateLimitKey = keyof typeof GLOBAL_RATE_LIMITS;
 
 class MemoryBucket {
+  private static readonly MAX_KEYS = 10_000;
+  private static readonly EVICT_CHUNK = 1_000;
   private hits = new Map<string, number[]>();
   take(key: string, windowMs: number, limit: number): { allowed: boolean; retryAfterMs: number } {
     const t = Date.now();
+    // Evicção: chaves controladas pelo atacante não podem crescer sem limite.
+    if (this.hits.size > MemoryBucket.MAX_KEYS) {
+      let removed = 0;
+      for (const k of this.hits.keys()) {
+        this.hits.delete(k);
+        if (++removed >= MemoryBucket.EVICT_CHUNK) break;
+      }
+    }
     const arr = (this.hits.get(key) ?? []).filter((ts) => ts > t - windowMs);
     if (arr.length >= limit) {
       const retryAfterMs = arr[0] + windowMs - t;
@@ -75,14 +85,13 @@ function bodyIdentifier(req: any): string {
 }
 
 function actorOf(req: any): string {
-  const h = req.headers ?? {};
-  for (const k of ['x-actor-id', 'x-subject-id']) {
-    const v = h[k];
-    if (typeof v === 'string' && v.length > 0) return v.slice(0, 128);
+  // Deriva o ator do JWT quando presente (req.user populado pela cadeia de
+  // guards). Nunca confia em headers forjáveis (x-actor-id/x-subject-id/x-role).
+  const u = req?.user;
+  if (u && typeof u === 'object') {
+    const sub = typeof u.sub === 'string' ? u.sub : (typeof u.id === 'string' ? u.id : '');
+    if (sub.length > 0) return sub.slice(0, 128);
   }
-  if (typeof h['x-role'] === 'string' && h['x-role'].length > 0) return `role:${h['x-role']}`;
-  const fwd = h['x-forwarded-for'];
-  if (typeof fwd === 'string' && fwd.length > 0) return fwd.split(',')[0].trim().slice(0, 64);
   const ip = clientIp(req);
   return ip !== 'unknown' ? ip : '';
 }

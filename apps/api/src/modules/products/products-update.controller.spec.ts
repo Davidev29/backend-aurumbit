@@ -1,7 +1,9 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import { AdminStubGuard } from './admin.guard';
+import { JwtService } from '../../common/auth/jwt.service';
+import { InMemorySessionLookup, SESSION_LOOKUP } from '../../common/auth/session-lookup.port';
+import { GuardsModule } from '../../common/guards/guards.module';
 import { PlansService } from './plans.service';
 import { PRODUCTS_POOL } from './products-pool.provider';
 import { ProductsController } from './products.controller';
@@ -19,8 +21,11 @@ import { ProductsService } from './products.service';
 describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
   let app: INestApplication;
   let query: jest.Mock;
-
-  const admin = { 'x-role': 'admin' };
+  let jwt: JwtService;
+  let sessions: InMemorySessionLookup;
+  let adminToken: string;
+  let noRoleToken: string;
+  const HOUR = 3_600_000;
 
   /** Coluna física → chave do shape (espelha `PRODUCT_COLS` do service). */
   const COLUMNS: Record<string, string> = {
@@ -74,30 +79,60 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
   beforeEach(async () => {
     query = poolWith(emptyRow());
     const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [GuardsModule],
       controllers: [ProductsController],
       providers: [
         { provide: PRODUCTS_POOL, useValue: { query } },
         ProductsService,
         PlansService,
-        AdminStubGuard,
       ],
-    }).compile();
+    })
+      .overrideProvider(SESSION_LOOKUP)
+      .useClass(InMemorySessionLookup)
+      .compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('v1');
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
     await app.init();
+    jwt = moduleFixture.get(JwtService);
+    sessions = moduleFixture.get(SESSION_LOOKUP) as InMemorySessionLookup;
+    sessions.seed({ id: 'sid-ok', identityId: 'user-1', status: 'ACTIVE', expiresAt: new Date(Date.now() + HOUR) });
+    adminToken = jwt.sign({
+      sub: 'user-1',
+      sid: 'sid-ok',
+      amr: ['pwd', 'mfa'],
+      email_verified: true,
+      roles: ['STAFF_ADMIN'],
+    } as never);
+    noRoleToken = jwt.sign({
+      sub: 'user-1',
+      sid: 'sid-ok',
+      amr: ['pwd'],
+      email_verified: true,
+      roles: [],
+    } as never);
   });
 
   afterEach(async () => {
     if (app) await app.close();
   });
 
-  it('sem x-role:admin → 403 nas duas escritas (guard ligado)', async () => {
-    await request(app.getHttpServer()).patch('/v1/products/AURUM_X').send({ name: 'X' }).expect(403);
+  it('sem token → 401 nas duas escritas (guard ligado)', async () => {
+    await request(app.getHttpServer()).patch('/v1/products/AURUM_X').send({ name: 'X' }).expect(401);
     await request(app.getHttpServer())
       .put('/v1/products/AURUM_X')
+      .send({ name: 'X', slug: 'x', description: null, machinesAllowed: 1, platforms: ['web'], deliveryMode: 'OFFLINE' })
+      .expect(401);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('token sem role STAFF_ADMIN → 403 nas duas escritas', async () => {
+    await request(app.getHttpServer()).patch('/v1/products/AURUM_X').set('Authorization', `Bearer ${noRoleToken}`).send({ name: 'X' }).expect(403);
+    await request(app.getHttpServer())
+      .put('/v1/products/AURUM_X')
+      .set('Authorization', `Bearer ${noRoleToken}`)
       .send({ name: 'X', slug: 'x', description: null, machinesAllowed: 1, platforms: ['web'], deliveryMode: 'OFFLINE' })
       .expect(403);
     expect(query).not.toHaveBeenCalled();
@@ -106,7 +141,7 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
   it('PATCH parcial → 200 com o detalhe completo e o SQL só com o enviado', async () => {
     const res = await request(app.getHttpServer())
       .patch('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'Aurum X Plus' })
       .expect(200);
 
@@ -126,7 +161,7 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
   it('PUT com todos os campos → 200; com um a menos → 400 listando o que falta', async () => {
     const ok = await request(app.getHttpServer())
       .put('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({
         name: 'Aurum X',
         slug: 'aurum-x-novo',
@@ -150,7 +185,7 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
     query.mockClear();
     const bad = await request(app.getHttpServer())
       .put('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'Aurum X', slug: 'aurum-x', machinesAllowed: 7, platforms: ['web'], deliveryMode: 'OFFLINE' })
       .expect(400);
     expect(String(bad.body.message)).toContain('Faltam: description');
@@ -160,7 +195,7 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
   it('code/status/preço no corpo → 400 com o motivo, sem tocar o banco', async () => {
     const res = await request(app.getHttpServer())
       .patch('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ code: 'OUTRO' })
       .expect(400);
     expect(String(res.body.message)).toContain('código do produto é imutável');
@@ -169,12 +204,12 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
 
     await request(app.getHttpServer())
       .patch('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ status: 'ARCHIVED' })
       .expect(400);
     await request(app.getHttpServer())
       .put('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({
         name: 'Aurum X',
         slug: 'aurum-x',
@@ -191,17 +226,17 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
   it('campo fora do catálogo → 400; valor inválido → 400; produto inexistente → 404', async () => {
     await request(app.getHttpServer())
       .patch('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'ok', tags: ['a'] })
       .expect(400);
     await request(app.getHttpServer())
       .patch('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ platforms: ['android'] })
       .expect(400);
     await request(app.getHttpServer())
       .patch('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ machinesAllowed: 0 })
       .expect(400);
     expect(query).not.toHaveBeenCalled();
@@ -210,7 +245,7 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
     query.mockResolvedValue({ rows: [] });
     await request(app.getHttpServer())
       .patch('/v1/products/NAO_EXISTE')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'ok' })
       .expect(404);
   });
@@ -220,7 +255,7 @@ describe('ProductsController PATCH/PUT (contrato HTTP)', () => {
     query.mockRejectedValue(Object.assign(new Error('duplicate key'), { code: '23505' }));
     const res = await request(app.getHttpServer())
       .patch('/v1/products/AURUM_X')
-      .set(admin)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ slug: 'aurum-pro' })
       .expect(409);
     expect(String(res.body.message)).toContain('já está em uso');

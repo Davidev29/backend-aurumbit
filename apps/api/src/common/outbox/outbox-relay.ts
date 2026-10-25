@@ -29,6 +29,10 @@ export interface RelaySqlRunner {
     sql: string,
     params?: unknown[],
   ): Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>;
+  /** Opcional: suporte a transação para claim+mark atômicos (BEGIN/COMMIT). */
+  begin?(): Promise<void>;
+  commit?(): Promise<void>;
+  rollback?(): Promise<void>;
 }
 
 export interface RelayQueue {
@@ -89,6 +93,39 @@ export function relayJobId(eventId: string): string {
   return eventId;
 }
 
+/**
+ * Adapta um `pg.Pool` mantendo o MESMO client para begin → queries → commit/rollback.
+ * Este é o adaptador correto para transação: claim `FOR UPDATE SKIP LOCKED`
+ * fica travado até o COMMIT, impedindo que outro worker pegue as mesmas linhas.
+ * Sem transação ativa, cada `query()` adquire e libera uma conexão (auto-commit).
+ */
+export function transactionalRelaySqlRunner(pool: { connect(): { query(sql: string, params?: unknown[]): Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>; release(): void } }): RelaySqlRunner {
+  let currentClient: { query(sql: string, params?: unknown[]): Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>; release(): void } | null = null;
+  return {
+    query: async (sql: string, params?: unknown[]) => {
+      const c = currentClient ?? (await pool.connect());
+      if (!currentClient) {
+        // Sem transação ativa: adquire e libera a cada query (auto-commit).
+        const r = await c.query(sql, params);
+        c.release();
+        return r;
+      }
+      // Dentro de transação: reusa o client já conectado (lock mantido até COMMIT).
+      return c.query(sql, params);
+    },
+    begin: async () => {
+      currentClient = await pool.connect();
+      await currentClient.query('BEGIN');
+    },
+    commit: async () => {
+      try { await currentClient?.query('COMMIT'); } finally { currentClient?.release(); currentClient = null; }
+    },
+    rollback: async () => {
+      try { await currentClient?.query('ROLLBACK'); } finally { currentClient?.release(); currentClient = null; }
+    },
+  };
+}
+
 export interface OutboxRelayResult {
   claimed: number;
   published: number;
@@ -109,29 +146,37 @@ export async function relayOutboxBatch(
 ): Promise<OutboxRelayResult> {
   const table = opts.table ?? OUTBOX_RELAY_TABLE;
   const limit = opts.limit ?? OUTBOX_RELAY_BATCH;
-  const { rows } = await db.query(buildClaimBatchSql(table, limit));
-  const claimed = rows.length;
-  const eventIds: string[] = [];
-  const failedEventIds: string[] = [];
-  for (const r of rows) {
-    const row = r as unknown as OutboxClaimRow;
-    const eventId = String(row.eventId);
-    try {
-      await queue.add(String(row.type), envelopeOf(row), { jobId: relayJobId(eventId) });
-      eventIds.push(eventId);
-    } catch {
-      // Linha ruim não aborta as linhas/domínios seguintes nem é marcada como
-      // publicada: fica p/ o próximo tick (jobId=eventId → dedupe BullMQ).
-      failedEventIds.push(eventId);
+  const tx = typeof db.begin === 'function' && typeof db.commit === 'function' && typeof db.rollback === 'function';
+  if (tx) await (db as any).begin();
+  try {
+    const { rows } = await db.query(buildClaimBatchSql(table, limit));
+    const claimed = rows.length;
+    const eventIds: string[] = [];
+    const failedEventIds: string[] = [];
+    for (const r of rows) {
+      const row = r as unknown as OutboxClaimRow;
+      const eventId = String(row.eventId);
+      try {
+        await queue.add(String(row.type), envelopeOf(row), { jobId: relayJobId(eventId) });
+        eventIds.push(eventId);
+      } catch {
+        failedEventIds.push(eventId);
+      }
     }
+    if (eventIds.length > 0) {
+      await db.query(buildMarkPublishedSql(table), [eventIds]);
+    }
+    if (tx) await (db as any).commit();
+    return {
+      claimed,
+      published: eventIds.length,
+      eventIds,
+      ...(failedEventIds.length > 0 ? { failedEventIds } : {}),
+    };
+  } catch (err) {
+    if (tx) {
+      try { await (db as any).rollback(); } catch { /* noop */ }
+    }
+    throw err;
   }
-  if (eventIds.length > 0) {
-    await db.query(buildMarkPublishedSql(table), [eventIds]);
-  }
-  return {
-    claimed,
-    published: eventIds.length,
-    eventIds,
-    ...(failedEventIds.length > 0 ? { failedEventIds } : {}),
-  };
 }

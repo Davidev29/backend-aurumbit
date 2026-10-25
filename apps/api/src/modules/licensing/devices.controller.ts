@@ -12,6 +12,9 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { UseGuards } from '@nestjs/common';
 import { DeviceConflictError, DeviceLimitError, DevicesService, LicenseNotFoundError } from './devices.service';
 import {
   BlockDeviceDto,
@@ -60,6 +63,8 @@ export class DevicesController {
     return this.devices.listDevices(id).catch(mapError).then((devices) => ({ licenseId: id, devices }));
   }
 
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   @Post(':id/devices/link')
   @HttpCode(201)
   async link(@Param('id') id: string, @Body() dto: LinkDeviceDto, @Req() req: Request) {
@@ -74,6 +79,8 @@ export class DevicesController {
     }
   }
 
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   @Post(':id/devices/unlink')
   @HttpCode(200)
   async unlink(@Param('id') id: string, @Body() dto: UnlinkDeviceDto) {
@@ -88,6 +95,8 @@ export class DevicesController {
     }
   }
 
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   @Post(':id/devices/rotate')
   @HttpCode(200)
   async rotate(@Param('id') id: string, @Body() dto: RotateDeviceDto, @Req() req: Request) {
@@ -107,6 +116,8 @@ export class DevicesController {
     }
   }
 
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   @Post(':id/devices/:hash/block')
   @HttpCode(200)
   async block(@Param('id') id: string, @Param() p: DeviceHashParamDto, @Body() dto: BlockDeviceDto) {

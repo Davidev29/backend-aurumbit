@@ -12,7 +12,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CustomerScope } from '../../common/decorators/customer-scope.decorator';
-import { AdminStubGuard } from '../access/admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateAutoReceivableDto, CreateExpenseDto } from './finance-automation.dto';
 import { FinanceAutomationService } from './finance-automation.service';
 import { FinanceNotificationsService } from './finance-notifications.service';
@@ -63,7 +64,9 @@ export class FinanceAutomationController {
   }
 
   @Post('expenses')
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @UseGuards(RolesGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   createExpense(
     @Req() req: never,
     @Body() dto: CreateExpenseDto,
@@ -79,7 +82,9 @@ export class FinanceAutomationController {
   }
 
   @Post('receivables/auto')
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @UseGuards(RolesGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   createReceivableAuto(
     @Req() req: never,
     @Body() dto: CreateAutoReceivableDto,

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { mockReceivablePage } from "@/lib/mocks";
-import { apiUrlFor, upstreamAuthHeaders } from "@/lib/api/upstream";
+import { apiUrlFor, requireOrgId, upstreamAuthHeaders, upstreamRequiredOr502 } from "@/lib/api/upstream";
 
 const API_INTERNAL_URL = apiUrlFor("finance");
 const STATUSES = ["PREVISTO", "PENDENTE", "RECEBIDO", "VENCIDO", "CANCELADO"];
@@ -33,50 +32,41 @@ export async function GET(req: NextRequest) {
   const cursor = q.get("cursor");
   const limit = Number(q.get("limit")) || 20;
 
-  if (API_INTERNAL_URL) {
-    try {
-      const params = new URLSearchParams();
-      const rawStatus = q.get("status");
-      if (rawStatus && STATUSES.includes(rawStatus)) params.set("status", rawStatus);
-      const from = q.get("from");
-      const to = q.get("to");
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
-      params.set("limit", "500");
-      const headers = upstreamAuthHeaders(session);
-      if (orgId) headers["x-org-id"] = orgId;
-      const upstream = await fetch(`${API_INTERNAL_URL}/v1/finance/receivables?${params.toString()}`, { headers });
-      const data = await upstream.json().catch(() => ({}));
-      if (!upstream.ok) return NextResponse.json(data, { status: upstream.status });
+  // financeiro é org-scoped: x-org-id obrigatório.
+  const orgErr = requireOrgId(orgId);
+  if (orgErr) return orgErr;
 
-      const rows = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
-      const mapped = rows.map((r: Record<string, unknown>) => mapReceivable(r))
-        .sort((a: { dueDate: string; id: string }, b: { dueDate: string; id: string }) => (a.dueDate < b.dueDate ? -1 : 1));
+  // fail-closed: sem upstream de financeiro → 502, nunca mock.
+  const missing = upstreamRequiredOr502("finance");
+  if (missing) return missing;
 
-      const start = cursor ? mapped.findIndex((r: { id: string }) => r.id === cursor) + 1 : 0;
-      const fromIdx = Math.max(start, 0);
-      const slice = mapped.slice(fromIdx, fromIdx + limit);
-      const last = slice[slice.length - 1];
-      const hasMore = !!last && mapped.findIndex((r: { id: string }) => r.id === last.id) < mapped.length - 1;
+  try {
+    const params = new URLSearchParams();
+    const rawStatus = q.get("status");
+    if (rawStatus && STATUSES.includes(rawStatus)) params.set("status", rawStatus);
+    const from = q.get("from");
+    const to = q.get("to");
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    params.set("limit", "500");
+    const headers = upstreamAuthHeaders(session);
+    headers["x-org-id"] = orgId;
+    const upstream = await fetch(`${API_INTERNAL_URL}/v1/finance/receivables?${params.toString()}`, { headers });
+    const data = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) return NextResponse.json(data, { status: upstream.status });
 
-      return NextResponse.json({ data: slice, meta: { nextCursor: hasMore && last ? last.id : null, limit } });
-    } catch {
-      return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível. Tente novamente." }, { status: 502 });
-    }
+    const rows = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
+    const mapped = rows.map((r: Record<string, unknown>) => mapReceivable(r))
+      .sort((a: { dueDate: string; id: string }, b: { dueDate: string; id: string }) => (a.dueDate < b.dueDate ? -1 : 1));
+
+    const start = cursor ? mapped.findIndex((r: { id: string }) => r.id === cursor) + 1 : 0;
+    const fromIdx = Math.max(start, 0);
+    const slice = mapped.slice(fromIdx, fromIdx + limit);
+    const last = slice[slice.length - 1];
+    const hasMore = !!last && mapped.findIndex((r: { id: string }) => r.id === last.id) < mapped.length - 1;
+
+    return NextResponse.json({ data: slice, meta: { nextCursor: hasMore && last ? last.id : null, limit } });
+  } catch {
+    return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível. Tente novamente." }, { status: 502 });
   }
-
-  const rawStatus = q.get("status");
-  return NextResponse.json(
-    mockReceivablePage(
-      {
-        status: STATUSES.includes(rawStatus ?? "") ? rawStatus : null,
-        category: q.get("category"),
-        product: q.get("product"),
-        from: q.get("from"),
-        to: q.get("to"),
-      },
-      q.get("cursor"),
-      Number(q.get("limit")) || 20,
-    ),
-  );
 }

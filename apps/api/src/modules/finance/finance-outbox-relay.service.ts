@@ -5,8 +5,10 @@ import {
   RelayQueue,
   RelaySqlRunner,
   relayOutboxBatch,
+  transactionalRelaySqlRunner,
 } from '../../common/outbox/outbox-relay';
 import { FINANCE_POOL } from './finance-pool.provider';
+import { Pool } from 'pg';
 
 // Relay finance (Fase 5). Drena para BullMQ com `jobId = eventId`; marca
 // `published` após enfileirar. Duas tabelas no DB finance (dois workstreams):
@@ -24,8 +26,11 @@ export const FINANCE_CORE_OUTBOX_TABLE = 'finance_outbox';
 @Injectable()
 export class FinanceOutboxRelayService {
   private readonly log = new Logger(FinanceOutboxRelayService.name);
+  private readonly db: RelaySqlRunner;
 
-  constructor(@Inject(FINANCE_POOL) private readonly pool: { query: RelaySqlRunner['query'] }) {}
+  constructor(@Inject(FINANCE_POOL) private readonly pool: Pool) {
+    this.db = transactionalRelaySqlRunner(pool);
+  }
 
   domains(): readonly string[] {
     return OUTBOX_RELAY_DOMAINS;
@@ -36,7 +41,7 @@ export class FinanceOutboxRelayService {
     limit = OUTBOX_RELAY_BATCH,
   ): Promise<{ claimed: number; published: number; eventIds: string[] }> {
     const out = await relayOutboxBatch(
-      this.pool as unknown as RelaySqlRunner,
+      this.db,
       queue,
       { table: FINANCE_SYNC_OUTBOX_TABLE, limit },
     );
@@ -50,7 +55,7 @@ export class FinanceOutboxRelayService {
     limit = OUTBOX_RELAY_BATCH,
   ): Promise<{ claimed: number; published: number; eventIds: string[] }> {
     const out = await relayOutboxBatch(
-      this.pool as unknown as RelaySqlRunner,
+      this.db,
       queue,
       { table: FINANCE_CORE_OUTBOX_TABLE, limit },
     );

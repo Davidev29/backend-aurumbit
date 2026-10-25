@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, ServiceUnavailableException, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequireMfa } from '../../common/decorators/require-mfa.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthPrincipal } from '../../common/auth/jwt-payload';
-import { AdminStubGuard } from '../access/admin.guard';
 import {
   CancelDto,
   CheckoutOrderDto,
@@ -34,18 +35,20 @@ export class BillingController {
    * Leitura espelho do titular p/ telas admin (nome/e-mail). Sem PII sensível.
    */
   @Get('customers/:userId')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   getCustomer(@Param('userId') userId: string) {
     return this.billing.getCustomer(userId);
   }
 
   @Post('invoices')
+  @Roles('billing.manage')
+  @RequireMfa()
   createInvoice(@Body() dto: CreateInvoiceDto, @Headers('idempotency-key') key?: string) {
     return this.billing.createInvoice(dto, key || undefined);
   }
 
   @Get('invoices')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   listInvoices(@Query() q: ListInvoicesQueryDto) {
     return this.billing.listInvoices({
       status: q.status,
@@ -74,7 +77,7 @@ export class BillingController {
   }
 
   @Get('invoices/:id/payments')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   listInvoicePayments(@Param('id') id: string) {
     return this.billing.listInvoicePayments(id);
   }
@@ -84,23 +87,28 @@ export class BillingController {
    * do rascunho. Idempotente (PENDING repetido retorna a linha).
    */
   @Post('invoices/:id/emit')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
+  @RequireMfa()
   emitInvoice(@Param('id') id: string) {
     return this.billing.emitInvoice(id);
   }
 
   @Post('invoices/:id/cancel')
+  @Roles('billing.manage')
+  @RequireMfa()
   cancelInvoice(@Param('id') id: string, @Body() dto: CancelDto) {
     return this.billing.cancelInvoice(id, dto);
   }
 
   @Post('subscriptions')
+  @Roles('billing.manage')
+  @RequireMfa()
   createSubscription(@Body() dto: CreateSubscriptionDto, @Headers('idempotency-key') key?: string) {
     return this.billing.createSubscription(dto, key || undefined);
   }
 
   @Get('subscriptions')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   listSubscriptions(@Query() q: ListSubscriptionsQueryDto) {
     return this.billing.listSubscriptions({ status: q.status, limit: q.limit, cursor: q.cursor });
   }
@@ -114,17 +122,22 @@ export class BillingController {
    * Ativação (DRAFT → ACTIVE) p/ telas admin e seed. Idempotente.
    */
   @Post('subscriptions/:id/activate')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
+  @RequireMfa()
   activateSubscription(@Param('id') id: string) {
     return this.billing.activateSubscription(id);
   }
 
   @Post('subscriptions/:id/cancel')
+  @Roles('billing.manage')
+  @RequireMfa()
   cancelSubscription(@Param('id') id: string, @Body() dto: CancelDto) {
     return this.billing.cancelSubscription(id, dto);
   }
 
   @Post('payments')
+  @Roles('billing.manage')
+  @RequireMfa()
   registerPayment(@Body() dto: RegisterPaymentDto, @Headers('idempotency-key') key?: string) {
     return this.billing.registerPayment(dto, key || undefined);
   }
@@ -138,11 +151,15 @@ export class BillingController {
   // confirmação; emite outbox PaymentConfirmed — lado access/licensing
   // fora deste módulo).
   @Post('payments/:id/confirm')
+  @Roles('billing.manage')
+  @RequireMfa()
   confirmPayment(@Param('id') id: string, @Body() dto: ConfirmPaymentDto) {
     return this.billing.confirmPayment(id, dto);
   }
 
   @Post('payments/:id/refund')
+  @Roles('billing.manage')
+  @RequireMfa()
   createRefund(
     @Param('id') id: string,
     @Body() dto: CreateRefundDto,

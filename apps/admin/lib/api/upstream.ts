@@ -8,11 +8,37 @@
  * sinalizados na UI. Quando pronto, define-se `API_FINANCE_URL`
  * (billing já é real via global).
  */
+import { NextResponse } from "next/server";
 
 /** URL do Nest por domínio (indefinida = stub de demonstração). */
 export function apiUrlFor(domain: "billing" | "finance"): string | undefined {
   if (domain === "billing") return process.env.API_BILLING_URL || process.env.API_INTERNAL_URL || undefined;
   return process.env.API_FINANCE_URL || process.env.API_INTERNAL_URL || undefined;
+}
+
+/**
+ * Resposta 502 fail-closed: sem `API_*_URL` configurado o BFF nunca serve
+ * mock/stub em produção. Retorna null quando há upstream (segue o fluxo
+ * normal) ou a resposta de erro quando não há.
+ */
+export function upstreamRequiredOr502(domain?: "billing" | "finance"): NextResponse | null {
+  const hasUpstream = domain ? apiUrlFor(domain) : (apiUrlFor("billing") || apiUrlFor("finance"));
+  if (hasUpstream) return null;
+  return NextResponse.json(
+    { code: "UPSTREAM_MISSING", message: "Nenhum upstream de backend configurado. Operação indisponível sem API real." },
+    { status: 502 },
+  );
+}
+
+/**
+ * Exige `x-org-id` (financeiro é org-scoped). Retorna 400 quando ausente ou
+ * inválido (vazio/whitespace), null quando válido e segue o fluxo normal.
+ */
+export function requireOrgId(orgId: string | null | undefined): NextResponse | null {
+  if (!orgId || orgId.trim().length === 0) {
+    return NextResponse.json({ code: "BAD_REQUEST", message: "x-org-id é obrigatório." }, { status: 400 });
+  }
+  return null;
 }
 
 export function upstreamHeaders(session?: string): Record<string, string> {

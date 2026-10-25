@@ -1,12 +1,14 @@
 import { Controller, Get, Post, Body, Query, Param, UseGuards, Headers, BadRequestException } from '@nestjs/common';
-import { AdminStubGuard } from './admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { PromotionsService, CreatePromotionInput } from './promotions.service';
 
 @Controller('promotions')
 export class PromotionsController {
   constructor(private readonly service: PromotionsService) {}
 
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   @Post()
   async create(@Body() body: any, @Headers('x-internal-key') _key?: string) {
     if (!body?.productId) throw new BadRequestException('productId obrigatório.');

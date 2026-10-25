@@ -12,7 +12,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CustomerScope } from '../../common/decorators/customer-scope.decorator';
-import { AdminStubGuard } from '../access/admin.guard';
+import { RequireMfa } from '../../common/decorators/require-mfa.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import {
   CreateAccountDto,
   CreateCategoryDto,
@@ -29,12 +30,12 @@ import { FinanceService } from './finance.service';
 
 // Finance core (Fase 5, PROJECT.md §3): /v1/finance, sempre escopado por
 // organização (`x-org-id`).
-// - Leitura (GETs): `finance.read` explícito (FinanceReadGuard — stub com
-//   TODO RBAC real: RolesGuard + membership + audit).
-// - Escrita (POSTs, baixas): `finance.manage` SÓ admin (AdminStubGuard +
-//   TODO RBAC real). Admin implica leitura (o read guard aceita x-role).
+// - Leitura (GETs): `finance.read` explícito (FinanceReadGuard).
+// - Escrita (POSTs, baixas): `finance.manage` via `@Roles('finance.manage')`
+//   (JWT, RolesGuard) + `@RequireMfa()` (MfaGuard, step-up). Admin stub
+//   `x-role` removido; identidade e permissões vêm do JWT.
 // - `@CustomerScope()` engaja a cadeia real (membership) quando houver
-//   JWT; sem usuário, o guard pula (passthrough) e vale o stub.
+//   JWT; sem usuário, o guard pula (passthrough).
 // - POSTs aceitam `Idempotency-Key` (replay retorna o existente).
 // - Projections compute: OUTRO workstream — nenhum endpoint de cálculo aqui.
 @CustomerScope()
@@ -83,7 +84,8 @@ export class FinanceController {
   }
 
   @Post('categories')
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   createCategory(@Req() req: never, @Body() dto: CreateCategoryDto) {
     return this.finance.createCategory(this.orgOf(req as never), dto);
   }
@@ -103,7 +105,8 @@ export class FinanceController {
   }
 
   @Post('accounts')
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   createAccount(@Req() req: never, @Body() dto: CreateAccountDto) {
     return this.finance.createAccount(this.orgOf(req as never), dto);
   }
@@ -138,14 +141,16 @@ export class FinanceController {
   }
 
   @Post('receivables')
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   createReceivable(@Req() req: never, @Body() dto: CreateReceivableDto) {
     return this.finance.createReceivable(this.orgOf(req as never), dto);
   }
 
   @Post('receivables/:id/mark-received')
   @HttpCode(200)
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   markReceived(
     @Req() req: never,
     @Param('id') id: string,
@@ -169,14 +174,16 @@ export class FinanceController {
   }
 
   @Post('payables')
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   createPayable(@Req() req: never, @Body() dto: CreatePayableDto) {
     return this.finance.createPayable(this.orgOf(req as never), dto);
   }
 
   @Post('payables/:id/mark-paid')
   @HttpCode(200)
-  @UseGuards(AdminStubGuard, FinanceReadGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   markPaid(
     @Req() req: never,
     @Param('id') id: string,

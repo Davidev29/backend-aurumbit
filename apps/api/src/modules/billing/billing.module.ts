@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { AdminStubGuard } from '../access/admin.guard';
 import { BillingController } from './billing.controller';
 import { BILLING_POOL, createBillingPool } from './billing-pool.provider';
 import { BillingFlowController } from './billing-flow.controller';
 import { BillingFlowService } from './billing-flow.service';
 import { BillingOutboxRelayService } from './billing-outbox-relay.service';
+import { BillingReconciliationCron } from './reconcile.cron';
+import { BillingReconciliationService } from './reconcile.service';
 import { BillingService } from './billing.service';
 
 // Fase 4 — Billing core (cobrança Asaas sandbox-first por adaptador em
@@ -16,11 +17,12 @@ import { BillingService } from './billing.service';
   controllers: [BillingController, BillingFlowController],
   providers: [
     { provide: BILLING_POOL, useFactory: createBillingPool },
-    AdminStubGuard,
     BillingService,
     BillingFlowService,
     BillingOutboxRelayService,
+    BillingReconciliationService,
+    BillingReconciliationCron,
   ],
-  exports: [BillingService, BillingFlowService],
+  exports: [BillingService, BillingFlowService, BillingReconciliationService],
 })
 export class BillingModule {}

@@ -1,5 +1,6 @@
 import { Controller, Get, Param, UseGuards } from '@nestjs/common';
-import { AdminStubGuard } from './admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { LicensingFlowService } from './licensing-flow.service';
 
 // Leituras admin do BFF sobre o fluxo in-memory (`LicensesController`
@@ -7,17 +8,20 @@ import { LicensingFlowService } from './licensing-flow.service';
 // `POST /:id/renew|revoke|reveal` — sombrearia o core).
 // Só os GETs novos, sem colisão: `by-product/:productId` e `:id/history`
 // têm 2 segmentos (core `GET :id` tem 1).
+// Requer role `STAFF_ADMIN` no JWT.
 @Controller('licenses')
-@UseGuards(AdminStubGuard)
+@UseGuards(RolesGuard)
 export class LicenseQueryController {
   constructor(private readonly flow: LicensingFlowService) {}
 
   @Get('by-product/:productId')
+  @Roles('STAFF_ADMIN')
   byProduct(@Param('productId') productId: string) {
     return this.flow.listByProduct(productId);
   }
 
   @Get(':id/history')
+  @Roles('STAFF_ADMIN')
   history(@Param('id') id: string) {
     return this.flow.getHistory(id);
   }

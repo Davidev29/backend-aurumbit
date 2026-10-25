@@ -19,7 +19,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
-import { AdminStubGuard } from './admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import {
   MAX_IMAGE_BYTES,
   ProductImagesService,
@@ -52,7 +53,8 @@ export class ProductImagesController {
 
   @Post(':code/images')
   @HttpCode(201)
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   @UseFilters(new ImageUploadExceptionFilter())
   @UseInterceptors(
     FileInterceptor('file', {
@@ -81,7 +83,8 @@ export class ProductImagesController {
   }
 
   @Delete(':code/images/:id')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   remove(@Param('code') code: string, @Param('id') id: string) {
     return this.images.removeImage(code, id);
   }

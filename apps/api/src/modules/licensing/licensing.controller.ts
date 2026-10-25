@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Headers, Logger, Param, Post, Query, Req, ServiceUnavailableException, UnauthorizedException, UseGuards } from '@nestjs/common';
-import { AdminStubGuard, LicenseReadGuard } from './admin.guard';
+import { LicenseReadGuard } from './admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { IssueFromPaymentDto, IssueLicenseDto, IssueTrialDto, ExtendLicenseDto, LicenseReasonDto, ListLicensesQueryDto, RenewLicenseDto, RevealLicenseDto } from './licenses.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { LicensesService } from './licenses.service';
@@ -43,13 +45,15 @@ export class LicensingController {
    * suspensões/revogações com motivo e sucessora. Admin-only.
    */
   @Get(':id/history')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   history(@Param('id') id: string) {
     return this.licenses.licenseHistory(id);
   }
 
   @Post()
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   issue(@Body() dto: IssueLicenseDto, @Req() req: any) {
     return this.licenses.issueLicense(dto, actorOf(req));
   }
@@ -60,13 +64,15 @@ export class LicensingController {
    * Ativação pelo programa é só por chave: POST /v1/licenses/activate-by-key.
    */
   @Post('trial-issue')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   trialIssue(@Body() dto: IssueTrialDto, @Req() req: any) {
     return this.licenses.issueTrial(dto, actorOf(req));
   }
 
   @Post(':id/renew')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   renew(@Param('id') id: string, @Body() dto: RenewLicenseDto, @Req() req: any) {
     return this.licenses.renewLicense(id, dto.kind, actorOf(req));
   }
@@ -78,7 +84,8 @@ export class LicensingController {
    * motivo obrigatório, outbox `LicenseExtended` + trilha de auditoria.
    */
   @Post(':id/extend')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   async extend(@Param('id') id: string, @Body() dto: ExtendLicenseDto, @Req() req: any) {
     const actor = actorOf(req);
     const out = await this.licenses.extendLicense(id, dto.months, dto.reason, actor);
@@ -98,13 +105,15 @@ export class LicensingController {
   }
 
   @Post(':id/suspend')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   suspend(@Param('id') id: string, @Body() dto: LicenseReasonDto, @Req() req: any) {
     return this.licenses.suspendLicense(id, dto.reason, actorOf(req));
   }
 
   @Post(':id/resume')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   resume(@Param('id') id: string, @Body() dto: LicenseReasonDto, @Req() req: any) {
     // `actor` vai p/ o payload do outbox `LicenseResumed` — sem ele a
     // reativação não deixava rastro de quem reativou.
@@ -112,7 +121,8 @@ export class LicensingController {
   }
 
   @Post(':id/revoke')
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   revoke(@Param('id') id: string, @Body() dto: LicenseReasonDto, @Req() req: any) {
     return this.licenses.revokeLicense(id, dto.reason, actorOf(req), dto.replacedBy);
   }
@@ -162,10 +172,9 @@ export class LicensingController {
 }
 
 function actorOf(req: any): string {
+  const user = req?.user as AuthPrincipal | undefined;
+  if (user?.identityId) return `identity:${user.identityId}`;
   const h = req?.headers ?? {};
-  for (const k of ['x-actor-id', 'x-subject-id']) {
-    if (typeof h[k] === 'string' && h[k].length > 0) return h[k].slice(0, 128);
-  }
   if (typeof h['x-service-token'] === 'string' && h['x-service-token'].length > 0) return 'system';
-  return `role:${String(h['x-role'] ?? 'unknown').slice(0, 32)}`;
+  return `role:unknown`;
 }

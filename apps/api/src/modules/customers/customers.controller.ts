@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,36 +25,38 @@ import {
 } from './customers.dto';
 
 // Rotas /v1/customers (prefixo global `v1` configurado em main.ts).
-// Identidade stub: header `x-identity-id` até a Fase auth ligar JWT/sessão.
-// Escopo PJ: header opcional `X-Org-Id`; se presente junto de :orgId, devem coincidir.
+// Identidade vem do JWT (`request.user.sub` = identityId, injetado pelo
+// `CurrentUser` e preenchido pelo `JwtAuthGuard`). O header `x-identity-id`
+// foi REMOVIDO: não era autêntico (podia ser forjado) e permitia IDOR /
+// takeover de qualquer titular — identidade agora só do token válido.
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customers: CustomersService) {}
 
-  private identityOrThrow(value: string | undefined): string {
-    if (!value || value.trim() === '') {
-      throw new BadRequestException('Header x-identity-id é obrigatório');
+  private identityOf(user: AuthPrincipal | undefined): string {
+    if (!user?.identityId) {
+      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Não autenticado.' });
     }
-    return value;
+    return user.identityId;
   }
 
   @Get('me')
-  getMe(@CurrentUser() user?: AuthPrincipal, @Headers('x-identity-id') headerId?: string) {
-    return this.customers.getMe(this.identityOrThrow(user?.identityId ?? headerId));
+  getMe(@CurrentUser() user?: AuthPrincipal) {
+    return this.customers.getMe(this.identityOf(user));
   }
 
   @Patch('me')
-  patchMe(@CurrentUser() user?: AuthPrincipal, @Headers('x-identity-id') headerId?: string, @Body() dto?: PatchMeDto) {
-    return this.customers.patchMe(this.identityOrThrow(user?.identityId ?? headerId), dto ?? {});
+  patchMe(@CurrentUser() user?: AuthPrincipal, @Body() dto?: PatchMeDto) {
+    return this.customers.patchMe(this.identityOf(user), dto ?? {});
   }
 
   @Post('upgrade-to-pj')
   upgradeToPj(
-    @Headers('x-identity-id') identityId?: string,
+    @CurrentUser() user?: AuthPrincipal,
     @Headers('x-org-id') headerOrgId?: string,
     @Body() dto?: UpgradeToPjDto,
   ) {
-    const id = this.identityOrThrow(identityId);
+    const id = this.identityOf(user);
     const orgId = this.customers.resolveOrgScope(headerOrgId, dto?.organizationId);
     return this.customers.upgradeToPj(id, { organizationId: orgId, cnpj: dto?.cnpj });
   }
@@ -61,44 +64,46 @@ export class CustomersController {
   @Post('organizations')
   @HttpCode(HttpStatus.CREATED)
   createOrganization(
-    @Headers('x-identity-id') identityId?: string,
+    @CurrentUser() user?: AuthPrincipal,
     @Body() dto?: CreateOrganizationDto,
   ) {
     if (!dto) throw new BadRequestException('Corpo obrigatório');
-    return this.customers.createOrganization(this.identityOrThrow(identityId), {
+    return this.customers.createOrganization(this.identityOf(user), {
       razaoSocial: dto.razaoSocial,
       cnpj: dto.cnpj,
     });
   }
 
   @Get('organizations')
-  listOrganizations(@Headers('x-identity-id') identityId?: string) {
-    return this.customers.listOrganizations(this.identityOrThrow(identityId));
+  listOrganizations(@CurrentUser() user?: AuthPrincipal) {
+    return this.customers.listOrganizations(this.identityOf(user));
   }
 
   @Get('organizations/:orgId/members')
   listMembers(
-    @Headers('x-identity-id') identityId?: string,
+    @CurrentUser() user?: AuthPrincipal,
     @Headers('x-org-id') headerOrgId?: string,
     @Param('orgId') orgId?: string,
   ) {
+    const caller = this.identityOf(user);
     const scope = this.customers.resolveOrgScope(headerOrgId, orgId);
     if (!scope) throw new BadRequestException('orgId obrigatório');
-    return this.customers.listMembers(this.identityOrThrow(identityId), scope);
+    return this.customers.listMembers(caller, scope);
   }
 
   @Post('organizations/:orgId/members/invite')
   @HttpCode(HttpStatus.CREATED)
   inviteMember(
-    @Headers('x-identity-id') identityId?: string,
+    @CurrentUser() user?: AuthPrincipal,
     @Headers('x-org-id') headerOrgId?: string,
     @Param('orgId') orgId?: string,
     @Body() dto?: InviteMemberDto,
   ) {
+    const caller = this.identityOf(user);
     const scope = this.customers.resolveOrgScope(headerOrgId, orgId);
     if (!scope) throw new BadRequestException('orgId obrigatório');
     if (!dto) throw new BadRequestException('Corpo obrigatório');
-    return this.customers.inviteMember(this.identityOrThrow(identityId), scope, {
+    return this.customers.inviteMember(caller, scope, {
       identityId: dto.identityId,
       role: dto.role,
     });
@@ -106,40 +111,42 @@ export class CustomersController {
 
   @Patch('organizations/:orgId/members/:memberIdentityId')
   updateMember(
-    @Headers('x-identity-id') identityId?: string,
+    @CurrentUser() user?: AuthPrincipal,
     @Headers('x-org-id') headerOrgId?: string,
     @Param('orgId') orgId?: string,
     @Param('memberIdentityId') memberIdentityId?: string,
     @Body() dto?: UpdateMemberDto,
   ) {
+    const caller = this.identityOf(user);
     const scope = this.customers.resolveOrgScope(headerOrgId, orgId);
     if (!scope || !memberIdentityId) throw new BadRequestException('orgId/memberIdentityId obrigatórios');
-    return this.customers.updateMember(this.identityOrThrow(identityId), scope, memberIdentityId, dto ?? {});
+    return this.customers.updateMember(caller, scope, memberIdentityId, dto ?? {});
   }
 
   @Delete('organizations/:orgId/members/:memberIdentityId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMember(
-    @Headers('x-identity-id') identityId?: string,
+    @CurrentUser() user?: AuthPrincipal,
     @Headers('x-org-id') headerOrgId?: string,
     @Param('orgId') orgId?: string,
     @Param('memberIdentityId') memberIdentityId?: string,
   ): Promise<void> {
+    const caller = this.identityOf(user);
     const scope = this.customers.resolveOrgScope(headerOrgId, orgId);
     if (!scope || !memberIdentityId) throw new BadRequestException('orgId/memberIdentityId obrigatórios');
-    this.customers.removeMember(this.identityOrThrow(identityId), scope, memberIdentityId);
+    this.customers.removeMember(caller, scope, memberIdentityId);
   }
 
   @Get('consents')
-  listConsents(@Headers('x-identity-id') identityId?: string) {
-    return this.customers.listConsents(this.identityOrThrow(identityId));
+  listConsents(@CurrentUser() user?: AuthPrincipal) {
+    return this.customers.listConsents(this.identityOf(user));
   }
 
   @Post('consents')
   @HttpCode(HttpStatus.CREATED)
-  recordConsent(@Headers('x-identity-id') identityId?: string, @Body() dto?: RecordConsentDto) {
+  recordConsent(@CurrentUser() user?: AuthPrincipal, @Body() dto?: RecordConsentDto) {
     if (!dto) throw new BadRequestException('Corpo obrigatório');
-    return this.customers.recordConsent(this.identityOrThrow(identityId), {
+    return this.customers.recordConsent(this.identityOf(user), {
       purpose: dto.purpose,
       version: dto.version,
       status: dto.status,
@@ -148,12 +155,12 @@ export class CustomersController {
   }
 
   @Get('gdpr/export')
-  exportData(@Headers('x-identity-id') identityId?: string) {
-    return this.customers.exportData(this.identityOrThrow(identityId));
+  exportData(@CurrentUser() user?: AuthPrincipal) {
+    return this.customers.exportData(this.identityOf(user));
   }
 
   @Post('gdpr/anonymize')
-  anonymize(@Headers('x-identity-id') identityId?: string) {
-    return this.customers.anonymize(this.identityOrThrow(identityId));
+  anonymize(@CurrentUser() user?: AuthPrincipal) {
+    return this.customers.anonymize(this.identityOf(user));
   }
 }

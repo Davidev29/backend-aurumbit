@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { AdminStubGuard } from './admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateFeatureDto } from './dto';
 import { FeaturesService } from './plans.service';
 
@@ -13,7 +14,8 @@ export class FeaturesController {
   }
 
   @Post()
-  @UseGuards(AdminStubGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   create(@Body() dto: CreateFeatureDto) {
     return this.features.createFeature(dto);
   }

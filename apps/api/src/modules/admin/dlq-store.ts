@@ -4,9 +4,9 @@
 // O que faltava era o registro consultável + replay manual: este módulo é
 // esse registro em memória (hermético p/ testes/e2e sem PG/Redis).
 // Produção: espelhar no PG (`audit.dlq_entries`) ou ler depth do Redis
-// BullMQ (TODO Fase 6-hardening); o replay real re-enfileira na fila de
-// origem com o mesmo `jobId` (dedupe BullMQ) — aqui o replay é lógico
-// (marca `replayedAt`, idempotente) + TODO re-enqueue real.
+// BullMQ. O replay real re-enfileira na fila de origem com o mesmo `jobId`
+// (dedupe BullMQ preserva o eventId) via `requeueFn` injetável; sem
+// `requeueFn` o replay é lógico (idempotente) + auditado.
 
 export const KNOWN_DLQ_QUEUES = [
   'billing.dlq',
@@ -16,6 +16,14 @@ export const KNOWN_DLQ_QUEUES = [
 ] as const;
 
 export type KnownDlqQueue = (typeof KNOWN_DLQ_QUEUES)[number];
+
+/** Mapeia fila DLQ → fila de origem para re-enfileiramento real. */
+export const DLQ_TO_ORIGIN: Record<string, string> = {
+  'billing.dlq': 'billing.webhook.apply',
+  'finance.dlq': 'finance.sync',
+  'comm.email.dlq': 'communications.send',
+  'licensing.dlq': 'licensing.sync',
+} as const;
 
 export interface DlqEntryInput {
   queue: string;
@@ -43,7 +51,16 @@ export interface DlqReplayResult {
   /** true quando o job já havia sido replayado (idempotente, sem re-enfileirar). */
   duplicate: boolean;
   replayCount: number;
+  /** true quando o re-enfileiramento real na fila de origem ocorreu. */
+  requeued: boolean;
 }
+
+/** Assinatura da função de re-enfileiramento real (injetada pelo controller). */
+export type DlqRequeueFn = (
+  queue: string,
+  jobId: string,
+  data: unknown,
+) => Promise<void>;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -127,6 +144,7 @@ export class InMemoryDlqStore {
             eventId: existing.eventId,
             duplicate: true,
             replayCount: existing.replayCount,
+            requeued: false,
           },
         ];
       }
@@ -138,12 +156,12 @@ export class InMemoryDlqStore {
       const cur = this.entries.get(k);
       if (!cur) continue;
       if (cur.replayedAt !== null) {
-        out.push({ queue: q, jobId: cur.jobId, eventId: cur.eventId, duplicate: true, replayCount: cur.replayCount });
+        out.push({ queue: q, jobId: cur.jobId, eventId: cur.eventId, duplicate: true, replayCount: cur.replayCount, requeued: false });
         continue;
       }
       cur.replayedAt = nowIso();
       cur.replayCount += 1;
-      out.push({ queue: q, jobId: cur.jobId, eventId: cur.eventId, duplicate: false, replayCount: cur.replayCount });
+      out.push({ queue: q, jobId: cur.jobId, eventId: cur.eventId, duplicate: false, replayCount: cur.replayCount, requeued: false });
     }
     return out;
   }

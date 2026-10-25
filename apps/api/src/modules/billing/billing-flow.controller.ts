@@ -1,33 +1,36 @@
 import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
-import { AdminStubGuard } from '../access/admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { AsaasWebhookDto, CreateOrderDto } from './billing-flow.dto';
 import { BillingFlowService } from './billing-flow.service';
 
 // Superfície Fase 4 (arquivo NOVO; `billing.controller.ts` stub preservado,
 // sem rotas — não reescrito).
-// - Rotas admin exigem `x-role: admin` (stub, PROJECT.md §3).
-// - `POST /webhooks/asaas` é PÚBLICA (Asaas não envia o stub): responde sempre
-//   200 (duplicate/rejected inclusive) p/ não gerar retry inútil do provedor.
+// - Rotas admin exigem role `billing.manage` no JWT + MFA step-up em escritas.
+// - `POST /webhooks/asaas-mock` é PÚBLICA mock/dev (Asaas não envia o stub):
+//   responde sempre 200 p/ não gerar retry inútil do provedor.
 //   TODO(prod): validar assinatura/token do Asaas + rate-limit por IP.
 @Controller('billing')
 export class BillingFlowController {
   constructor(private readonly flow: BillingFlowService) {}
 
   @Post('orders')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
+  @RequireMfa()
   createOrder(@Body() dto: CreateOrderDto) {
     return this.flow.createOrder(dto);
   }
 
   @Post('orders/:id/invoices')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
+  @RequireMfa()
   @HttpCode(201)
   createInvoice(@Param('id') id: string) {
     return this.flow.createInvoice(id);
   }
 
   @Get('orders/:id')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   getOrder(@Param('id') id: string) {
     const order = this.flow.getOrder(id);
     if (!order) return { code: 'NOT_FOUND', message: `order ${id} não encontrada` };
@@ -54,37 +57,37 @@ export class BillingFlowController {
   }
 
   @Get('outbox')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   outbox() {
     return this.flow.listOutbox();
   }
 
   @Get('emails')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   emails() {
     return this.flow.listEmails();
   }
 
   @Get('license-hooks')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   licenseHooks() {
     return this.flow.listLicenseHooks();
   }
 
   @Get('receipts')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   receipts() {
     return this.flow.listReceipts();
   }
 
   @Get('alerts')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   alerts() {
     return this.flow.listAlerts();
   }
 
   @Get('metrics')
-  @UseGuards(AdminStubGuard)
+  @Roles('billing.manage')
   metrics() {
     return this.flow.metrics.snapshot();
   }

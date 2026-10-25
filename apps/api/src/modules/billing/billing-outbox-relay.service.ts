@@ -5,8 +5,10 @@ import {
   RelayQueue,
   RelaySqlRunner,
   relayOutboxBatch,
+  transactionalRelaySqlRunner,
 } from '../../common/outbox/outbox-relay';
 import { BILLING_POOL } from './billing-pool.provider';
+import { Pool } from 'pg';
 
 // Relay billing (Fase 4). Drena `billing.outbox_events` → BullMQ com
 // `jobId = eventId`; marca `published` após enfileirar. Outros domínios usam o
@@ -17,8 +19,11 @@ import { BILLING_POOL } from './billing-pool.provider';
 @Injectable()
 export class BillingOutboxRelayService {
   private readonly log = new Logger(BillingOutboxRelayService.name);
+  private readonly db: RelaySqlRunner;
 
-  constructor(@Inject(BILLING_POOL) private readonly pool: { query: RelaySqlRunner['query'] }) {}
+  constructor(@Inject(BILLING_POOL) private readonly pool: Pool) {
+    this.db = transactionalRelaySqlRunner(pool);
+  }
 
   domains(): readonly string[] {
     return OUTBOX_RELAY_DOMAINS;
@@ -29,7 +34,7 @@ export class BillingOutboxRelayService {
     limit = OUTBOX_RELAY_BATCH,
   ): Promise<{ claimed: number; published: number; eventIds: string[] }> {
     const out = await relayOutboxBatch(
-      this.pool as unknown as RelaySqlRunner,
+      this.db,
       queue,
       { limit },
     );

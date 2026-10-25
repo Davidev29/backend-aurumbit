@@ -6,7 +6,9 @@ import { z } from 'zod';
 import { handleSyncJob } from './queues/licensing.sync';
 import { runEvaluateTick } from './queues/licensing.evaluate';
 import { LICENSING_QUEUES, EVALUATE_EVERY_MS, SYNC_BACKOFF_MS, SYNC_MAX_ATTEMPTS } from './queues/licensing.queues';
-import { BILLING_QUEUES, RECON_HOURLY_MS, billingJobOptions } from './queues/billing.queues';
+import { handleLicensingIssueJob } from './queues/licensing.issue';
+import { BILLING_QUEUES, RECON_HOURLY_MS, billingJobOptions, dlqJobId } from './queues/billing.queues';
+import { handleBillingApplyJob } from './queues/billing.apply';
 import { FINANCE_QUEUES, financeSyncJobOptions } from './queues/finance.queues';
 import {
   FINANCE_PROJECTION_QUEUE,
@@ -23,7 +25,6 @@ import {
   FINANCE_BILL_PAY_QUEUE,
   handleFinanceAutomationJob,
 } from './queues/finance.automation';
-import { handleBillingWebhookJob } from './queues/billing.webhook';
 import { runReconTick } from './queues/billing.recon';
 import { PAYMENT_CONFIRMED_TOPIC, fanOutPaymentConfirmed } from './queues/comms.fanout';
 import { OUTBOX_RELAY_DOMAINS, runOutboxRelayTick } from './queues/outbox.relay';
@@ -78,6 +79,7 @@ async function main(): Promise<void> {
   const syncQueue = new Queue(LICENSING_QUEUES.sync, { connection: createConnection() });
   const evaluateQueue = new Queue(LICENSING_QUEUES.evaluate, { connection: createConnection() });
   const dlqQueue = new Queue(LICENSING_QUEUES.dlq, { connection: createConnection() });
+  const licensingIssueQueue = new Queue(LICENSING_QUEUES.issue, { connection: createConnection() });
   const commsQueue = new Queue('communications.send', { connection: createConnection() });
 
   // Filas billing (Fase 4): webhook.apply + recon + fanout + dlq.
@@ -181,21 +183,23 @@ async function main(): Promise<void> {
   commsWorker.on('failed', (job, err) => logger.error({ jobId: job?.id, err }, 'communications.send falhou (stub)'));
 
   // --- Billing (Fase 4) -------------------------------------------------
-  // `billing.webhook.apply`: envelope → POST interno idempotente na API
-  // (TODO: `POST /v1/billing/internal/webhook-apply` com o envelope; hoje só
-  // registra). Retry exp 5x + DLQ `billing.dlq` (replay manual, jobId=eventId).
-  const billingWebhookWorker = new Worker(
+  // `billing.webhook.apply`: envelope (webhook + reconciliação) → POST interno
+  // idempotente na API (`POST /v1/billing/webhooks/apply` e
+  // `/v1/billing/webhooks/recon-apply`). Retry exp 5x + DLQ `billing.dlq`
+  // (replay manual, jobId=eventId). `handleBillingApplyJob` consome o mesmo
+  // formato que os produtores enfileiram (`BillingApplyJobSchema`).
+  const billingInternalKey = process.env.INTERNAL_WEBHOOK_KEY ?? '';
+  if (!billingInternalKey) {
+    logger.warn('billing.webhook.apply sem INTERNAL_WEBHOOK_KEY (applies falharão p/ DLQ)');
+  }
+  const billingApplyWorker = new Worker(
     BILLING_QUEUES.webhookApply,
     async (job) =>
-      handleBillingWebhookJob(
+      handleBillingApplyJob(
         { id: job.id, data: job.data, attemptsMade: job.attemptsMade },
         {
-          applyEnvelope: async (envelope) => {
-            logger.info(
-              { eventId: envelope.eventId, topic: envelope.topic },
-              'billing.webhook.apply recebido (TODO: aplicar via API interna idempotente)',
-            );
-          },
+          apiBaseUrl: env.API_BASE_URL,
+          internalKey: billingInternalKey,
           moveToDlq: async (jobId, data, reason) => {
             await billingDlqQueue.add('dlq', data, { jobId });
             logger.warn({ jobId, eventId: data.eventId, reason }, 'billing.webhook.apply → DLQ');
@@ -204,8 +208,31 @@ async function main(): Promise<void> {
       ),
     { connection: createConnection(), concurrency: 5 },
   );
-  billingWebhookWorker.on('failed', (job, err) =>
+  billingApplyWorker.on('failed', (job, err) =>
     logger.error({ jobId: job?.id, attemptsMade: job?.attemptsMade, err }, 'billing.webhook.apply falhou'),
+  );
+
+  // `licensing.issue`: consome `billing.payment.confirmed.v1` (fan-out) e emite
+  // / renova licença via `POST /v1/licenses/internal/issue-from-payment`
+  // (claim-first por eventId → idempotente). Retry exp 5x + DLQ `licensing.dlq`.
+  const licensingIssueWorker = new Worker(
+    LICENSING_QUEUES.issue,
+    async (job) =>
+      handleLicensingIssueJob(
+        { id: job.id, data: job.data, attemptsMade: job.attemptsMade },
+        {
+          apiBaseUrl: env.API_BASE_URL,
+          internalKey: billingInternalKey,
+          moveToDlq: async (jobId, data, reason) => {
+            await dlqQueue.add('dlq', data, { jobId });
+            logger.warn({ jobId, eventId: data.eventId, reason }, 'licensing.issue → DLQ');
+          },
+        },
+      ),
+    { connection: createConnection(), concurrency: 5 },
+  );
+  licensingIssueWorker.on('failed', (job, err) =>
+    logger.error({ jobId: job?.id, attemptsMade: job?.attemptsMade, err }, 'licensing.issue falhou'),
   );
 
   // `billing.recon`: tick hourly/daily (Asaas Sandbox-first; TODO: paginar a
@@ -244,6 +271,22 @@ async function main(): Promise<void> {
         payload: data?.payload,
       };
       const result = await fanOutPaymentConfirmed(env, {
+        // access: espelhar entitlement via fila sync (POST interno idempotente na API).
+        toAccess: async (e) => {
+          await syncQueue.add(
+            String(e.topic),
+            { eventId: e.eventId, topic: e.topic, payload: (e.payload ?? {}) as Record<string, unknown> },
+            { jobId: e.eventId, attempts: 5, backoff: { type: 'exponential', delay: 2000 }, removeOnComplete: 1000, removeOnFail: 5000 },
+          );
+        },
+        // licensing: issue/renova licença a partir do pagamento confirmado.
+        toLicensing: async (e) => {
+          await licensingIssueQueue.add(
+            String(e.topic),
+            { eventId: e.eventId, topic: e.topic, payload: (e.payload ?? {}) as Record<string, unknown> },
+            { jobId: e.eventId, attempts: 5, backoff: { type: 'exponential', delay: 2000 }, removeOnComplete: 1000, removeOnFail: 5000 },
+          );
+        },
         // Fase 5: finance real — enfileira em `finance.sync` com
         // `jobId = eventId` (o consumidor API é idempotente por eventId).
         toFinance: async (e) => {
@@ -417,6 +460,7 @@ async function main(): Promise<void> {
       queues: [
         LICENSING_QUEUES.evaluate,
         LICENSING_QUEUES.sync,
+        LICENSING_QUEUES.issue,
         LICENSING_QUEUES.dlq,
         'communications.send',
         BILLING_QUEUES.webhookApply,
@@ -441,7 +485,8 @@ async function main(): Promise<void> {
       evaluateWorker.close(),
       syncWorker.close(),
       commsWorker.close(),
-      billingWebhookWorker.close(),
+      billingApplyWorker.close(),
+      licensingIssueWorker.close(),
       billingReconWorker.close(),
       billingFanoutWorker.close(),
       financeSyncWorker.close(),
@@ -451,6 +496,7 @@ async function main(): Promise<void> {
       evaluateQueue.close(),
       syncQueue.close(),
       dlqQueue.close(),
+      licensingIssueQueue.close(),
       commsQueue.close(),
       billingWebhookQueue.close(),
       billingReconQueue.close(),

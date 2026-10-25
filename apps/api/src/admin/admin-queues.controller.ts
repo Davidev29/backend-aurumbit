@@ -2,20 +2,23 @@ import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { randomUUID } from 'node:crypto';
 import { Public } from '../common/decorators/public.decorator';
-import { AdminStubGuard } from '../modules/licensing/admin.guard';
+import { RequireMfa, Roles } from '../common/decorators';
+import { RolesGuard } from '../common/guards/roles.guard';
 
 // Stub Fase 6 — Bull Board em `/admin/queues` (raiz, fora do prefixo /v1).
-// Admin-only (`AdminStubGuard`: `x-role: admin` ou service token).
+// Admin-only (`RolesGuard` + `@Roles('STAFF_ADMIN')` + `@RequireMfa()`; identidade via JWT).
 // Sem `@bull-board/*` de propósito (dep pesada adiada — ver docs/SLOs.md § Queues):
 // responde o estado funcional (DLQ depth ao vivo do registry + TODO de wiring).
 // Quando a dep entrar, este controller monta o `ExpressAdapter` do Bull Board
 // atrás do mesmo guard, sem mudar path nem auth.
 @Controller('admin/queues')
 export class AdminQueuesController {
-  // @Public marca para pular a cadeia global; o guard local impõe admin-only.
+  // @Public marca para pular a cadeia global; o guard local impõe admin-only + MFA.
   @Public()
   @Get()
-  @UseGuards(AdminStubGuard)
+  @UseGuards(RolesGuard)
+  @Roles('STAFF_ADMIN')
+  @RequireMfa()
   overview(@Req() req: Request): Record<string, unknown> {
     const incoming = req.headers['x-correlation-id'];
     const correlationId =

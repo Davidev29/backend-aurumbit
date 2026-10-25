@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { apiUrlFor, upstreamAuthHeaders } from "@/lib/api/upstream";
+import { apiUrlFor, requireOrgId, upstreamAuthHeaders, upstreamRequiredOr502 } from "@/lib/api/upstream";
 
 const API_INTERNAL_URL = apiUrlFor("finance");
 
@@ -16,49 +16,27 @@ export async function POST(req: NextRequest) {
   const key = req.headers.get("Idempotency-Key") ?? req.headers.get("idempotency-key") ?? newKey();
   const orgId = req.headers.get("x-org-id") ?? "";
 
-  if (API_INTERNAL_URL) {
-    try {
-      const headers = upstreamAuthHeaders(session);
-      headers["Content-Type"] = "application/json";
-      headers["Idempotency-Key"] = key;
-      if (orgId) headers["x-org-id"] = orgId;
-      const upstream = await fetch(`${API_INTERNAL_URL}/v1/finance/expenses`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      });
-      const data = await upstream.json().catch(() => ({}));
-      return NextResponse.json(data, { status: upstream.status });
-    } catch {
-      return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível. Tente novamente." }, { status: 502 });
-    }
-  }
+  // financeiro é org-scoped: x-org-id obrigatório.
+  const orgErr = requireOrgId(orgId);
+  if (orgErr) return orgErr;
 
-  // Stub frontend-first (sem backend): ecoa despesa + job agendado.
-  const id = `ap-stub-${newKey().slice(0, 8)}`;
-  const barcode = typeof body.barcode === "string" ? body.barcode.replace(/\D/g, "") : "";
-  const viaAsaas = body.pay_via_asaas === true && (barcode.length === 47 || barcode.length === 48);
-  return NextResponse.json(
-    {
-      payable: { id, status: "PREVISTO" },
-      job: viaAsaas
-        ? {
-            id: `job-stub-${id}`,
-            idempotencyKey: key,
-            kind: "BILL_PAY",
-            payableId: id,
-            barcodeMasked: barcode ? `${barcode.slice(0, 4)}…${barcode.slice(-4)} (${barcode.length}d)` : null,
-            scheduleDate: body.schedule_date ?? body.due_date ?? null,
-            provider: "ASAAS",
-            externalId: "bill_stub_001",
-            status: "SCHEDULED",
-            attempts: 1,
-            lastError: null,
-          }
-        : null,
-      duplicate: false,
-      viaAsaas,
-    },
-    { status: 201 },
-  );
+  // fail-closed: sem upstream de financeiro → 502, nunca stub.
+  const missing = upstreamRequiredOr502("finance");
+  if (missing) return missing;
+
+  try {
+    const headers = upstreamAuthHeaders(session);
+    headers["Content-Type"] = "application/json";
+    headers["Idempotency-Key"] = key;
+    headers["x-org-id"] = orgId;
+    const upstream = await fetch(`${API_INTERNAL_URL}/v1/finance/expenses`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    const data = await upstream.json().catch(() => ({}));
+    return NextResponse.json(data, { status: upstream.status });
+  } catch {
+    return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "Backend indisponível. Tente novamente." }, { status: 502 });
+  }
 }

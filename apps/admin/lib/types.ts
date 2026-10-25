@@ -360,10 +360,12 @@ export interface FinanceFilters {
   to?: string | null;
 }
 
-/** Liquidação pagar/baixar (exige `finance.manage`; motivo >= 10 + confirmação na UI). */
+/** Liquidação pagar/baixar (exige `finance.manage`; motivo >= 10 + confirmação na UI).
+ * `accountId` é enviado pela UI e repassado ao upstream (não é resolvido pelo BFF). */
 export interface SettleFinanceRequest {
   motivo: string;
   confirmacao: boolean;
+  accountId?: string;
 }
 
 export type FinanceExportScope = "payables" | "receivables" | "transactions";

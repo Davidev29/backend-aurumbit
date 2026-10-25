@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
-import { AdminStubGuard } from '../access/admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuditService } from '../audit/audit.service';
 import {
   ComputeProjectionDto,
@@ -16,9 +17,9 @@ import { FinanceReadGuard } from './finance-read.guard';
 
 // Superfície Fase 5 (arquivo NOVO; `finance.controller.ts` stub preservado,
 // sem rotas — não reescrito).
-// - Escritas admin exigem `x-role: admin` (stub; PROJECT.md §3).
+// - Escritas admin exigem role `finance.manage` no JWT + MFA step-up.
 // - Leituras (`balance`, `projections`) exigem `finance.read` escopado
-//   (`FinanceReadGuard`: header `x-finance-read: <orgId>` casando; sem → 403).
+//   (`FinanceReadGuard`).
 // - Projeções: snapshot em cache → 200 HIT; ausente/expirado → 202 MISS
 //   (`computing`; worker `finance.projection.compute` + `POST .../compute`).
 @Controller('finance')
@@ -29,7 +30,8 @@ export class FinanceFlowController {
   ) {}
 
   @Post('ingest/payment-confirmed')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   @HttpCode(201)
   ingest(@Body() dto: IngestPaymentConfirmedDto) {
     return this.flow.ingestPaymentConfirmed({
@@ -42,7 +44,8 @@ export class FinanceFlowController {
   }
 
   @Post('receivables')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   @HttpCode(201)
   createReceivable(@Body() dto: CreateReceivableDto) {
     return this.flow.createReceivable({
@@ -55,13 +58,15 @@ export class FinanceFlowController {
   }
 
   @Post('receivables/:id/mark-received')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   receive(@Param('id') id: string, @Body() dto: MarkReceivedDto) {
     return this.flow.markReceived(id, { paidAt: dto.paidAt, eventId: dto.eventId });
   }
 
   @Post('payables')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   @HttpCode(201)
   createPayable(@Body() dto: CreatePayableDto) {
     return this.flow.createPayable({
@@ -73,7 +78,8 @@ export class FinanceFlowController {
   }
 
   @Post('payables/:id/mark-paid')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   pay(@Param('id') id: string, @Body() dto: MarkPaidDto) {
     return this.flow.markPaid(id, { paidAt: dto.paidAt, eventId: dto.eventId });
   }
@@ -104,33 +110,35 @@ export class FinanceFlowController {
   }
 
   @Post('projections/compute')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   @HttpCode(201)
   compute(@Body() dto: ComputeProjectionDto) {
     return this.flow.computeProjection(dto.orgId, dto.horizonDays ?? 30);
   }
 
   @Post('grants')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
+  @RequireMfa()
   @HttpCode(201)
   grant(@Body() dto: GrantFinanceReadDto) {
     return this.flow.grantRead({ orgId: dto.orgId, grantee: dto.grantee, reason: dto.reason, actorId: dto.actorId });
   }
 
   @Get('grants')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
   grants() {
     return this.flow.listGrants();
   }
 
   @Get('transactions')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
   transactions(@Query('orgId') orgId?: string) {
     return this.flow.listTransactions(orgId);
   }
 
   @Get('audit')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
   auditLog(@Query('action') action?: string) {
     if (action === 'finance.transaction.posted') return this.audit.list('finance.transaction.posted');
     if (action === 'finance.read.grant') return this.audit.list('finance.read.grant');
@@ -138,7 +146,7 @@ export class FinanceFlowController {
   }
 
   @Get('metrics')
-  @UseGuards(AdminStubGuard)
+  @Roles('finance.manage')
   metrics() {
     return this.flow.metrics.snapshot();
   }

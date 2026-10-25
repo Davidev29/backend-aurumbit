@@ -10,6 +10,8 @@ import { z } from 'zod';
 export const LICENSING_QUEUES = {
   evaluate: 'licensing.evaluate',
   sync: 'licensing.sync',
+  /** Fan-out de `billing.payment.confirmed.v1` → issue/renova licença (jobId = eventId). */
+  issue: 'licensing.issue',
   dlq: 'licensing.dlq',
 } as const;
 

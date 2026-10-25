@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AdminStubGuard } from '../access/admin.guard';
 import { AUDIT_POOL, createAuditPool } from './audit-pool.provider';
 import { AuditController } from './audit.controller';
 import { AuditReadService } from './audit-read.service';
@@ -11,11 +10,11 @@ import { AuditService } from './audit.service';
 // Leitura PG (aditivo): `GET /v1/audit/events` via AuditReadService sobre
 // `audit.audit_events` (pool próprio DATABASE_URL_AUDIT, só SELECT).
 // Nada escreve no PG hoje (ver relatório do workstream de leitura).
+// RBAC real: RolesGuard (APP_GUARD global) + @Roles('STAFF_ADMIN') na rota de leitura.
 @Module({
   controllers: [AuditController],
   providers: [
     { provide: AUDIT_POOL, useFactory: createAuditPool },
-    AdminStubGuard,
     AuditService,
     AuditReadService,
   ],

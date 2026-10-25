@@ -134,6 +134,10 @@ cleanup() {
 trap cleanup EXIT
 
 [ -f .env ] || { cp .env.example .env && echo "[timer] .env criado de .env.example (segredos: defaults locais)"; }
+  # D2-4: substitui placeholders TROCAR_* por segredos dev (idempotente).
+  if [ -f deploy/scripts/gen-dev-env.sh ]; then
+    bash deploy/scripts/gen-dev-env.sh || fail "gen-dev-env" "geracao de .env dev falhou"
+  fi
   bash deploy/scripts/pgbouncer-userlist.sh || fail "pgbouncer-userlist" "userlist do PgBouncer falhou"
 
 S="$(date +%s)"
@@ -141,7 +145,7 @@ docker compose -f deploy/docker-compose.yml up -d --build || fail "build" "compo
 stamp "build" "$S"
 
 S="$(date +%s)"
-bash deploy/scripts/migrate-all.sh || fail "migrate" "migrate-all.sh falhou"
+MIGRATE_AS_MIGRATOR=1 bash deploy/scripts/migrate-all.sh || fail "migrate" "migrate-all.sh falhou"
 stamp "migrate" "$S"
 
 S="$(date +%s)"

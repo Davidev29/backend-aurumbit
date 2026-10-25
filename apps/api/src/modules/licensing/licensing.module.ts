@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
-import { AdminStubGuard, LicenseReadGuard } from './admin.guard';
+import { LicenseReadGuard } from './admin.guard';
 import { DevicesController } from './devices.controller';
 import { ActivationController } from './activation.controller';
 import { DevicesService } from './devices.service';
@@ -42,7 +42,6 @@ import { RevealRateLimitGuard } from './reveal.guard';
   providers: [
     { provide: LICENSING_POOL, useFactory: createLicensingPool },
     { provide: LICENSE_STORE, useClass: InMemoryLicenseStore },
-    AdminStubGuard,
     LicenseReadGuard,
     RevealRateLimitGuard,
     LicensesService,

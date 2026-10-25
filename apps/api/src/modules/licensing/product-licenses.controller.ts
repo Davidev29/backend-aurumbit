@@ -1,7 +1,8 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { AdminStubGuard } from './admin.guard';
+import { RequireMfa, Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import {
   LICENSE_EFFECTIVE_STATUSES,
   LicensesService,
@@ -21,8 +22,8 @@ import {
  * de products — domínios separados, sem FK). Mesma chave usada por
  * `GET /v1/licenses?productId=`.
  *
- * GUARDA: `AdminStubGuard`, mesma política dos demais endpoints admin do
- * licensing (`licensing.controller.ts`).
+ * GUARDA: `RolesGuard` + `@Roles('STAFF_ADMIN')`, mesma política dos demais
+ * endpoints admin do licensing (`licensing.controller.ts`).
  *
  * ROTA: `products/:code/licenses` tem 3 segmentos com 2º literal fixo
  * (`licenses`) — não colide com `products/:code/plans` nem
@@ -55,11 +56,12 @@ class ProductLicensesQueryDto {
 }
 
 @Controller('products')
-@UseGuards(AdminStubGuard)
+@UseGuards(RolesGuard)
 export class ProductLicensesController {
   constructor(private readonly licenses: LicensesService) {}
 
   @Get(':code/licenses')
+  @Roles('STAFF_ADMIN')
   list(
     @Param('code') code: string,
     @Query() q: ProductLicensesQueryDto,

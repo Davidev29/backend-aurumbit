@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AdminStubGuard } from '../access/admin.guard';
 import { AuditModule } from '../audit/audit.module';
 import { FinanceAutomationController } from './finance-automation.controller';
 import { FinanceAutomationInternalController } from './finance-automation.internal.controller';
@@ -51,7 +50,6 @@ import { FinanceSyncService } from './sync.service';
     { provide: FINANCE_SYNC_QUEUE_PORT, useFactory: createFinanceSyncQueue },
     { provide: FINANCE_AUTOMATION_PROVIDER, useFactory: createFinanceAutomationProvider },
     { provide: FINANCE_AUTOMATION_QUEUE_PORT, useFactory: createFinanceAutomationQueue },
-    AdminStubGuard,
     FinanceReadGuard,
     FinanceService,
     FinanceFlowService,
